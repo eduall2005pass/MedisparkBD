@@ -53,7 +53,7 @@ export default function StartExamButton({
       type="button"
       onClick={handleStart}
       disabled={disabled}
-      className={`touch-manipulation select-none rounded-lg bg-primary-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-primary-900/40 transform-gpu will-change-transform transition-colors duration-75 ease-out active:scale-[0.97] hover:bg-primary-700 disabled:cursor-not-allowed disabled:border disabled:border-ink/10 disabled:bg-dark-800 disabled:text-neutral-500 disabled:shadow-none ${className}`}
+      className={`touch-manipulation select-none transform-gpu will-change-transform transition-all duration-200 ease-out active:scale-[0.98] disabled:cursor-not-allowed ${className}`}
     >
       {children ?? (disabled ? "Not Available" : "Start Exam")}
     </button>
