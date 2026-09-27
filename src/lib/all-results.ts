@@ -171,7 +171,11 @@ export async function fetchAllResults(options: {
            JOIN exams e ON e.id = r.exam_id
            LEFT JOIN students s ON s.uid = r.student_uid
            ${filter}
-           ORDER BY r.submitted_at DESC
+           ORDER BY r.merit_position IS NULL ASC,
+                    r.merit_position ASC,
+                    r.score DESC,
+                    COALESCE(r.time_taken_seconds, 2147483647) ASC,
+                    r.submitted_at ASC
            LIMIT ? OFFSET ?`,
         [...params, limit, offset],
       ),

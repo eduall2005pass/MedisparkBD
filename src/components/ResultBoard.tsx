@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type BoardRow = {
   resultId: number;
@@ -77,6 +77,44 @@ export default function ResultBoard() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [page, setPage] = useState(1);
   const limit = 20;
+  // Searchable exam dropdown.
+  const [examOpen, setExamOpen] = useState(false);
+  const [examSearch, setExamSearch] = useState("");
+  const examBoxRef = useRef<HTMLDivElement>(null);
+  const selectedExam = exams.find((e) => e.id === examId) ?? null;
+  const filteredExams = examSearch.trim()
+    ? exams.filter((e) =>
+        e.title.toLowerCase().includes(examSearch.trim().toLowerCase()),
+      )
+    : exams;
+
+  useEffect(() => {
+    if (!examOpen) return;
+    const onClick = (event: MouseEvent) => {
+      if (
+        examBoxRef.current &&
+        !examBoxRef.current.contains(event.target as Node)
+      ) {
+        setExamOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExamOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [examOpen]);
+
+  const pickExam = (id: string) => {
+    setExamId(id);
+    setPage(1);
+    setExamOpen(false);
+    setExamSearch("");
+  };
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -153,26 +191,86 @@ export default function ResultBoard() {
               className="w-full rounded-xl border border-ink/10 bg-dark-950 px-4 py-2.5 text-sm text-heading outline-none transition placeholder:text-neutral-600 focus:border-primary-500/60"
             />
           </div>
-          <div>
-            <label htmlFor="result-exam" className="mb-1 block text-xs font-bold uppercase tracking-widest text-neutral-500">
+          <div ref={examBoxRef} className="relative">
+            <label htmlFor="result-exam-search" className="mb-1 block text-xs font-bold uppercase tracking-widest text-neutral-500">
               পরীক্ষা
             </label>
-            <select
-              id="result-exam"
-              value={examId}
-              onChange={(e) => {
-                setExamId(e.target.value);
-                setPage(1);
-              }}
-              className="w-full rounded-xl border border-ink/10 bg-dark-950 px-4 py-2.5 text-sm text-heading outline-none transition focus:border-primary-500/60"
-            >
-              <option value="">সব পরীক্ষা ({total}টি ফল)</option>
-              {exams.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.title}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                id="result-exam-search"
+                value={examOpen ? examSearch : (selectedExam?.title ?? "")}
+                onChange={(e) => {
+                  setExamSearch(e.target.value);
+                  if (!examOpen) setExamOpen(true);
+                }}
+                onFocus={() => {
+                  setExamSearch("");
+                  setExamOpen(true);
+                }}
+                placeholder={`পরীক্ষা খুঁজুন… (${exams.length}টি)`}
+                autoComplete="off"
+                className="w-full rounded-xl border border-ink/10 bg-dark-950 px-4 py-2.5 pr-16 text-sm text-heading outline-none transition placeholder:text-neutral-600 focus:border-primary-500/60"
+              />
+              {examId && (
+                <button
+                  type="button"
+                  aria-label="Clear exam filter"
+                  onClick={() => pickExam("")}
+                  className="absolute right-9 top-1/2 -translate-y-1/2 rounded-md px-1.5 text-neutral-500 transition hover:text-heading"
+                >
+                  ✕
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label={examOpen ? "Close exam list" : "Open exam list"}
+                aria-expanded={examOpen}
+                onClick={() => {
+                  setExamSearch("");
+                  setExamOpen((o) => !o);
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-1.5 text-neutral-400 transition hover:text-heading"
+              >
+                {examOpen ? "▲" : "▼"}
+              </button>
+            </div>
+            {examOpen && (
+              <ul className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-xl border border-ink/10 bg-dark-950 shadow-2xl shadow-black/50">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => pickExam("")}
+                    className={`block w-full px-4 py-2.5 text-left text-sm transition hover:bg-primary-600/10 ${
+                      !examId ? "font-bold text-primary-400" : "text-heading"
+                    }`}
+                  >
+                    সব পরীক্ষা ({total}টি ফল)
+                  </button>
+                </li>
+                {filteredExams.length === 0 ? (
+                  <li className="px-4 py-3 text-center text-xs text-neutral-500">
+                    “{examSearch}” নামে পরীক্ষা নেই
+                  </li>
+                ) : (
+                  filteredExams.map((e) => (
+                    <li key={e.id}>
+                      <button
+                        type="button"
+                        onClick={() => pickExam(e.id)}
+                        className={`block w-full truncate px-4 py-2.5 text-left text-sm transition hover:bg-primary-600/10 ${
+                          e.id === examId
+                            ? "font-bold text-primary-400"
+                            : "text-neutral-300"
+                        }`}
+                        title={e.title}
+                      >
+                        {e.title}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
           </div>
           <div className="flex items-end">
             <button
