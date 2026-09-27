@@ -19,6 +19,7 @@ export default function CourseRoutineViewer({ routineUrls, courseName }: Props) 
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [downloading, setDownloading] = useState(false);
 
   const hasRoutine = urls.length > 0;
   const currentUrl = hasRoutine ? urls[Math.min(page, urls.length - 1)] : null;
@@ -33,6 +34,63 @@ export default function CourseRoutineViewer({ routineUrls, courseName }: Props) 
   }
   function resetZoom() {
     setZoom(1);
+  }
+
+  function fileNameFor(url: string, index: number, mime: string): string {
+    const base = url.split(/[?#]/)[0].split("/").pop();
+    if (base && base.includes(".")) return base;
+    const ext =
+      /\.pdf(\?|$)/i.test(url) || mime === "application/pdf"
+        ? ".pdf"
+        : mime === "image/jpeg"
+          ? ".jpg"
+          : mime === "image/png"
+            ? ".png"
+            : mime === "image/webp"
+              ? ".webp"
+              : mime === "image/gif"
+                ? ".gif"
+                : mime === "image/avif"
+                  ? ".avif"
+                  : mime === "image/svg+xml"
+                    ? ".svg"
+                    : isImage(url)
+                      ? ".jpg"
+                      : "";
+    return `routine-page-${index + 1}${ext}`;
+  }
+
+  /** One click → downloads ALL routine pages (fetched as blobs so the
+   *  files save directly instead of just opening in a tab). */
+  async function downloadAll() {
+    if (!hasRoutine || downloading) return;
+    setDownloading(true);
+    try {
+      for (let i = 0; i < urls.length; i += 1) {
+        const url = urls[i];
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error("fetch failed");
+          const blob = await res.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = objectUrl;
+          a.download = fileNameFor(url, i, res.headers.get("content-type") ?? "");
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+        } catch {
+          // CORS/network blocked → fall back to opening the file in a new tab.
+          window.open(url, "_blank", "noopener");
+        }
+        if (i < urls.length - 1) {
+          await new Promise((r) => window.setTimeout(r, 400));
+        }
+      }
+    } finally {
+      setDownloading(false);
+    }
   }
 
   if (!hasRoutine) {
@@ -94,18 +152,28 @@ export default function CourseRoutineViewer({ routineUrls, courseName }: Props) 
             <span className="rounded-full bg-red-500/10 px-2.5 py-0.5 text-xs font-bold text-red-400">PDF</span>
           )}
         </h2>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className={`rounded-xl px-5 py-2.5 text-sm font-bold shadow-md transition active:scale-[0.98] ${
-            open
-              ? "border border-ink/15 bg-ink/10 text-heading hover:bg-ink/20"
-              : "bg-primary-600 text-white shadow-primary-900/20 hover:bg-primary-700"
-          }`}
-          aria-expanded={open}
-        >
-          {open ? "Hide Routine" : "View Routine"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className={`rounded-xl px-5 py-2.5 text-sm font-bold shadow-md transition active:scale-[0.98] ${
+              open
+                ? "border border-ink/15 bg-ink/10 text-heading hover:bg-ink/20"
+                : "bg-primary-600 text-white shadow-primary-900/20 hover:bg-primary-700"
+            }`}
+            aria-expanded={open}
+          >
+            {open ? "Hide Routine" : "View Routine"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void downloadAll()}
+            disabled={downloading}
+            className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-2.5 text-sm font-bold text-emerald-400 shadow-md transition hover:bg-emerald-500/20 active:scale-[0.98] disabled:opacity-50"
+          >
+            {downloading ? "Downloading…" : `Download Routine${urls.length > 1 ? ` (${urls.length})` : ""}`}
+          </button>
+        </div>
       </div>
 
       <p className="mt-2 text-xs leading-relaxed text-neutral-500">
