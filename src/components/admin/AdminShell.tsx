@@ -36,7 +36,6 @@ import { useAuth } from "@/lib/auth-context";
 import { useOverlayBackClose } from "@/components/navigation/useOverlayBackClose";
 
 const SIDEBAR_STORAGE_KEY = "medispark-admin-sidebar-collapsed";
-const NOTIF_SEEN_KEY = "medispark-admin-notif-seen";
 
 /** Latest-activity row shape served by GET /api/admin/activity/recent. */
 type RecentActivity = {
@@ -45,6 +44,17 @@ type RecentActivity = {
   action: string;
   detail: string | null;
   createdAt: string;
+};
+
+/** Pending enrollment request waiting for admin approval. */
+type PendingItem = {
+  id: number;
+  studentName: string;
+  courseId: string;
+  courseName: string;
+  courseKind: "free" | "paid";
+  fee: number;
+  createdAt: number | null;
 };
 
 /** "course.save" → "Course save" for the bell list. */
@@ -64,6 +74,12 @@ function timeAgo(iso: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+/** Epoch-ms variant for pending items (null → no timestamp). */
+function timeAgoMs(epochMs: number | null): string {
+  if (!epochMs) return "waiting review";
+  return timeAgo(new Date(epochMs).toISOString());
 }
 
 // === Required sidebar structure: HOME separate + MANAGEMENT heading + Home Page Control after Enrollment ===
@@ -115,17 +131,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const notifRef = useRef<HTMLDivElement>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifItems, setNotifItems] = useState<RecentActivity[]>([]);
-  const [notifSeenAt, setNotifSeenAt] = useState<number>(() => {
-    // SSR-safe lazy init — bell's read position from the last visit.
-    try {
-      if (typeof window !== "undefined") {
-        return Number(window.localStorage.getItem(NOTIF_SEEN_KEY)) || 0;
-      }
-    } catch {
-      // Non-fatal — bell simply treats everything as unread.
-    }
-    return 0;
-  });
+  const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
   // Browser/device Back closes open drawers/overlays first (no navigation).
   useOverlayBackClose(mobileOpen, () => setMobileOpen(false));
   useOverlayBackClose(mobileSearchOpen, () => setMobileSearchOpen(false));
@@ -179,8 +185,13 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
           headers: gate.headers,
         });
         if (!response.ok) return;
-        const data = (await response.json()) as { logs?: RecentActivity[] };
-        if (!cancelled && Array.isArray(data.logs)) setNotifItems(data.logs);
+        const data = (await response.json()) as {
+          logs?: RecentActivity[];
+          pending?: PendingItem[];
+        };
+        if (cancelled) return;
+        if (Array.isArray(data.logs)) setNotifItems(data.logs);
+        if (Array.isArray(data.pending)) setPendingItems(data.pending);
       } catch {
         // Bell stays quiet on failure — never blocks the panel.
       }
@@ -193,25 +204,12 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     };
   }, [gate.ready, gate.headers]);
 
-  const unreadCount = notifItems.filter((item) => {
-    const time = Date.parse(item.createdAt);
-    return !Number.isNaN(time) && time > notifSeenAt;
-  }).length;
+  // The badge counts pending work only — it clears itself once the
+  // admin approves/rejects the requests.
+  const pendingCount = pendingItems.length;
 
   const toggleNotif = () => {
-    setNotifOpen((open) => {
-      if (!open) {
-        // Opening the dropdown marks everything as seen.
-        const now = Date.now();
-        setNotifSeenAt(now);
-        try {
-          window.localStorage.setItem(NOTIF_SEEN_KEY, String(now));
-        } catch {
-          // Non-fatal.
-        }
-      }
-      return !open;
-    });
+    setNotifOpen((open) => !open);
   };
 
   // Close the mobile drawer ONLY after a menu item's route has actually
@@ -521,9 +519,9 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                 className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 text-zinc-700 transition hover:border-primary-500/60 hover:bg-neutral-50 admin-dark:border-zinc-700 admin-dark:text-zinc-200 admin-dark:hover:bg-zinc-800"
               >
                 <NotificationsIcon className="h-5 w-5" />
-                {unreadCount > 0 && (
+                {pendingCount > 0 && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-600 px-1 text-[10px] font-bold text-white">
-                    {unreadCount > 9 ? "9+" : unreadCount}
+                    {pendingCount > 9 ? "9+" : pendingCount}
                   </span>
                 )}
               </button>
@@ -534,40 +532,74 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                     <p className="text-sm font-bold text-zinc-900 admin-dark:text-zinc-50">
                       Notifications
                     </p>
-                    {unreadCount > 0 && (
+                    {pendingCount > 0 && (
                       <span className="rounded-full bg-primary-600/10 px-2 py-0.5 text-[10px] font-bold text-primary-700 admin-dark:text-primary-400">
-                        {unreadCount} new
+                        {pendingCount} pending
                       </span>
                     )}
                   </div>
-                  <ul className="max-h-96 divide-y divide-neutral-100 overflow-y-auto admin-dark:divide-zinc-800">
-                    {notifItems.length === 0 ? (
-                      <li className="px-4 py-8 text-center">
-                        <p className="text-sm font-semibold text-zinc-700 admin-dark:text-zinc-200">
-                          No activity yet
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          Admin actions will appear here.
-                        </p>
-                      </li>
-                    ) : (
-                      notifItems.map((item) => (
-                        <li key={item.id} className="px-4 py-3">
-                          <p className="text-xs font-bold capitalize text-zinc-900 admin-dark:text-zinc-50">
-                            {formatActivityAction(item.action)}
-                          </p>
-                          {item.detail && (
-                            <p className="mt-0.5 line-clamp-2 text-xs text-zinc-600 admin-dark:text-zinc-300">
-                              {item.detail}
-                            </p>
-                          )}
-                          <p className="mt-1 text-[10px] text-zinc-400">
-                            {item.adminEmail || "Admin"} · {timeAgo(item.createdAt)}
-                          </p>
-                        </li>
-                      ))
+                  <div className="max-h-96 overflow-y-auto">
+                    {/* Pending work first — enrollment requests waiting for approval. */}
+                    {pendingCount > 0 && (
+                      <ul className="divide-y divide-neutral-100 admin-dark:divide-zinc-800">
+                        {pendingItems.map((item) => (
+                          <li key={`pending-${item.id}`}>
+                            <Link
+                              href={`/admin/enrollment-control/course/${encodeURIComponent(item.courseId)}`}
+                              onClick={closeOverlays}
+                              className="block px-4 py-3 transition hover:bg-primary-600/5"
+                            >
+                              <p className="flex items-center gap-2 text-xs font-bold text-zinc-900 admin-dark:text-zinc-50">
+                                <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                                <span className="truncate">
+                                  {item.courseKind === "paid" ? "New enrollment request" : "New free enrollment"} — {item.studentName}
+                                </span>
+                              </p>
+                              <p className="mt-0.5 truncate pl-4 text-xs text-zinc-600 admin-dark:text-zinc-300">
+                                {item.courseName}
+                                {item.courseKind === "paid" && item.fee > 0 ? ` · ৳${item.fee}` : ""}
+                              </p>
+                              <p className="mt-1 pl-4 text-[10px] font-semibold text-primary-700 admin-dark:text-primary-400">
+                                Tap to review → {timeAgoMs(item.createdAt)}
+                              </p>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                  </ul>
+                    {pendingCount === 0 && (
+                      <p className="border-b border-neutral-100 px-4 py-4 text-center text-xs font-semibold text-zinc-500 admin-dark:border-zinc-800">
+                        🎉 All caught up — no pending requests.
+                      </p>
+                    )}
+                    {/* Recent admin activity below (full log stays in audit). */}
+                    <p className="px-4 pb-1 pt-3 text-[10px] font-bold uppercase tracking-wide text-zinc-400">
+                      Recent activity
+                    </p>
+                    <ul className="divide-y divide-neutral-100 admin-dark:divide-zinc-800">
+                      {notifItems.length === 0 ? (
+                        <li className="px-4 py-4 text-center text-xs text-zinc-500">
+                          No activity yet.
+                        </li>
+                      ) : (
+                        notifItems.map((item) => (
+                          <li key={item.id} className="px-4 py-2.5">
+                            <p className="text-xs font-bold capitalize text-zinc-900 admin-dark:text-zinc-50">
+                              {formatActivityAction(item.action)}
+                            </p>
+                            {item.detail && (
+                              <p className="mt-0.5 line-clamp-2 text-xs text-zinc-600 admin-dark:text-zinc-300">
+                                {item.detail}
+                              </p>
+                            )}
+                            <p className="mt-0.5 text-[10px] text-zinc-400">
+                              {item.adminEmail || "Admin"} · {timeAgo(item.createdAt)}
+                            </p>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
                   <Link
                     href="/admin/administration/activity-logs"
                     onClick={closeOverlays}
