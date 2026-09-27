@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAnyPermission } from "@/lib/admin";
 import { ALL_PERMISSIONS } from "@/lib/admin-access";
-import { fetchActivityLogs } from "@/lib/administration";
+import { fetchActivityLogs, pruneActivityLogs } from "@/lib/administration";
 import { fetchEnrollmentsAdmin } from "@/lib/enrollments-admin";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
       "manageAdmins",
     ]).then(Boolean),
   ]);
+  // 30-day retention: auto-delete older audit rows (best-effort).
+  void pruneActivityLogs();
 
   let pending: Array<{
     id: number;

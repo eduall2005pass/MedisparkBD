@@ -166,6 +166,33 @@ export async function fetchFilteredActivityLogs(
   }
 }
 
+/** Retention window for the audit log — rows older than this are auto-deleted. */
+export const ACTIVITY_LOG_RETENTION_DAYS = 30;
+
+let lastActivityPruneAt = 0;
+const ACTIVITY_PRUNE_THROTTLE_MS = 60 * 60 * 1000;
+
+/**
+ * Auto-delete audit rows older than 30 days (DB-level cleanup).
+ * Best-effort and throttled to at most once per hour per server instance —
+ * callers (activity APIs) invoke it fire-and-forget on every read.
+ * Returns the number of deleted rows.
+ */
+export async function pruneActivityLogs(): Promise<number> {
+  try {
+    if (Date.now() - lastActivityPruneAt < ACTIVITY_PRUNE_THROTTLE_MS) return 0;
+    lastActivityPruneAt = Date.now();
+    await ensureLogTable();
+    const result = await exec(
+      `DELETE FROM admin_activity_logs
+        WHERE created_at < (NOW() - INTERVAL ${ACTIVITY_LOG_RETENTION_DAYS} DAY)`,
+    );
+    return result.affectedRows ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Records a login event at most once per 30 minutes per admin. */
 export async function recordAdminLogin(
   admin: { uid: string; email?: string | null },

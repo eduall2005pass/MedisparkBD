@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/admin";
-import { fetchFilteredActivityLogs } from "@/lib/administration";
+import { fetchFilteredActivityLogs, pruneActivityLogs } from "@/lib/administration";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
+  // 30-day retention: auto-delete older rows from the DB (best-effort).
+  void pruneActivityLogs();
   const params = request.nextUrl.searchParams;
   const limitParam = Number(params.get("limit"));
   const logs = await fetchFilteredActivityLogs(

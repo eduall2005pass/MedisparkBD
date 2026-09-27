@@ -42,13 +42,21 @@ function moduleOf(action: string): string {
   return dot === -1 ? "general" : action.slice(0, dot);
 }
 
+/** Default date filter: 30 days ago (matches DB auto-retention). */
+function defaultFrom(): string {
+  const date = new Date();
+  date.setDate(date.getDate() - 30);
+  return date.toISOString().slice(0, 10);
+}
+
 export default function ActivityLogsPage() {
   const gate = useAdminGate();
   const [logs, setLogs] = useState<LogEntry[] | null>(null);
   const [q, setQ] = useState("");
   const [module, setModule] = useState("");
   const [action, setAction] = useState("");
-  const [from, setFrom] = useState("");
+  // Default window: last 30 days (matches DB auto-retention).
+  const [from, setFrom] = useState(defaultFrom);
   const [to, setTo] = useState("");
 
   const load = useCallback(async () => {
@@ -85,7 +93,7 @@ export default function ActivityLogsPage() {
     );
   }
 
-  const hasFilters = Boolean(q || module || action || from || to);
+  const hasFilters = Boolean(q || module || action || to || (from && from !== defaultFrom()));
 
   return (
     <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
@@ -93,6 +101,7 @@ export default function ActivityLogsPage() {
         <h2 className="text-2xl font-extrabold tracking-tight text-[#0b1e3a] admin-dark:text-white">Activity Logs</h2>
         <p className="mt-1.5 text-sm text-slate-500 admin-dark:text-slate-400">
           Audit trail of admin logins and panel actions (latest 200 matches).
+          Shows the last 30 days — older entries are auto-deleted from the database.
         </p>
       </header>
 
@@ -127,7 +136,7 @@ export default function ActivityLogsPage() {
               setQ("");
               setModule("");
               setAction("");
-              setFrom("");
+              setFrom(defaultFrom());
               setTo("");
             }}
             className={`${buttonSecondaryClass} mt-3 px-3 py-1.5 text-xs`}
