@@ -61,6 +61,7 @@ function toCourse(
     fee: row.fee,
     discountFee: row.discountFee,
     features: row.features,
+    examFeatures: row.examFeatures ?? [],
     overviewTitle: row.overviewTitle,
     overview: row.overview,
     status: (row.status === "published" ? "published" : "unpublished") as CourseStatus,

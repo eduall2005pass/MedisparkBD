@@ -21,8 +21,8 @@ export default function CourseCard({ course }: { course: Course }) {
   const categoryLabel = course.category;
   const batchLabel = batchLabelText(course);
   // Admin-managed Course Features (stored with the course, in admin order).
-  const features = Array.isArray(course.features)
-    ? course.features.filter((f) => typeof f === "string" && f.trim().length > 0)
+  const features = Array.isArray(course.examFeatures)
+    ? course.examFeatures.filter((f) => typeof f === "string" && f.trim().length > 0)
     : [];
 
   return (

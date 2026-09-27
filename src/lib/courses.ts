@@ -46,6 +46,7 @@ export type Course = {
   fee: number;
   discountFee: number | null;
   features: string[];
+  examFeatures?: string[];
   overviewTitle: string;
   overview: string[];
   status: CourseStatus;

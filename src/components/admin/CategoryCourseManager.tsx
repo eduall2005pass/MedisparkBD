@@ -33,7 +33,6 @@ const EMPTY_FORM = {
   name: "",
   batchId: "hsc-28",
   image: "",
-  shortDescription: "",
   description: "",
   duration: "",
   fee: "0",
@@ -44,13 +43,10 @@ const EMPTY_FORM = {
   featured: false,
   qaAccess: true,
   contentLayout: "flow-1" as "flow-1" | "flow-2" | "flow-3" | "flow-4" | "flow-5",
-  totalClasses: "",
-  totalExams: "",
   courseDuration: "",
   courseDescription: "",
   courseFeatures: "",
-  courseTopics: "",
-  chapterOverview: "",
+  examFeatures: "",
   teachersJson: "[]",
   routineUrls: [] as string[],
 };
@@ -205,7 +201,6 @@ export default function CategoryCourseManager({
       name: course.name,
       batchId: course.batchId || defaultBatchFor(category.slug),
       image: course.image ?? "",
-      shortDescription: course.shortDescription ?? "",
       description: course.description ?? "",
       duration: course.duration,
       fee: String(course.fee),
@@ -218,13 +213,10 @@ export default function CategoryCourseManager({
       contentLayout: (course.contentLayout === "flow-1" || course.contentLayout === "flow-2" || course.contentLayout === "flow-3" || course.contentLayout === "flow-4" || course.contentLayout === "flow-5"
         ? course.contentLayout
         : String(course.contentLayout) === "paper" ? "flow-2" : String(course.contentLayout) === "subject" ? "flow-3" : "flow-1"),
-      totalClasses: course.totalClasses != null ? String(course.totalClasses) : "",
-      totalExams: course.totalExams != null ? String(course.totalExams) : "",
       courseDuration: details?.duration ?? "",
       courseDescription: details?.description ?? "",
       courseFeatures: (course.features ?? []).join("\n"),
-      courseTopics: (details?.topics ?? []).join("\n"),
-      chapterOverview: (details?.chapterOverview ?? []).join("\n"),
+      examFeatures: (course.examFeatures ?? []).join("\n"),
       teachersJson: JSON.stringify(details?.teachers ?? []),
       routineUrls: course.routineUrls ?? [],
     });
@@ -262,8 +254,6 @@ export default function CategoryCourseManager({
         duration: form.courseDuration.trim() || undefined,
         description: form.courseDescription.trim() || undefined,
         teachers: teachers.length > 0 ? teachers : undefined,
-        topics: form.courseTopics.split("\n").map((s) => s.trim()).filter(Boolean),
-        chapterOverview: form.chapterOverview.split("\n").map((s) => s.trim()).filter(Boolean),
       };
       const response = await fetch("/api/admin/courses", {
         method: "POST",
@@ -273,12 +263,11 @@ export default function CategoryCourseManager({
           // Mandatory relationship — the open category owns this course.
           categoryId: category.id,
           features: form.courseFeatures.split("\n").map((s) => s.trim()).filter(Boolean),
+          examFeatures: form.examFeatures.split("\n").map((s) => s.trim()).filter(Boolean),
           mentorIds,
           fee: Number(form.fee) || 0,
           discountFee:
             form.discountFee.trim() === "" ? null : Number(form.discountFee),
-          totalClasses: form.totalClasses.trim() === "" ? null : Number(form.totalClasses),
-          totalExams: form.totalExams.trim() === "" ? null : Number(form.totalExams),
           courseDetails,
           routineUrls: form.routineUrls,
         }),
@@ -611,8 +600,6 @@ export default function CategoryCourseManager({
                       {course.fee.toLocaleString("en-IN")}
                       {course.discountFee != null &&
                         ` · Discount ৳ ${course.discountFee.toLocaleString("en-IN")}`}
-                      {" · "}
-                      {course.totalClasses ?? 0} classes · {course.totalExams ?? 0} exams
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-start gap-2">
@@ -763,18 +750,6 @@ export default function CategoryCourseManager({
                   onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })} />
               </div>
               <div>
-                <label className={labelClass} htmlFor="ccm-total-classes">Total Classes</label>
-                <input id="ccm-total-classes" type="number" min="0" className={inputClass} value={form.totalClasses}
-                  placeholder="e.g. 48"
-                  onChange={(e) => setForm({ ...form, totalClasses: e.target.value })} />
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="ccm-total-exams">Total Exams</label>
-                <input id="ccm-total-exams" type="number" min="0" className={inputClass} value={form.totalExams}
-                  placeholder="e.g. 12"
-                  onChange={(e) => setForm({ ...form, totalExams: e.target.value })} />
-              </div>
-              <div>
                 <label className={labelClass} htmlFor="ccm-fee">Original Course Fee (৳)</label>
                 <input id="ccm-fee" type="number" min="0" className={inputClass} value={form.fee}
                   onChange={(e) => setForm({ ...form, fee: e.target.value })} />
@@ -783,6 +758,13 @@ export default function CategoryCourseManager({
                 <label className={labelClass} htmlFor="ccm-discount">Discount Fee (optional, ৳)</label>
                 <input id="ccm-discount" type="number" min="0" className={inputClass} value={form.discountFee}
                   onChange={(e) => setForm({ ...form, discountFee: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelClass} htmlFor="ccm-exam-features">Exam Feature (one per line)</label>
+                <textarea id="ccm-exam-features" rows={3} className={inputClass} value={form.examFeatures}
+                  placeholder={"Weekly Mock Tests\nChapter-wise Quizzes\nFull Syllabus Mock Exams\nPrevious Year Questions"}
+                  onChange={(e) => setForm({ ...form, examFeatures: e.target.value })} />
+                <p className="mt-1 text-[11px] text-slate-500">Short exam-related features displayed on the Course Card. One feature per line.</p>
               </div>
               <div className="sm:col-span-2 flex flex-wrap items-center gap-6">
                 <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 admin-dark:text-zinc-200">
@@ -1014,11 +996,6 @@ export default function CategoryCourseManager({
                 </div>
               </div>
               <div className="sm:col-span-2">
-                <label className={labelClass} htmlFor="ccm-short">Short description</label>
-                <textarea id="ccm-short" rows={2} className={inputClass} value={form.shortDescription}
-                  onChange={(e) => setForm({ ...form, shortDescription: e.target.value })} />
-              </div>
-              <div className="sm:col-span-2">
                 <label className={labelClass} htmlFor="ccm-cd-desc">Course Description (detailed)</label>
                 <textarea id="ccm-cd-desc" rows={4} className={inputClass} value={form.courseDescription}
                   placeholder="Detailed description for the course details page..."
@@ -1030,18 +1007,6 @@ export default function CategoryCourseManager({
                   placeholder={"Structured live classes\nRegular examinations\nStudy materials\nExpert guidance"}
                   onChange={(e) => setForm({ ...form, courseFeatures: e.target.value })} />
                 <p className="mt-1 text-[11px] text-slate-500">Shown on the Course Details page as “Course Features”. Reorder by moving lines.</p>
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass} htmlFor="ccm-topics">Course Topics (one per line)</label>
-                <textarea id="ccm-topics" rows={4} className={inputClass} value={form.courseTopics}
-                  placeholder={"What Will Be Taught:\nBiology fundamentals\nCell structure\nEvolution"}
-                  onChange={(e) => setForm({ ...form, courseTopics: e.target.value })} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass} htmlFor="ccm-overview">Chapter/Subject Overview (one per line)</label>
-                <textarea id="ccm-overview" rows={4} className={inputClass} value={form.chapterOverview}
-                  placeholder={"Chapter 1: Introduction\nChapter 2: Cell Biology\nChapter 3: Genetics"}
-                  onChange={(e) => setForm({ ...form, chapterOverview: e.target.value })} />
               </div>
 
               {/* Mentors assignment — specific to THIS course. */}

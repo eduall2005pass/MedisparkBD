@@ -148,6 +148,8 @@ export type CatalogCourse = {
   mentorIds?: string[];
   /** Course routine files (PDF / images) — per-course, supports multi-page. */
   routineUrls?: string[];
+  /** Exam Features — short features displayed on the Course Card (main website). */
+  examFeatures?: string[];
 };
 
 type CatalogCourseRow = {
@@ -165,6 +167,7 @@ type CatalogCourseRow = {
   fee: string | number;
   discount_fee: string | number | null;
   features: string | null;
+  exam_features: string | null;
   overview_title: string;
   overview: string | null;
   status: string;
@@ -243,6 +246,7 @@ export function rowToCourse(row: CatalogCourseRow): CatalogCourse {
     totalExams: row.total_exams != null ? toNumber(row.total_exams) : undefined,
     courseDetails: parseJsonObject<CourseDetails>(row.course_details ?? null),
     routineUrls: row.routine_urls ? parseJsonArray(row.routine_urls) : [],
+    examFeatures: row.exam_features ? parseJsonArray(row.exam_features) : [],
   };
 }
 
@@ -351,6 +355,20 @@ async function ensureTables(): Promise<void> {
     await exec(
       `ALTER TABLE catalog_courses ADD COLUMN routine_urls JSON NULL`,
     );
+  } catch {
+    // Best effort — column may already exist.
+  }
+  // Exam Features for Course Card (short list displayed on main website course card).
+  try {
+    await exec(
+      `ALTER TABLE catalog_courses ADD COLUMN exam_features JSON NULL`,
+    );
+  } catch {
+    // Best effort — column may already exist.
+  }
+  // Exam Features — short features displayed on the Course Card (main website).
+  try {
+    await ensureColumn("catalog_courses", "exam_features", "`exam_features` JSON NULL");
   } catch {
     // Best effort — column may already exist.
   }
@@ -678,10 +696,10 @@ export async function saveCatalogCourse(
     `INSERT INTO catalog_courses
        (slug, name, category, category_id, batch_id, image_url, short_description, description,
         teacher_name, teacher_photo_url, teacher_designation, duration,
-        fee, discount_fee, features, overview_title, overview,
+        fee, discount_fee, features, exam_features, overview_title, overview,
         status, availability, coupon_enabled, is_featured, qa_access, content_layout,
         total_classes, total_exams, course_details, routine_urls, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        name = VALUES(name), category = VALUES(category), category_id = VALUES(category_id),
        batch_id = VALUES(batch_id),
@@ -690,6 +708,7 @@ export async function saveCatalogCourse(
        teacher_photo_url = VALUES(teacher_photo_url),
        teacher_designation = VALUES(teacher_designation), duration = VALUES(duration),
        fee = VALUES(fee), discount_fee = VALUES(discount_fee), features = VALUES(features),
+       exam_features = VALUES(exam_features),
        overview_title = VALUES(overview_title), overview = VALUES(overview),
        status = VALUES(status), availability = VALUES(availability),
        coupon_enabled = VALUES(coupon_enabled), is_featured = VALUES(is_featured),
@@ -713,6 +732,7 @@ export async function saveCatalogCourse(
       fee,
       discountFee,
       JSON.stringify(asStringArray(input.features)),
+      JSON.stringify(asStringArray(input.examFeatures)),
       asString(input.overviewTitle),
       JSON.stringify(asStringArray(input.overview)),
       input.status === "published" ? "published" : "unpublished",
@@ -775,6 +795,7 @@ export async function saveCatalogCourse(
       fee,
       discountFee,
       features: asStringArray(input.features),
+      examFeatures: asStringArray(input.examFeatures),
       overviewTitle: asString(input.overviewTitle),
       overview: asStringArray(input.overview),
       status: input.status === "published" ? "published" : "unpublished",
