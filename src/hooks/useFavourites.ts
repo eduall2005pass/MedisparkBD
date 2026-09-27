@@ -87,15 +87,20 @@ export function useFavourites() {
         body: JSON.stringify({ itemType, itemId }),
       });
       if (!res.ok) throw new Error("Failed");
-      // Optimistically update cache
+      // Optimistically update cache (branch per key so strict TS indexing stays happy)
       mutate(
         (current) => {
           if (!current) return current;
-          const key = itemType === "qa" ? "qa" : `${itemType}s`;
-          return {
-            ...current,
-            [key]: current[key].filter((item: { item_id: string }) => item.item_id !== itemId),
-          };
+          if (itemType === "qa") {
+            return { ...current, qa: current.qa.filter((item) => item.item_id !== itemId) };
+          }
+          if (itemType === "class") {
+            return { ...current, classes: current.classes.filter((item) => item.item_id !== itemId) };
+          }
+          if (itemType === "exam") {
+            return { ...current, exams: current.exams.filter((item) => item.item_id !== itemId) };
+          }
+          return { ...current, materials: current.materials.filter((item) => item.item_id !== itemId) };
         },
         false,
       );

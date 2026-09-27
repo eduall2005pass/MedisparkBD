@@ -1,6 +1,6 @@
 import { exec, query } from "@/lib/mysql";
 import { saveFile, removeFile, isLocalUpload } from "@/lib/storage";
-import { unstable_cache } from "next/cache";
+import { unstable_cache, revalidateTag, revalidatePath } from "next/cache";
 
 let courseCategoriesReady = false;
 export const COURSE_CATEGORIES_STORAGE_DIR = "course-categories";
@@ -80,6 +80,27 @@ export { ALLOWED_IMAGE_EXTENSIONS as ALLOWED_CATEGORY_IMAGE_EXTENSIONS };
 export const MAX_CATEGORY_IMAGE_SIZE = 5 * 1024 * 1024;
 
 let schemaEnsured = false;
+
+/**
+ * Bust every live-website category cache after a mutation so ON/OFF and
+ * reorder apply immediately (not after the 30s / 5min cache windows):
+ *  - `course-categories` tag → all `fetchActiveCourseCategories()` readers
+ *    (/courses page, Footer, counts, exam catalogs)
+ *  - `/api/course-categories` path → the public JSON route's static cache
+ * Best-effort: a cache failure must never fail the DB write itself.
+ */
+function bustCategoryCache(): void {
+  try {
+    revalidateTag("course-categories");
+  } catch {
+    // Cache backend unavailable — readers fall back to timed revalidation.
+  }
+  try {
+    revalidatePath("/api/course-categories");
+  } catch {
+    // Same as above.
+  }
+}
 
 export async function ensureSchema(): Promise<void> {
   if (courseCategoriesReady || schemaEnsured) return;
@@ -227,6 +248,7 @@ export async function createCourseCategory(input: {
       sortOrder,
     ],
   );
+  bustCategoryCache();
 
   return fetchAllCourseCategories();
 }
@@ -287,6 +309,7 @@ export async function updateCourseCategory(
   if (sets.length > 0) {
     values.push(id);
     await exec(`UPDATE course_categories SET ${sets.join(", ")} WHERE id = ?`, values);
+    bustCategoryCache();
   }
 
   return fetchAllCourseCategories();
@@ -314,6 +337,7 @@ export async function setCourseCategoryImage(
       [id],
     );
     await deleteCategoryImage(previousPath);
+    bustCategoryCache();
     return fetchAllCourseCategories();
   }
 
@@ -337,7 +361,7 @@ export async function setCourseCategoryImage(
     [url, url, id],
   );
   await deleteCategoryImage(previousPath);
-
+  bustCategoryCache();
   return fetchAllCourseCategories();
 }
 
@@ -349,6 +373,8 @@ export async function reorderCourseCategories(orderedIds: string[]): Promise<Cou
       orderedIds[index],
     ]);
   }
+  // Display order only — no other data is touched.
+  bustCategoryCache();
   return fetchAllCourseCategories();
 }
 
@@ -362,5 +388,6 @@ export async function deleteCourseCategory(id: string): Promise<CourseCategory[]
   if (rows[0]) {
     await deleteCategoryImage(rows[0].image_storage_path ?? rows[0].image_url);
   }
+  bustCategoryCache();
   return fetchAllCourseCategories();
 }

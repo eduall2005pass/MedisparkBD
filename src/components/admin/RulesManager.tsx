@@ -122,6 +122,20 @@ export default function RulesManager({ standalone = false }: { standalone?: bool
       </header>
 
       <div className={`${cardClass} mt-5 p-4`}>
+        <h2 className="text-sm font-extrabold text-[#0b1e3a] admin-dark:text-white">On this page</h2>
+        <ol className="mt-2 grid gap-1 sm:grid-cols-2">
+          {sections.map((s) => (
+            <li key={s.id}>
+              <a href={`#${s.id}`} className="text-sm font-semibold text-[#234e9f] hover:underline admin-dark:text-[#93c5fd]">
+                {s.title}
+              </a>
+              <span className="text-xs text-slate-400"> · {s.items.length}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div className={`${cardClass} mt-4 p-4`}>
         <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
           <div>
             <label className={labelClass} htmlFor="rules-q">নিয়ম খুঁজুন</label>
