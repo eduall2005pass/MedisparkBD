@@ -1020,10 +1020,10 @@ async function finalizeAttempt(
      ON DUPLICATE KEY UPDATE student_name = VALUES(student_name)`,
     [examId, uid, studentName],
   );
-  // Attempt typing — scheduled (official, ranked) vs practice (unranked for
-  // course exams; dynamically ranked for public practice via existing rules).
-  // Enrolled exams: Archived submissions are practice. Public exams stay live
-  // (public practice merit updates dynamically through the normal ranking).
+  // Attempt typing — scheduled (official, ranked) vs practice (unranked, never
+  // on the leaderboard). Enrolled exams: Archived submissions are practice.
+  // Public exams: static practice-mode exams + post-live Practice phase are
+  // both unranked practice attempts with their own result.
   let attemptType: "scheduled" | "practice" = "scheduled";
   try {
     const { getEnrolledExamPhase, isEnrolledExam, isEnrolledPracticePhase } = await import("@/lib/enrolled-exam-lifecycle");
@@ -1031,6 +1031,10 @@ async function finalizeAttempt(
     if (isEnrolled) {
       const phase = getEnrolledExamPhase(found);
       if (isEnrolledPracticePhase(phase)) attemptType = "practice";
+    } else if ((found as { examMode?: string }).examMode === "practice") {
+      // Static Practice Exam — student takes the exam normally, but the
+      // attempt is unranked and never affects the official leaderboard.
+      attemptType = "practice";
     } else if (await isPostLivePracticeExam(found).catch(() => false)) {
       // Public live-mode exam submitted after its End Time → unranked
       // practice attempt: it keeps its own result but gets merit_position

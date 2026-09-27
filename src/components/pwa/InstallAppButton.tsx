@@ -118,13 +118,14 @@ const BTN_CLASS =
   "rounded-xl border border-ink/20 bg-ink/5 px-6 py-3.5 text-center font-semibold text-heading transition hover:border-primary-500/60 hover:bg-ink/10 active:scale-[0.98]";
 
 /**
- * Hero install button with auto-detect:
- * - Installed (standalone) → "Open in App" linking home.
- * - Chrome/Edge with install prompt → native install popup on tap.
- * - Every other browser → per-browser Add-to-Home-Screen guide modal.
+ * Hero install button with 3-state auto-detect:
+ * - "app": running INSIDE the installed app → original Dashboard button.
+ * - "installed": browser, but the app is installed on this device
+ *   (getInstalledRelatedApps) → "Open in App".
+ * - "install": not installed → "Install as App" (native popup or guide).
  */
 export default function InstallAppButton() {
-  const [installed, setInstalled] = useState<boolean>(() => isStandalone());
+  const [mode, setMode] = useState<"app" | "installed" | "install">("install");
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [promptUsed, setPromptUsed] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -138,8 +139,29 @@ export default function InstallAppButton() {
 
   useEffect(() => {
     // Re-check after mount (SSR renders blind) without a sync setState.
-    void Promise.resolve().then(() => {
-      if (isStandalone()) setInstalled(true);
+    void Promise.resolve().then(async () => {
+      if (isStandalone()) {
+        setMode("app");
+        return;
+      }
+      // Browser tab, but the PWA may already be installed on this device —
+      // Chrome/Edge expose it via getInstalledRelatedApps (needs the
+      // related_applications manifest entry).
+      try {
+        const nav = navigator as Navigator & {
+          getInstalledRelatedApps?: () => Promise<Array<{ platform: string }>>;
+        };
+        if (typeof nav.getInstalledRelatedApps === "function") {
+          const related = await nav.getInstalledRelatedApps();
+          if (Array.isArray(related) && related.length > 0) {
+            setMode("installed");
+            return;
+          }
+        }
+      } catch {
+        // Unsupported — stay on the install path.
+      }
+      setMode("install");
     });
     const onBeforeInstall = (event: Event) => {
       event.preventDefault();
@@ -149,7 +171,7 @@ export default function InstallAppButton() {
       setPromptUsed(false);
     };
     const onInstalled = () => {
-      setInstalled(true);
+      setMode("app");
       setDeferred(null);
       setGuideOpen(false);
       setMinimized(false);
@@ -189,7 +211,7 @@ export default function InstallAppButton() {
       await deferred.prompt();
       const choice = await deferred.userChoice;
       if (choice.outcome === "accepted") {
-        setInstalled(true);
+        setMode("app");
         setDeferred(null);
         setGuideOpen(false);
         setMinimized(false);
@@ -212,12 +234,28 @@ export default function InstallAppButton() {
     setGuideOpen(true);
   }, [tryNativeInstall]);
 
-  if (installed) {
+  if (mode === "app") {
     // Already running inside the installed app → the original Dashboard
     // button (opening the app again would be pointless).
     return (
       <Link href="/dashboard" aria-label="Go to Dashboard" className={BTN_CLASS}>
         Dashboard
+      </Link>
+    );
+  }
+
+  if (mode === "installed") {
+    // Browser tab, but the app lives on this device → deep-link the app.
+    // launch_handler (manifest) routes this into the installed window
+    // where the platform supports link capturing.
+    return (
+      <Link href="/?source=pwa" aria-label="Open the MediSpark app" className={BTN_CLASS}>
+        <span className="inline-flex items-center gap-2">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
+          </svg>
+          Open in App
+        </span>
       </Link>
     );
   }

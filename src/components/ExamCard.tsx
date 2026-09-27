@@ -6,18 +6,26 @@ import {
 } from "@/lib/public-exams";
 
 /**
- * Exam Card — reference-based premium card, three states driven ONLY by the
- * exam's time-based status (dynamic exam data, never hardcoded):
+ * Exam Card — single premium Upcoming design shared by ALL states.
+ * Upcoming, Live and Practice render 100% IDENTICAL visuals (layout, size,
+ * spacing, typography, colors, border, radius, shadow, icons, badge style,
+ * premium appearance, responsive behavior). The ONLY differences are
+ * state-specific text + functionality:
  *
  *   Upcoming → "Upcoming Exam" + "Coming Soon" (disabled, cannot start)
- *   Live     → "Exam is Live"  + "Start Exam"  (starts the live attempt)
- *   Practice → "Practice Exam" + "Start Now"   (unranked practice attempt)
+ *   Live     → "Exam is Live Now" + "Start Exam" (blinking dot, starts live attempt)
+ *   Practice → "Practice Exam" + "Start Exam" (unranked practice attempt)
  *
- * Status color system — full-card state theme (dark surface preserved):
- *   Upcoming = YELLOW / GOLD · Live = GREEN · Practice = BLUE.
- * The phase color extends through the entire card (outer border, ambient
- * glow, gradient wash, icons, CTA button) while the main surface stays dark
- * to blend with the MediSpark background.
+ * Visual theme (all states): YELLOW / GOLD on a dark surface.
+ * Live keeps a faster dot blink as its state-specific indicator behavior —
+ * same yellow color, same size/position, only the pulse speed differs.
+ * No green / blue / red chrome appears on Upcoming / Live / Practice cards.
+ *
+ * Single Upcoming gold theme (dark surface preserved): the yellow accent
+ * extends through the entire card (outer border, ambient glow, gradient
+ * wash, icons, CTA button) while the main surface stays dark to blend
+ * with the MediSpark background. Closed/expired states keep their own
+ * muted theme; Upcoming / Live / Practice are always gold.
  *
  * Schedule visibility: the "পরীক্ষায় অংশগ্রহণের সময়সূচি" section renders
  * for ALL states (Upcoming / Live / Practice) — it is gated ONLY on the
@@ -184,40 +192,39 @@ const phaseMeta: Record<
       "border border-yellow-400/30 bg-gradient-to-b from-yellow-500/[0.16] to-yellow-600/[0.08] text-yellow-100/80 shadow-[0_10px_28px_-12px_rgba(234,179,8,0.5),inset_0_1px_0_rgba(255,255,255,0.15)]",
   },
   live: {
-    badge: "Exam is Live",
+    badge: "Exam is Live Now",
     dotClass: "exam-dot exam-dot-live",
-    label:
-      "bg-green-600 text-white shadow-lg shadow-green-950/40 ring-1 ring-green-400/70",
+    label: "border-yellow-400/50 bg-yellow-500/10 exam-pill-upcoming",
     action: "Start Exam",
-    accentBar: "from-green-500 via-green-500/40 to-transparent",
-    ring: "hover:border-green-400/60",
-    icon: "border-green-500/30 bg-green-600/10 text-green-500",
-    accentText: "text-green-500",
-    divider: "via-green-500/40",
-    glow: "bg-green-600/10 group-hover:bg-green-600/20",
-    btn: "border border-green-300/40 bg-gradient-to-b from-green-400 via-green-500 to-green-700 text-white shadow-[0_12px_32px_-10px_rgba(34,197,94,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] hover:from-green-300 hover:via-green-500 hover:to-green-700 hover:shadow-[0_16px_36px_-10px_rgba(34,197,94,0.7),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
-    cardBorder: "border-green-400/30",
-    cardShadow: "shadow-green-950/30",
-    wash: "from-green-500/[0.07] via-transparent to-transparent",
-    panel: "border-green-500/20 bg-green-500/[0.05]",
+    accentBar: "from-yellow-500/80 via-yellow-500/20 to-transparent",
+    ring: "hover:border-yellow-400/50",
+    icon: "border-yellow-500/30 bg-yellow-600/10 text-yellow-500",
+    accentText: "text-yellow-500",
+    divider: "via-yellow-500/40",
+    glow: "bg-yellow-600/10 group-hover:bg-yellow-600/20",
+    btn: "border border-yellow-300/40 bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-600 text-white shadow-[0_12px_32px_-10px_rgba(234,179,8,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] hover:from-yellow-200 hover:via-yellow-500 hover:to-yellow-600 hover:shadow-[0_16px_36px_-10px_rgba(234,179,8,0.7),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+    cardBorder: "border-yellow-400/30",
+    cardShadow: "shadow-yellow-950/30",
+    wash: "from-yellow-500/[0.07] via-transparent to-transparent",
+    panel: "border-yellow-500/20 bg-yellow-500/[0.05]",
     disabledBtn: "border-ink/10 bg-dark-850 text-neutral-400",
   },
   practice: {
     badge: "Practice Exam",
     dotClass: "exam-dot exam-dot-practice",
-    label: "border-blue-400/50 bg-blue-600/15 exam-pill-practice",
-    action: "Start Now",
-    accentBar: "from-blue-500/80 via-blue-500/30 to-transparent",
-    ring: "hover:border-blue-400/60",
-    icon: "border-blue-500/30 bg-blue-600/10 text-blue-500",
-    accentText: "text-blue-500",
-    divider: "via-blue-500/40",
-    glow: "bg-blue-600/10 group-hover:bg-blue-600/20",
-    btn: "border border-blue-300/40 bg-gradient-to-b from-blue-400 via-blue-500 to-blue-700 text-white shadow-[0_12px_32px_-10px_rgba(59,130,246,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] hover:from-blue-300 hover:via-blue-500 hover:to-blue-700 hover:shadow-[0_16px_36px_-10px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
-    cardBorder: "border-blue-400/30",
-    cardShadow: "shadow-blue-950/30",
-    wash: "from-blue-500/[0.07] via-transparent to-transparent",
-    panel: "border-blue-500/20 bg-blue-500/[0.05]",
+    label: "border-yellow-400/50 bg-yellow-500/10 exam-pill-upcoming",
+    action: "Start Exam",
+    accentBar: "from-yellow-500/80 via-yellow-500/20 to-transparent",
+    ring: "hover:border-yellow-400/50",
+    icon: "border-yellow-500/30 bg-yellow-600/10 text-yellow-500",
+    accentText: "text-yellow-500",
+    divider: "via-yellow-500/40",
+    glow: "bg-yellow-600/10 group-hover:bg-yellow-600/20",
+    btn: "border border-yellow-300/40 bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-600 text-white shadow-[0_12px_32px_-10px_rgba(234,179,8,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] hover:from-yellow-200 hover:via-yellow-500 hover:to-yellow-600 hover:shadow-[0_16px_36px_-10px_rgba(234,179,8,0.7),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+    cardBorder: "border-yellow-400/30",
+    cardShadow: "shadow-yellow-950/30",
+    wash: "from-yellow-500/[0.07] via-transparent to-transparent",
+    panel: "border-yellow-500/20 bg-yellow-500/[0.05]",
     disabledBtn: "border-ink/10 bg-dark-850 text-neutral-400",
   },
   closed: {
@@ -341,14 +348,9 @@ export default function ExamCard({
     phase !== "idle";
   const href = detailsHref ?? `/exam/${exam.id}`;
 
-  const accentText =
-    phase === "upcoming"
-      ? "text-yellow-500"
-      : phase === "live"
-        ? "text-green-400"
-        : phase === "practice"
-          ? "text-blue-400"
-          : "text-neutral-400";
+  // Single Upcoming visual theme for ALL states — only text/functionality
+  // differ. Live keeps its faster dot blink via CSS (same yellow color).
+  const accentText = "text-yellow-500";
 
   const buttonBase =
     "w-full rounded-2xl px-6 py-3.5 text-[15px] font-extrabold tracking-wide touch-manipulation select-none transform-gpu will-change-transform transition-all duration-200 ease-out active:scale-[0.98]";
@@ -422,7 +424,7 @@ export default function ExamCard({
         <ExamWindow exam={exam} accentText={accentText} />
 
         {isPostLivePractice && (
-          <p className="exam-practice-note mt-3 rounded-lg border border-blue-400/25 bg-blue-600/10 px-3 py-2 text-[11px] font-semibold leading-relaxed">
+          <p className="exam-practice-note mt-3 rounded-lg border border-yellow-400/25 bg-yellow-500/10 px-3 py-2 text-[11px] font-semibold leading-relaxed">
             Live window ended — practice attempts won&apos;t affect the
             leaderboard.
           </p>

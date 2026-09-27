@@ -276,7 +276,9 @@ html:not(:has([data-admin-theme]))[data-button-style="square"] button {
 }
 
 /* ============ Exam Card status indicator — smooth premium pulse/glow ============ */
-/* Same size/position in every state; only the glow intensity changes. */
+/* Single Upcoming (yellow/gold) visual theme for Upcoming / Live / Practice.
+ * Same size/position/color in every state; only the Live pulse speed differs
+ * (Live blinks faster as its state-specific indicator behavior). */
 .exam-dot {
   height: 6px;
   width: 6px;
@@ -293,14 +295,14 @@ html:not(:has([data-admin-theme]))[data-button-style="square"] button {
   animation: exam-dot-pulse 1.8s ease-in-out infinite;
 }
 .exam-dot-live {
-  background: #4ade80;
-  box-shadow: 0 0 8px 2px rgb(74 222 128 / 0.9);
+  background: #eab308;
+  box-shadow: 0 0 6px 1px rgb(234 179 8 / 0.7);
   animation: exam-dot-pulse 1.2s ease-in-out infinite;
 }
 .exam-dot-practice {
-  background: #60a5fa;
-  box-shadow: 0 0 6px 1px rgb(96 165 250 / 0.65);
-  animation: exam-dot-pulse 2.4s ease-in-out infinite;
+  background: #eab308;
+  box-shadow: 0 0 6px 1px rgb(234 179 8 / 0.7);
+  animation: exam-dot-pulse 1.8s ease-in-out infinite;
 }
 .exam-dot-closed {
   background: currentColor;
@@ -312,10 +314,10 @@ html:not(:has([data-admin-theme]))[data-button-style="square"] button {
 /* Theme-safe pill text — readable in both Dark and Light mode. */
 .exam-pill-upcoming { color: #a16207; }
 html[data-theme="dark"] .exam-pill-upcoming { color: #fde047; }
-.exam-pill-practice { color: #1d4ed8; }
-html[data-theme="dark"] .exam-pill-practice { color: #bfdbff; }
-.exam-practice-note { color: #1d4ed8; }
-html[data-theme="dark"] .exam-practice-note { color: rgba(191, 219, 255, 0.9); }
+.exam-pill-practice { color: #a16207; }
+html[data-theme="dark"] .exam-pill-practice { color: #fde047; }
+.exam-practice-note { color: #a16207; }
+html[data-theme="dark"] .exam-practice-note { color: rgba(253, 224, 71, 0.9); }
 .exam-result-btn { color: #047857; }
 html[data-theme="dark"] .exam-result-btn { color: #a7f3d0; }
 

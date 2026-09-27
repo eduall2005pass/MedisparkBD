@@ -12,6 +12,21 @@
   "background_color": "#0b1220",
   "theme_color": "#0b1220",
   "categories": ["education"],
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://medisparkbd.com/manifest.webmanifest"
+    },
+    {
+      "platform": "webapp",
+      "url": "https://medisparkbd.com/?source=pwa"
+    }
+  ],
+  "launch_handler": {
+    "route_to": "auto",
+    "navigate_existing_client": "always"
+  },
   "icons": [
     {
       "src": "/icons/icon-192-v2.png",
