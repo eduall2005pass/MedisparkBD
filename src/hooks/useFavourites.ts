@@ -58,14 +58,19 @@ type AllFavourites = {
   qa: FavQa[];
 };
 
-const fetcher = async (url: string) => {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load");
-  return res.json();
-};
-
 export function useFavourites() {
   const { user, authLoading } = useAuth();
+
+  const fetcher = async (url: string) => {
+    if (!user) throw new Error("Not authenticated");
+    const token = await user.getIdToken();
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Failed to load");
+    return res.json();
+  };
 
   const { data, error, isLoading, mutate } = useSWR<AllFavourites>(
     user && !authLoading ? "/api/my/favourites/details/all" : null,
