@@ -54,6 +54,21 @@ function computeLite(): boolean {
   }
 }
 
+/** Exam-taking routes — lite mode must NEVER hold question images or
+ *  touch media here. Badge may still show; content stays fully functional. */
+function isExamRoute(): boolean {
+  try {
+    const path = window.location.pathname;
+    return (
+      path.startsWith("/exam/") ||
+      path.includes("/exams/") ||
+      path.includes("/exam-flow/")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function holdImage(img: HTMLImageElement): void {
   if (img.dataset.liteSrc) return;
   // Already loaded images cost nothing more — leave them alone.
@@ -79,6 +94,7 @@ function releaseImage(img: HTMLImageElement): void {
 
 function holdPendingImages(): void {
   try {
+    if (isExamRoute()) return;
     document.querySelectorAll("img").forEach((img) => {
       holdImage(img as HTMLImageElement);
     });
@@ -99,6 +115,7 @@ function releaseAllImages(): void {
 
 function pauseVideos(): void {
   try {
+    if (isExamRoute()) return;
     document.querySelectorAll("video").forEach((video) => {
       const v = video as HTMLVideoElement;
       try {
@@ -157,6 +174,9 @@ export default function LiteModeProvider({ children }: { children: ReactNode }) 
   useEffect(() => {
     if (!lite) return;
     const observer = new MutationObserver((mutations) => {
+      // SPA navigation may land on an exam route while lite stays on —
+      // never hold anything there.
+      if (isExamRoute()) return;
       for (const mutation of mutations) {
         mutation.addedNodes.forEach((node) => {
           if (!(node instanceof HTMLElement)) return;
