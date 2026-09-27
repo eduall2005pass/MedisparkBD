@@ -85,6 +85,8 @@ export type PublicExam = {
   secondTimerEnabled: boolean;
   /** Second timer deduction marks. */
   secondTimerDeduction: number;
+  /** Central rule template key (academic/medical/university). */
+  ruleTemplate?: string | null;
   eligibility: Eligibility;
 };
 

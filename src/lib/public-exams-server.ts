@@ -55,6 +55,7 @@ function toPublicExam(exam: Exam): PublicExam {
     endsAt: endsAtIso,
     secondTimerEnabled: exam.secondTimerEnabled ?? false,
     secondTimerDeduction: exam.secondTimerDeduction ?? 3,
+    ruleTemplate: exam.ruleTemplate ?? null,
     examDate: scheduledIso ? scheduledIso.slice(0, 10) : "",
     examTime: scheduledIso ? formatExamTime(scheduledIso) : "",
     status: deriveStatus(exam),

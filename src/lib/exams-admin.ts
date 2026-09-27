@@ -1123,11 +1123,12 @@ export async function saveExam(
     ],
   );
 
-  // New public exams start with MediSpark's standard rule set — fully
+  // New public exams start with their template's rule set from the central
+  // Exam Rules page (Academic/Medical/Varsity) — fully
   // editable/deletable afterwards from Public Exam Control → Rules.
   if (isNew) {
     try {
-      await seedDefaultExamRules(id);
+      await seedDefaultExamRules(id, resolvedRuleTemplate);
     } catch {
       // Best effort — rules can still be added manually.
     }

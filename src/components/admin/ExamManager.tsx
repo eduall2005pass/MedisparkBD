@@ -1109,6 +1109,7 @@ export default function ExamManager({
                       {(form as unknown as { ruleTemplate: string }).ruleTemplate === "medical" && "Medical: negative marking + second-timer penalty."}
                       {(form as unknown as { ruleTemplate: string }).ruleTemplate === "university" && "University: negative marking, no second-timer."}
                       {(form as unknown as { ruleTemplate: string }).ruleTemplate === "academic" && "Academic: no negative marking, no second-timer."}
+                      {" "}Edit texts in <a href="/admin/exam-rules" className="font-bold text-primary-600 underline">Exam Rules</a>.
                     </p>
                   </div>
                   <div className="sm:col-span-2 rounded-xl border border-neutral-200 p-3 admin-dark:border-zinc-700">

@@ -128,8 +128,19 @@ export async function reorderExamRules(
   return fetchExamRules(examId);
 }
 
-/** MediSpark's standard rule set for brand-new exams (editable afterwards). */
-export function buildDefaultExamRules(examId: string): ExamRule[] {
+/** MediSpark's standard rule set for brand-new exams (editable afterwards).
+ * Template-aware: Academic / Medical / Varsity texts come from the central
+ * Exam Rules page (exam_rule_templates). Falls back to built-ins. */
+export function buildDefaultExamRules(examId: string, template?: string | null): ExamRule[] {
+  const key = String(template ?? "").toLowerCase() === "medical" ? "medical" : String(template ?? "").toLowerCase() === "university" || String(template ?? "").toLowerCase() === "varsity" ? "university" : "academic";
+  const negative =
+    key === "academic"
+      ? "এই পরীক্ষায় নেগেটিভ মার্কিং নেই — ভুল উত্তরের জন্য কোনো নম্বর কাটা যাবে না। নিশ্চিন্তে উত্তর দিন।"
+      : "এই পরীক্ষায় নেগেটিভ মার্কিং চালু থাকলে প্রতিটি ভুল উত্তরের জন্য ০.২৫ নম্বর কাটা যাবে। সতর্কভাবে উত্তর দিন!";
+  const secondTimer =
+    key === "medical"
+      ? "এই পরীক্ষার জন্য চালু থাকলে, একই পরীক্ষা দ্বিতীয়বার (Second Timer) দিলে গ্রেডিংয়ের পর অতিরিক্ত নম্বর কাটা যাবে। প্রথমবারের (First Timer) প্রচেষ্টায় কখনো জরিমানা করা হয় না।"
+      : "এই পরীক্ষায় Second Timer জরিমানা নেই — পুনরায় দিলেও অতিরিক্ত নম্বর কাটা যাবে না।";
   const defaults: Array<Pick<ExamRule, "title" | "text">> = [
     {
       title: "Duration",
@@ -141,7 +152,7 @@ export function buildDefaultExamRules(examId: string): ExamRule[] {
     },
     {
       title: "Negative Marking",
-      text: "এই পরীক্ষায় নেগেটিভ মার্কিং চালু থাকলে প্রতিটি ভুল উত্তরের জন্য ০.২৫ নম্বর কাটা যাবে। সতর্কভাবে উত্তর দিন!",
+      text: negative,
     },
     {
       title: "Answer Selection Rules",
@@ -157,7 +168,7 @@ export function buildDefaultExamRules(examId: string): ExamRule[] {
     },
     {
       title: "Second Attempt Timer Penalty",
-      text: "এই পরীক্ষার জন্য চালু থাকলে, একই পরীক্ষা দ্বিতীয়বার (Second Timer) দিলে গ্রেডিংয়ের পর অতিরিক্ত নম্বর কাটা যাবে। প্রথমবারের (First Timer) প্রচেষ্টায় কখনো জরিমানা করা হয় না।",
+      text: secondTimer,
     },
     {
       title: "Answer Key",
@@ -173,15 +184,37 @@ export function buildDefaultExamRules(examId: string): ExamRule[] {
   }));
 }
 
-/** Seed the standard rules for a new exam (only when it has none yet). */
-export async function seedDefaultExamRules(examId: string): Promise<void> {
+/** Seed the standard rules for a new exam (only when it has none yet).
+ * Prefers the central Exam Rules template when available. */
+export async function seedDefaultExamRules(examId: string, template?: string | null): Promise<void> {
   await ensureExamRulesTable();
   const existing = await query<{ id: number }[]>(
     `SELECT id FROM exam_rules WHERE exam_id = ? LIMIT 1`,
     [examId],
   );
   if (existing.length > 0) return;
-  const rules = buildDefaultExamRules(examId);
+  // Prefer central template rows (Admin → Exam Rules page).
+  try {
+    const { ensureTemplateTable, normalizeTemplate } = await import("@/lib/exam-rule-templates");
+    await ensureTemplateTable();
+    const key = normalizeTemplate(template);
+    const tplRows = await query<{ rule_title: string | null; rule_text: string; sort_order: number }[]>(
+      `SELECT rule_title, rule_text, sort_order FROM exam_rule_templates WHERE template = ? ORDER BY sort_order ASC`,
+      [key],
+    );
+    if (tplRows.length > 0) {
+      for (const r of tplRows) {
+        await exec(
+          `INSERT INTO exam_rules (exam_id, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`,
+          [examId, r.rule_title ?? "", r.rule_text, r.sort_order],
+        );
+      }
+      return;
+    }
+  } catch {
+    // Fall through to built-ins.
+  }
+  const rules = buildDefaultExamRules(examId, template);
   for (const rule of rules) {
     await exec(
       `INSERT INTO exam_rules (exam_id, rule_title, rule_text, sort_order)
