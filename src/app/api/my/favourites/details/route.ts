@@ -73,6 +73,7 @@ export async function GET(request: NextRequest) {
            FROM student_favourites f
            JOIN course_classes cl ON cl.id = f.item_id AND cl.is_active = 1
            JOIN course_chapters ch ON ch.id = cl.chapter_id AND ch.is_active = 1
+           JOIN course_subjects s ON s.id = ch.subject_id
            JOIN course_subject_assignments a ON a.subject_id = ch.subject_id
            JOIN catalog_courses cc ON cc.slug = a.course_slug
            JOIN enrollments e ON e.course_id = a.course_slug AND e.student_uid = ? AND e.enrollment_status = 'active'
@@ -91,6 +92,7 @@ export async function GET(request: NextRequest) {
            FROM student_favourites f
            JOIN course_materials m ON m.id = f.item_id AND m.is_active = 1
            JOIN course_chapters ch ON ch.id = m.chapter_id AND ch.is_active = 1
+           JOIN course_subjects s ON s.id = ch.subject_id
            JOIN course_subject_assignments a ON a.subject_id = ch.subject_id
            JOIN catalog_courses cc ON cc.slug = a.course_slug
            JOIN enrollments e ON e.course_id = a.course_slug AND e.student_uid = ? AND e.enrollment_status = 'active'
@@ -109,6 +111,7 @@ export async function GET(request: NextRequest) {
            FROM student_favourites f
            JOIN exams ex ON ex.id = f.item_id AND ex.status = 'published'
            LEFT JOIN course_chapters ch ON ch.id = ex.chapter_id
+           LEFT JOIN course_subjects s ON s.id = ch.subject_id
            LEFT JOIN course_subject_assignments a ON a.subject_id = ch.subject_id
            LEFT JOIN catalog_courses cc ON cc.slug = a.course_slug
           WHERE f.student_uid = ? AND f.item_type = 'exam'
