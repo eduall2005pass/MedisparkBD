@@ -6,6 +6,7 @@ import ExamCard from "@/components/ExamCard";
 import {
   distinctSubjects,
   getPublicLivePhase,
+  isPracticeMode,
   matchMedicalPracticeSubject,
   MEDICAL_PRACTICE_SUBJECTS,
   medicalPracticeSubjectTitle,
@@ -18,7 +19,7 @@ import type { ExamCategory, PublicExam } from "@/lib/public-exams";
 type ModeTab = "live" | "practice";
 
 const LIVE_SECTIONS: {
-  phase: PublicLivePhase;
+  phase: Exclude<PublicLivePhase, "practice" | "hidden">;
   heading: string;
   dot: string;
   text: string;
@@ -34,12 +35,6 @@ const LIVE_SECTIONS: {
     heading: "Exam is Live Now",
     dot: "bg-emerald-500",
     text: "text-emerald-400",
-  },
-  {
-    phase: "practice",
-    heading: "Practice Exam",
-    dot: "bg-violet-500",
-    text: "text-violet-300",
   },
   {
     phase: "closed",
@@ -130,21 +125,25 @@ export default function PublicExamCategoryView({
     [exams, batch],
   );
 
-  // Live Exam tab: ONLY live-mode exams with the Upcoming → Live →
-  // Practice Exam lifecycle (automatic after End Time; unranked attempts).
-  // Admin-closed exams show under Exam is Closed; post-live practice never
-  // moves to the Practice tab and never hides.
+  // Live Exam tab: ONLY static live-mode exams (examMode === "live";
+  // legacy `kind = "practice"` rows count as practice) that are still in
+  // their Upcoming → Live → Closed lifecycle. A live-mode exam whose End
+  // Time has passed is in its automatic post-live Practice phase — its card
+  // carries the "Practice Exam" badge, so it belongs to the Practice Exam
+  // tab, NEVER to the Live Exam section.
   const liveGroups = useMemo(() => {
-    const groups: Record<PublicLivePhase, PublicExam[]> = {
+    const groups: Record<"upcoming" | "live" | "closed", PublicExam[]> = {
       upcoming: [],
       live: [],
-      practice: [],
       closed: [],
-      hidden: [],
     };
     for (const exam of batchFiltered) {
-      if ((exam.examMode ?? "live") !== "live") continue;
-      groups[getPublicLivePhase(exam, nowMs)].push(exam);
+      if (isPracticeMode(exam)) continue;
+      const phase = getPublicLivePhase(exam, nowMs);
+      // Post-live Practice (and hidden) live-mode exams are NOT Live Exams
+      // anymore — they render in the Practice Exam tab (see practiceExams).
+      if (phase === "practice" || phase === "hidden") continue;
+      groups[phase].push(exam);
     }
     return groups;
   }, [batchFiltered, nowMs]);
@@ -152,14 +151,24 @@ export default function PublicExamCategoryView({
   const liveTotal =
     liveGroups.upcoming.length +
     liveGroups.live.length +
-    liveGroups.practice.length +
     liveGroups.closed.length;
 
-  // Practice Exam tab: continuously available practice-mode exams.
+  // Practice Exam tab: ONLY exams in their Practice phase —
+  // 1) static practice-mode exams (examMode === "practice", incl. legacy
+  //    `kind = "practice"` rows normalized server-side), plus
+  // 2) live-mode exams past their End Time (automatic post-live Practice
+  //    phase; attempts are unranked). A static practice-mode exam NEVER
+  //    appears in the Live Exam tab, and no Upcoming/Live/Closed live-mode
+  //    exam EVER appears here.
   const practiceExams = useMemo(
     () =>
-      batchFiltered.filter((exam) => (exam.examMode ?? "live") === "practice"),
-    [batchFiltered],
+      batchFiltered.filter(
+        (exam) =>
+          isPracticeMode(exam) ||
+          (!isPracticeMode(exam) &&
+            getPublicLivePhase(exam, nowMs) === "practice"),
+      ),
+    [batchFiltered, nowMs],
   );
 
   const useSubjectCards = practiceUsesSubjectCards(categoryKey, practiceExams);
