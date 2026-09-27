@@ -91,7 +91,7 @@ let schemaEnsured = false;
  */
 function bustCategoryCache(): void {
   try {
-    revalidateTag("course-categories");
+    revalidateTag("course-categories", { expire: 0 });
   } catch {
     // Cache backend unavailable — readers fall back to timed revalidation.
   }
