@@ -19,6 +19,7 @@ export const DEFAULT_NAVBAR_ITEMS: NavbarItem[] = [
   { key: "courses", label: "Course", href: "/courses", isActive: true },
   { key: "public-exam", label: "Public Exam", href: "/exam", isActive: true },
   { key: "qa", label: "Q&A", href: "/qa", isActive: true },
+  { key: "result", label: "Result", href: "/result", isActive: true },
   { key: "our-success", label: "Our Success", href: "/#our-success", isActive: true },
   { key: "jersey", label: "Jersey", href: "/#jerseys", isActive: true },
   { key: "mentors", label: "Mentor", href: "/#mentors", isActive: true },

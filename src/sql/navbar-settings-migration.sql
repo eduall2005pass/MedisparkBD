@@ -29,8 +29,10 @@ INSERT IGNORE INTO navbar_items (item_key, label, href, sort_order, is_active) V
   ('dashboard', 'Dashboard', '/dashboard', 2, 1),
   ('courses', 'Course', '/courses', 3, 1),
   ('public-exam', 'Public Exam', '/exam', 4, 1),
-  ('our-success', 'Our Success', '/#our-success', 5, 1),
-  ('jersey', 'Jersey', NULL, 6, 1),
-  ('mentors', 'Mentor', '/#mentors', 7, 1),
-  ('reviews', 'Review', '/#reviews', 8, 1),
-  ('faq', 'FAQ', '/#faq', 9, 1);
+  ('qa', 'Q&A', '/qa', 5, 1),
+  ('result', 'Result', '/result', 6, 1),
+  ('our-success', 'Our Success', '/#our-success', 7, 1),
+  ('jersey', 'Jersey', NULL, 8, 1),
+  ('mentors', 'Mentor', '/#mentors', 9, 1),
+  ('reviews', 'Review', '/#reviews', 10, 1),
+  ('faq', 'FAQ', '/#faq', 11, 1);

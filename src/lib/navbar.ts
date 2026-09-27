@@ -65,6 +65,29 @@ export async function fetchNavbarConfig(): Promise<NavbarConfig> {
           items.splice(examIndex + 1, 0, qaItem);
         }
       }
+      // Ensure the Result entry exists even in older saved menus — it always
+      // sits immediately after Q&A.
+      if (!items.some((item) => item.key === "result")) {
+        const resultItem: NavbarItem = {
+          key: "result",
+          label: "Result",
+          href: "/result",
+          isActive: true,
+        };
+        const qaIndex = items.findIndex((item) => item.key === "qa");
+        if (qaIndex === -1) {
+          const examIndex = items.findIndex(
+            (item) => item.key === "public-exam",
+          );
+          if (examIndex === -1) {
+            items.push(resultItem);
+          } else {
+            items.splice(examIndex + 1, 0, resultItem);
+          }
+        } else {
+          items.splice(qaIndex + 1, 0, resultItem);
+        }
+      }
     } else {
       items = DEFAULT_NAVBAR_CONFIG.items;
     }
