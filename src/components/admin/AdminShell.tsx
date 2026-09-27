@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -127,11 +127,46 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+/** Map an activity action to the admin page that owns it (click → redirect). */
+function activityHref(action: string): string {
+  const a = action.toLowerCase();
+  if (/enroll|payment|coupon|fee/.test(a)) return "/admin/enrollment-control";
+  if (/result|ranking|leaderboard/.test(a)) return "/admin/result-control";
+  if (/public.?exam/.test(a)) return "/admin/public-exam-control";
+  if (/exam|question|answer.?key|rule/.test(a)) return "/admin/public-exam-control";
+  if (/material|pdf|chapter|content|course/.test(a)) return "/admin/course-control";
+  if (/student|profile/.test(a)) return "/admin/student-control";
+  if (/qa|question.*answer/.test(a)) return "/admin/qa-control";
+  if (/notif|push|announce/.test(a)) return "/admin/notification-control";
+  if (/admin|role|staff|moderator|teacher|activity|audit|log/.test(a)) return "/admin/admin-center";
+  if (/finance|cost|income|audit/.test(a)) return "/finance";
+  if (/home|banner|hero|review|faq/.test(a)) return "/admin/home-control";
+  if (/website|theme|navbar|seo|logo|mentor|footer|setting/.test(a)) return "/admin/website-information";
+  if (/dashboard/.test(a)) return "/admin/dashboard-control";
+  return "/admin/administration/activity-logs";
+}
+
+const NOTIF_READ_KEY = "medispark-admin-notif-read";
+
+function loadReadIds(): number[] {
+  try {
+    const raw = window.localStorage.getItem(NOTIF_READ_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((v): v is number => typeof v === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
   // Notification bell — recent admin activity feed.
   const notifRef = useRef<HTMLDivElement>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifItems, setNotifItems] = useState<RecentActivity[]>([]);
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
+  // Per-admin read state (localStorage) — audit rows are never deleted,
+  // checking a notification only hides its unread dot locally.
+  const [readIds, setReadIds] = useState<number[]>([]);
   // Browser/device Back closes open drawers/overlays first (no navigation).
   useOverlayBackClose(mobileOpen, () => setMobileOpen(false));
   useOverlayBackClose(mobileSearchOpen, () => setMobileSearchOpen(false));
@@ -142,6 +177,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     setCollapsed(
       window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "collapsed"
     );
+    setReadIds(loadReadIds());
   }, []);
 
   useEffect(() => {
@@ -174,42 +210,68 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   useOverlayBackClose(notifOpen, () => setNotifOpen(false));
 
   // Keep the feed fresh while the admin panel is open
-  // (initial load + 60s polling).
-  useEffect(() => {
+  // (initial load + 30s polling + window focus + every bell open).
+  const loadRecent = useCallback(async () => {
     if (!gate.ready) return;
-    let cancelled = false;
-    const loadRecent = async () => {
-      try {
-        const response = await fetch("/api/admin/activity/recent", {
-          cache: "no-store",
-          headers: gate.headers,
-        });
-        if (!response.ok) return;
-        const data = (await response.json()) as {
-          logs?: RecentActivity[];
-          pending?: PendingItem[];
-        };
-        if (cancelled) return;
-        if (Array.isArray(data.logs)) setNotifItems(data.logs);
-        if (Array.isArray(data.pending)) setPendingItems(data.pending);
-      } catch {
-        // Bell stays quiet on failure — never blocks the panel.
-      }
-    };
-    void loadRecent();
-    const timer = window.setInterval(() => void loadRecent(), 60_000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+    try {
+      const response = await fetch("/api/admin/activity/recent", {
+        cache: "no-store",
+        headers: gate.headers,
+      });
+      if (!response.ok) return;
+      const data = (await response.json()) as {
+        logs?: RecentActivity[];
+        pending?: PendingItem[];
+      };
+      if (Array.isArray(data.logs)) setNotifItems(data.logs);
+      if (Array.isArray(data.pending)) setPendingItems(data.pending);
+    } catch {
+      // Bell stays quiet on failure — never blocks the panel.
+    }
   }, [gate.ready, gate.headers]);
 
-  // The badge counts pending work only — it clears itself once the
-  // admin approves/rejects the requests.
+  useEffect(() => {
+    if (!gate.ready) return;
+    void loadRecent();
+    const timer = window.setInterval(() => void loadRecent(), 30_000);
+    const onFocus = () => void loadRecent();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [gate.ready, loadRecent]);
+
+  // Badge = pending work + unread activity. Pending clears on
+  // approve/reject; activity clears via mark-as-read below.
   const pendingCount = pendingItems.length;
+  const unreadActivity = useMemo(
+    () => notifItems.filter((item) => !readIds.includes(item.id)),
+    [notifItems, readIds],
+  );
+  const badgeCount = pendingCount + unreadActivity.length;
+
+  const persistReadIds = (ids: number[]) => {
+    setReadIds(ids);
+    try {
+      window.localStorage.setItem(NOTIF_READ_KEY, JSON.stringify(ids.slice(-200)));
+    } catch {}
+  };
+
+  const markOneRead = (id: number) => {
+    if (readIds.includes(id)) return;
+    persistReadIds([...readIds, id]);
+  };
+
+  const markAllRead = () => {
+    persistReadIds([...readIds, ...notifItems.map((item) => item.id)]);
+  };
 
   const toggleNotif = () => {
-    setNotifOpen((open) => !open);
+    setNotifOpen((open) => {
+      if (!open) void loadRecent();
+      return !open;
+    });
   };
 
   // Close the mobile drawer ONLY after a menu item's route has actually
@@ -519,9 +581,9 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                 className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 text-zinc-700 transition hover:border-primary-500/60 hover:bg-neutral-50 admin-dark:border-zinc-700 admin-dark:text-zinc-200 admin-dark:hover:bg-zinc-800"
               >
                 <NotificationsIcon className="h-5 w-5" />
-                {pendingCount > 0 && (
+                {badgeCount > 0 && (
                   <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-600 px-1 text-[10px] font-bold text-white">
-                    {pendingCount > 9 ? "9+" : pendingCount}
+                    {badgeCount > 9 ? "9+" : badgeCount}
                   </span>
                 )}
               </button>
@@ -532,11 +594,22 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                     <p className="text-sm font-bold text-zinc-900 admin-dark:text-zinc-50">
                       Notifications
                     </p>
-                    {pendingCount > 0 && (
-                      <span className="rounded-full bg-primary-600/10 px-2 py-0.5 text-[10px] font-bold text-primary-700 admin-dark:text-primary-400">
-                        {pendingCount} pending
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {pendingCount > 0 && (
+                        <span className="rounded-full bg-primary-600/10 px-2 py-0.5 text-[10px] font-bold text-primary-700 admin-dark:text-primary-400">
+                          {pendingCount} pending
+                        </span>
+                      )}
+                      {unreadActivity.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllRead}
+                          className="rounded-full px-2 py-0.5 text-[10px] font-bold text-primary-700 transition hover:bg-primary-600/10 admin-dark:text-primary-400"
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="max-h-96 overflow-y-auto">
                     {/* Pending work first — enrollment requests waiting for approval. */}
@@ -582,21 +655,36 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                           No activity yet.
                         </li>
                       ) : (
-                        notifItems.map((item) => (
-                          <li key={item.id} className="px-4 py-2.5">
-                            <p className="text-xs font-bold capitalize text-zinc-900 admin-dark:text-zinc-50">
-                              {formatActivityAction(item.action)}
-                            </p>
-                            {item.detail && (
-                              <p className="mt-0.5 line-clamp-2 text-xs text-zinc-600 admin-dark:text-zinc-300">
-                                {item.detail}
-                              </p>
-                            )}
-                            <p className="mt-0.5 text-[10px] text-zinc-400">
-                              {item.adminEmail || "Admin"} · {timeAgo(item.createdAt)}
-                            </p>
-                          </li>
-                        ))
+                        notifItems.map((item) => {
+                          const isUnread = !readIds.includes(item.id);
+                          return (
+                            <li key={item.id}>
+                              <Link
+                                href={activityHref(item.action)}
+                                onClick={() => {
+                                  markOneRead(item.id);
+                                  closeOverlays();
+                                }}
+                                className="block px-4 py-2.5 transition hover:bg-primary-600/5"
+                              >
+                                <p className="flex items-center gap-2 text-xs font-bold capitalize text-zinc-900 admin-dark:text-zinc-50">
+                                  {isUnread && (
+                                    <span className="h-2 w-2 shrink-0 rounded-full bg-primary-600" />
+                                  )}
+                                  {formatActivityAction(item.action)}
+                                </p>
+                                {item.detail && (
+                                  <p className="mt-0.5 line-clamp-2 pl-4 text-xs text-zinc-600 admin-dark:text-zinc-300">
+                                    {item.detail}
+                                  </p>
+                                )}
+                                <p className="mt-0.5 pl-4 text-[10px] text-zinc-400">
+                                  {item.adminEmail || "Admin"} · {timeAgo(item.createdAt)}
+                                </p>
+                              </Link>
+                            </li>
+                          );
+                        })
                       )}
                     </ul>
                   </div>
