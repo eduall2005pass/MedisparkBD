@@ -2,7 +2,7 @@
    - PWA: cache-first for versioned static assets only (never API/exam pages).
    - Push: Firebase Cloud Messaging background handler + tap-to-open. */
 
-const PWA_CACHE = "medispark-pwa-v1";
+const PWA_CACHE = "medispark-pwa-v2";
 
 /* ---------- Firebase (compat builds for classic workers) ---------- */
 try {

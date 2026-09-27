@@ -6,9 +6,10 @@ import { useEffect } from "react";
 export default function PwaRegister() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
-    // Skip re-registering when FCM already owns an equivalent registration.
+    // updateViaCache:none → browser re-checks /sw.js on every load, so
+    // icon/manifest updates reach devices instead of sticking for days.
     void navigator.serviceWorker
-      .register("/sw.js")
+      .register("/sw.js", { updateViaCache: "none" })
       .catch(() => undefined);
   }, []);
   return null;

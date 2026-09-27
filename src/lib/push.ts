@@ -35,7 +35,10 @@ export function currentPushState(): PushPermissionState {
 async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
   // Single root-scope worker: PWA asset cache + Firebase push together.
   // (Legacy /firebase-messaging-sw.js registrations are superseded by scope.)
-  const registration = await navigator.serviceWorker.register("/sw.js");
+  // updateViaCache:none → update checks hit the network every page load.
+  const registration = await navigator.serviceWorker.register("/sw.js", {
+    updateViaCache: "none",
+  });
   await navigator.serviceWorker.ready;
   return registration;
 }
