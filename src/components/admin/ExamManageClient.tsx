@@ -20,7 +20,7 @@ import AdminCenterLoader from "@/components/admin/AdminCenterLoader";
 import ExamPaperEditor from "@/components/admin/ExamPaperEditor";
 import ExamRulesEditor from "@/components/admin/ExamRulesEditor";
 import { MediaUploadField } from "@/components/admin/MediaUploadField";
-import { examCategoryLabel } from "@/lib/public-exams";
+import { examCategoryLabel, toDhakaInputValue } from "@/lib/public-exams";
 
 type TabKey = "info" | "questions" | "rules" | "participants" | "results";
 const TABS: { key: TabKey; label: string }[] = [
@@ -100,8 +100,8 @@ function InfoTab({
     subject: exam.subject ?? "",
     courseType: exam.courseType ?? "Academic",
     status: exam.status,
-    scheduledAt: exam.scheduledAt ? exam.scheduledAt.slice(0, 16) : "",
-    endsAt: exam.endsAt ? exam.endsAt.slice(0, 16) : "",
+    scheduledAt: toDhakaInputValue(exam.scheduledAt),
+    endsAt: toDhakaInputValue(exam.endsAt),
   });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -119,8 +119,8 @@ function InfoTab({
       subject: exam.subject ?? "",
       courseType: exam.courseType ?? "Academic",
       status: exam.status,
-      scheduledAt: exam.scheduledAt ? exam.scheduledAt.slice(0, 16) : "",
-      endsAt: exam.endsAt ? exam.endsAt.slice(0, 16) : "",
+      scheduledAt: toDhakaInputValue(exam.scheduledAt),
+      endsAt: toDhakaInputValue(exam.endsAt),
     });
   }, [exam]);
 

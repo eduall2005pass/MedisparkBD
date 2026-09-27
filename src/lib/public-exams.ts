@@ -182,6 +182,51 @@ export function batchLabel(batchId: string): string {
   return match ? `HSC ${match[1]}` : batchId.trim();
 }
 
+export const DHAKA_TZ = "Asia/Dhaka";
+
+/**
+ * Date key (YYYY-MM-DD) in Bangladesh time.
+ * `.slice(0, 10)` on an ISO string gives the UTC date, which is 6h behind
+ * Dhaka — near midnight it even shows the wrong day.
+ */
+export function toDhakaDateKey(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: DHAKA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/**
+ * Convert a UTC ISO string to a `datetime-local` value in Bangladesh time.
+ * The admin input expects local wall-clock ("YYYY-MM-DDTHH:mm"), so slicing
+ * the ISO directly shows UTC (6 hours behind Dhaka).
+ */
+export function toDhakaInputValue(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: DHAKA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
 export function formatExamTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
@@ -190,7 +235,7 @@ export function formatExamTime(iso: string): string {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-      timeZone: "UTC",
+      timeZone: DHAKA_TZ,
     })
     .toUpperCase();
 }

@@ -14,6 +14,7 @@ import {
   examCategories,
   examCategorySlugs,
   formatExamTime,
+  toDhakaDateKey,
   type ExamCategory,
   type PublicExam,
 } from "@/lib/public-exams";
@@ -56,7 +57,7 @@ function toPublicExam(exam: Exam): PublicExam {
     secondTimerEnabled: exam.secondTimerEnabled ?? false,
     secondTimerDeduction: exam.secondTimerDeduction ?? 3,
     ruleTemplate: exam.ruleTemplate ?? null,
-    examDate: scheduledIso ? scheduledIso.slice(0, 10) : "",
+    examDate: toDhakaDateKey(scheduledIso),
     examTime: scheduledIso ? formatExamTime(scheduledIso) : "",
     status: deriveStatus(exam),
     published: true,

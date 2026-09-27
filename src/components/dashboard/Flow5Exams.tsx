@@ -21,7 +21,7 @@ import {
 } from "@/lib/flow5-shared";
 
 import ExamCard from "@/components/ExamCard";
-import type { PublicExam } from "@/lib/public-exams";
+import { toDhakaDateKey, type PublicExam } from "@/lib/public-exams";
 import InfoBox from "@/components/dashboard/InfoBox";
 
 export function examFlowBase(slug: string) {
@@ -268,7 +268,7 @@ function courseItemToPublicExam(item: Flow5ExamItem): PublicExam {
     negativePerWrong: item.negativePerWrong || 0,
     scheduledAt: scheduledIso,
     endsAt: item.endsAt,
-    examDate: scheduledIso ? scheduledIso.slice(0, 10) : "",
+    examDate: toDhakaDateKey(scheduledIso),
     examTime: "",
     status: item.phase === "upcoming" ? "Upcoming" : item.phase === "live" ? "Live" : item.phase === "practice" ? "Archived" : "Live",
     published: true,

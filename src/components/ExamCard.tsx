@@ -56,7 +56,7 @@ function formatDayMonth(iso: string | null): string {
   return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
-    timeZone: "UTC",
+    timeZone: "Asia/Dhaka",
   });
 }
 
@@ -69,7 +69,7 @@ function formatClock(iso: string | null): string {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-      timeZone: "UTC",
+      timeZone: "Asia/Dhaka",
     })
     .toUpperCase();
 }

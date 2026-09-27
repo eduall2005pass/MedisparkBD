@@ -3,6 +3,7 @@ import {
   batchLabel,
   deriveStatus,
   formatExamTime,
+  toDhakaDateKey,
   type PublicExam,
 } from "@/lib/public-exams";
 import { negativePerWrongFor } from "@/lib/public-exams";
@@ -39,7 +40,7 @@ export function examToPublic(exam: Exam): PublicExam {
     negativePerWrong: negativePerWrongFor(exam),
     scheduledAt: scheduledIso,
     endsAt: endsAtIso,
-    examDate: scheduledIso ? scheduledIso.slice(0, 10) : "",
+    examDate: toDhakaDateKey(scheduledIso),
     examTime: scheduledIso ? formatExamTime(scheduledIso) : "",
     status: deriveStatus(exam),
     published: exam.status !== "draft",

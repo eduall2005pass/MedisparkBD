@@ -20,7 +20,7 @@ import ExamRulesEditor from "@/components/admin/ExamRulesEditor";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MediaUploadField } from "@/components/admin/MediaUploadField";
-import { examCategoryLabel, type ExamCategory } from "@/lib/public-exams";
+import { examCategoryLabel, toDhakaInputValue, type ExamCategory } from "@/lib/public-exams";
 import { examToPublic } from "@/lib/public-exam-view";
 import ExamCard from "@/components/ExamCard";
 import {
@@ -432,8 +432,8 @@ export default function ExamManager({
       negativeMarks: String(exam.negativeMarks),
       totalMarks: exam.totalMarks ? String(exam.totalMarks) : "",
       status: exam.status,
-      scheduledAt: exam.scheduledAt ? exam.scheduledAt.slice(0, 16) : "",
-      endsAt: exam.endsAt ? exam.endsAt.slice(0, 16) : "",
+      scheduledAt: toDhakaInputValue(exam.scheduledAt),
+      endsAt: toDhakaInputValue(exam.endsAt),
       ruleTemplate: tpl || "academic",
       questionCount: String(qc || 30),
       marksPerQuestion: String(mpq ?? 1),

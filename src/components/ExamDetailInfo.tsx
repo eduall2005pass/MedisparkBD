@@ -51,7 +51,7 @@ function formatDate(iso: string | null): string {
     year: "numeric",
     month: "short",
     day: "numeric",
-    timeZone: "UTC",
+    timeZone: "Asia/Dhaka",
   });
 }
 
@@ -64,7 +64,7 @@ function formatTime(iso: string | null): string {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
-      timeZone: "UTC",
+      timeZone: "Asia/Dhaka",
     })
     .toUpperCase();
 }

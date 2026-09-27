@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import ExamCard from "@/components/ExamCard";
-import type { PublicExam, ExamStatus } from "@/lib/public-exams";
+import { toDhakaDateKey, type PublicExam, type ExamStatus } from "@/lib/public-exams";
 
 type MyExam = {
   id: string;
@@ -41,12 +41,13 @@ function toPublicExam(exam: MyExam): PublicExam {
     scheduledAt: exam.scheduledAt ?? null,
     endsAt: null,
     examMode: "live",
-    examDate: scheduledIso.slice(0, 10),
+    examDate: toDhakaDateKey(scheduledIso || null),
     examTime: scheduledIso
       ? new Date(scheduledIso).toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",
           hour12: true,
+          timeZone: "Asia/Dhaka",
         })
       : "",
     status: exam.status,
