@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
+import { LiteBadge } from "@/components/LiteModeProvider";
 import ThemeToggle from "@/components/ThemeToggle";
 import { loginHref } from "@/lib/nav-links";
 import { useAuth } from "@/lib/auth-context";
@@ -178,7 +179,10 @@ export default function Navbar({ config }: { config?: NavbarConfig }) {
             scrolled ? "lg:max-w-[220px]" : ""
           }`}
         >
-          <Logo size="large" />
+          <span className="relative inline-flex shrink-0">
+            <Logo size="large" />
+            <LiteBadge />
+          </span>
         </Link>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">

@@ -509,3 +509,31 @@ html[data-exam-locked="true"] body {
   border-color: #2f5aa0;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
+
+/* ── Lite mode (slow connection): kill motion/GPU effects, mark held images ── */
+html[data-litemode="1"],
+html[data-litemode="1"] body {
+  scroll-behavior: auto !important;
+}
+html[data-litemode="1"] *,
+html[data-litemode="1"] *::before,
+html[data-litemode="1"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+html[data-litemode="1"] [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* Images held back in lite mode — tap to load individually. */
+html[data-litemode="1"] img[data-lite-src] {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(148, 163, 184, 0.12),
+    rgba(148, 163, 184, 0.12) 8px,
+    rgba(148, 163, 184, 0.05) 8px,
+    rgba(148, 163, 184, 0.05) 16px
+  );
+  cursor: zoom-in;
+}
