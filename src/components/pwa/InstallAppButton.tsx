@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 
 type BeforeInstallPromptEvent = Event & {
@@ -129,6 +130,11 @@ export default function InstallAppButton() {
   const [guideOpen, setGuideOpen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [guideTab, setGuideTab] = useState<BrowserKey>(() => detectBrowser());
+  const [portalMounted, setPortalMounted] = useState(false);
+  useEffect(() => {
+    setPortalMounted(true);
+    return () => setPortalMounted(false);
+  }, []);
 
   useEffect(() => {
     // Re-check after mount (SSR renders blind) without a sync setState.
@@ -216,12 +222,18 @@ export default function InstallAppButton() {
         </span>
       </button>
 
-      {guideOpen && !minimized && (
+      {/* Portal to <body>: ancestor transforms (hero animation) break
+          position:fixed and trap stacking — the banner slider would paint
+          above the modal otherwise. */}
+      {portalMounted &&
+        createPortal(
+          <>
+            {guideOpen && !minimized && (
         <div
           role="dialog"
           aria-modal="true"
           aria-label="How to install the MediSpark app"
-          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
           onClick={() => { setGuideOpen(false); setMinimized(false); }}
         >
           <div
@@ -282,15 +294,15 @@ export default function InstallAppButton() {
             </ol>
           </div>
         </div>
-      )}
+            )}
 
-      {guideOpen && minimized && (
+            {guideOpen && minimized && (
         <button
           type="button"
           onClick={() => setMinimized(false)}
           aria-label="Expand install guide"
           title="Expand install guide"
-          className="fixed bottom-20 right-4 z-[70] flex items-center gap-2 rounded-full border border-primary-500/50 bg-dark-900/95 px-4 py-3 text-xs font-extrabold text-heading shadow-xl shadow-black/40 backdrop-blur transition hover:bg-dark-850 active:scale-[0.97] sm:bottom-6"
+          className="fixed bottom-20 right-4 z-[100] flex items-center gap-2 rounded-full border border-primary-500/50 bg-dark-900/95 px-4 py-3 text-xs font-extrabold text-heading shadow-xl shadow-black/40 backdrop-blur transition hover:bg-dark-850 active:scale-[0.97] sm:bottom-6"
         >
           <svg className="h-4 w-4 text-primary-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 19h16" />
@@ -298,7 +310,10 @@ export default function InstallAppButton() {
           Install guide
           <span aria-hidden="true">▲</span>
         </button>
-      )}
+            )}
+          </>,
+          document.body,
+        )}
     </>
   );
 }

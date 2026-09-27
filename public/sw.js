@@ -29,8 +29,8 @@ try {
       (payload.data && payload.data.url) || "/dashboard/notifications";
     self.registration.showNotification(title, {
       body,
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      icon: "/icons/icon-192-v2.png",
+      badge: "/icons/icon-192-v2.png",
       data: { url },
     });
   });
