@@ -24,6 +24,7 @@ export default function AllStudentsNotificationsPage() {
   const [settings, setSettings] = useState<AutoSettingUI[]>([]);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [link, setLink] = useState("");
   const [notifications, setNotifications] = useState<AdminNotification[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -124,18 +125,20 @@ export default function AllStudentsNotificationsPage() {
         body: JSON.stringify({
           title: title.trim(),
           message: message.trim(),
+          link: link.trim(),
           audience: "all",
           isActive: true,
         }),
       });
-      const data = (await res.json().catch(() => null)) as { error?: string };
+      const data = (await res.json().catch(() => null)) as { error?: string; push?: { sent: number } | null };
       if (!res.ok) {
         toast.showToast("error", data?.error ?? "Failed to send.");
         return;
       }
-      toast.showToast("success", "Notification sent to all students.");
+      toast.showToast("success", `Notification sent to all students.${typeof data?.push?.sent === "number" ? ` Push → ${data.push.sent} devices.` : ""}`);
       setTitle("");
       setMessage("");
+      setLink("");
       await loadAll();
     } catch {
       toast.showToast("error", "Failed to send the notification.");
@@ -250,6 +253,17 @@ export default function AllStudentsNotificationsPage() {
               onChange={(event) => setMessage(event.target.value)}
               placeholder="Your upcoming exam schedule has been updated. Please check the exam section."
               className={`${inputClass} resize-none`}
+            />
+          </label>
+          <label className="block">
+            <span className={labelClass}>Link on tap (optional)</span>
+            <input
+              type="text"
+              value={link}
+              maxLength={1024}
+              onChange={(event) => setLink(event.target.value)}
+              placeholder="/courses/specialmedicalexambatch"
+              className={inputClass}
             />
           </label>
           <button

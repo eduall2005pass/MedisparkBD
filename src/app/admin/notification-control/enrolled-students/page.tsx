@@ -44,6 +44,7 @@ export default function EnrolledStudentsNotificationsPage() {
   const [enrolled, setEnrolled] = useState<EnrolledStudent[] | null>(null);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [link, setLink] = useState("");
   const [notifications, setNotifications] = useState<AdminNotification[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -229,22 +230,24 @@ export default function EnrolledStudentsNotificationsPage() {
         body: JSON.stringify({
           title: title.trim(),
           message: message.trim(),
+          link: link.trim(),
           audience: "enrolled",
           targetCourseId: courseId,
           isActive: true,
         }),
       });
-      const data = (await res.json().catch(() => null)) as { error?: string };
+      const data = (await res.json().catch(() => null)) as { error?: string; push?: { sent: number } | null };
       if (!res.ok) {
         toast.showToast("error", data?.error ?? "Failed to send.");
         return;
       }
       toast.showToast(
         "success",
-        `Notification sent to students enrolled in the selected course (${enrolled?.length ?? 0}).`,
+        `Notification sent to students enrolled in the selected course (${enrolled?.length ?? 0}).${typeof data?.push?.sent === "number" ? ` Push → ${data.push.sent} devices.` : ""}`,
       );
       setTitle("");
       setMessage("");
+      setLink("");
       await loadBase();
     } catch {
       toast.showToast("error", "Failed to send the notification.");
@@ -427,6 +430,17 @@ export default function EnrolledStudentsNotificationsPage() {
               onChange={(event) => setMessage(event.target.value)}
               placeholder="Write the notification message…"
               className={`${inputClass} resize-none`}
+            />
+          </label>
+          <label className="block">
+            <span className={labelClass}>Link on tap (optional)</span>
+            <input
+              type="text"
+              value={link}
+              maxLength={1024}
+              onChange={(event) => setLink(event.target.value)}
+              placeholder="/courses/specialmedicalexambatch"
+              className={inputClass}
             />
           </label>
           <button

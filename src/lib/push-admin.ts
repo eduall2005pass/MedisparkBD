@@ -157,15 +157,47 @@ export async function sendPush(input: {
     throw new Error("Firebase Admin is not configured.");
   }
   const subscriptions = await fetchPushSubscriptions(input.targetUid);
-  const result: PushSendResult = { sent: 0, failed: 0, total: subscriptions.length };
-  if (subscriptions.length === 0) return result;
+  return deliverToTokens(messaging, subscriptions.map((sub) => sub.token), input);
+}
+
+/**
+ * Send to a SET of users (e.g. every student actively enrolled in one
+ * course). One token query + 500-token FCM batches — no per-user fan-out.
+ */
+export async function sendPushToUids(
+  uids: string[],
+  input: { title: string; body: string; url?: string },
+): Promise<PushSendResult> {
+  const messaging = getMessagingInstance();
+  if (!messaging) {
+    throw new Error("Firebase Admin is not configured.");
+  }
+  const clean = [...new Set(uids.map((u) => String(u ?? "").trim()).filter(Boolean))].slice(0, 5000);
+  if (clean.length === 0) return { sent: 0, failed: 0, total: 0 };
+  await ensureTable();
+  const placeholders = clean.map(() => "?").join(",");
+  const rows = await query<PushTokenRow[]>(
+    `SELECT token, uid, email, user_agent, created_at FROM push_tokens WHERE uid IN (${placeholders}) ORDER BY created_at DESC LIMIT 5000`,
+    clean,
+  );
+  return deliverToTokens(messaging, rows.map((row) => row.token), input);
+}
+
+/** FCM multicast delivery with stale-token pruning. Shared by all senders. */
+async function deliverToTokens(
+  messaging: Messaging,
+  tokens: string[],
+  input: { title: string; body: string; url?: string },
+): Promise<PushSendResult> {
+  const result: PushSendResult = { sent: 0, failed: 0, total: tokens.length };
+  if (tokens.length === 0) return result;
   const staleTokens: string[] = [];
 
   // FCM v1 accepts batches of up to 500.
-  for (let i = 0; i < subscriptions.length; i += 500) {
-    const batch = subscriptions.slice(i, i + 500);
+  for (let i = 0; i < tokens.length; i += 500) {
+    const batch = tokens.slice(i, i + 500);
     const response = await messaging.sendEachForMulticast({
-      tokens: batch.map((sub) => sub.token),
+      tokens: batch,
       notification: { title: input.title, body: input.body },
       webpush: {
         fcmOptions: { link: input.url || "/dashboard/notifications" },
@@ -182,7 +214,7 @@ export async function sendPush(input: {
           code === "messaging/registration-token-not-registered" ||
           code === "messaging/invalid-registration-token"
         ) {
-          staleTokens.push(batch[index].token);
+          staleTokens.push(batch[index]);
         }
       }
     });

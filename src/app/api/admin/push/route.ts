@@ -66,8 +66,8 @@ export async function POST(request: NextRequest) {
     );
   }
   const url =
-    typeof body?.url === "string" && body.url.trim().startsWith("/")
-      ? body.url.trim()
+    typeof body?.url === "string"
+      ? ((await import("@/lib/content-admin")).sanitizeNotificationLink(body.url) ?? undefined)
       : undefined;
 
   let targetUid: string | undefined;

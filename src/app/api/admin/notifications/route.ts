@@ -46,25 +46,40 @@ export async function POST(request: NextRequest) {
     await logAdminAction(admin, "notification.save", String(body.title ?? ""), request);
     // Push to devices on fresh publishes (not on edits): best-effort, never
     // fails the save. Tapping the push opens the notification link.
+    // Scope matches the inbox audience — "enrolled" pushes ONLY to that
+    // course's students (never a leaky broadcast); "student" is pushed
+    // explicitly by the Specific Student page, so it's skipped here.
     let push: { sent: number; failed: number } | null = null;
     const isNew = typeof body.id !== "string" || !body.id.trim();
     if (isNew && payload.isActive !== false) {
       try {
-        const { sendPush } = await import("@/lib/push-admin");
+        const { sendPush, sendPushToUids } = await import("@/lib/push-admin");
         const { sanitizeNotificationLink } = await import("@/lib/content-admin");
         const url = sanitizeNotificationLink(body.link) ?? "/dashboard/notifications";
-        const targetUid =
-          payload.audience === "student" && typeof payload.targetUid === "string" && payload.targetUid
-            ? payload.targetUid
-            : undefined;
-        const result = await sendPush({
-          title: String(body.title ?? "MediSpark"),
-          body: String(body.message ?? ""),
-          url,
-          ...(targetUid ? { targetUid } : {}),
-        });
-        push = { sent: result.sent, failed: result.failed };
-        await logAdminAction(admin, "notification.push", `sent=${result.sent} failed=${result.failed}`, request);
+        const title = String(body.title ?? "MediSpark");
+        const text = String(body.message ?? "");
+        if (payload.audience === "all" || payload.audience === "students") {
+          const result = await sendPush({ title, body: text, url });
+          push = { sent: result.sent, failed: result.failed };
+        } else if (
+          payload.audience === "enrolled" &&
+          typeof payload.targetCourseId === "string" &&
+          payload.targetCourseId
+        ) {
+          const { query } = await import("@/lib/mysql");
+          const enrolled = await query<{ student_uid: string }[]>(
+            `SELECT DISTINCT student_uid FROM enrollments WHERE course_id = ? AND enrollment_status = 'active' LIMIT 5000`,
+            [payload.targetCourseId],
+          );
+          const result = await sendPushToUids(
+            enrolled.map((e) => e.student_uid),
+            { title, body: text, url },
+          );
+          push = { sent: result.sent, failed: result.failed };
+        }
+        if (push) {
+          await logAdminAction(admin, "notification.push", `audience=${String(payload.audience)} sent=${push.sent} failed=${push.failed}`, request);
+        }
       } catch {
         // Push infra (Firebase) missing or failing — in-app notice still saved.
         push = { sent: 0, failed: 0 };

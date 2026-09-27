@@ -7,6 +7,7 @@ export type AdminNotification = {
   id: string;
   title: string;
   message: string;
+  link?: string | null;
   audience: string;
   targetUid?: string | null;
   targetEmail?: string | null;
@@ -170,6 +171,11 @@ export function SentNotificationsList({
             <p className="line-clamp-2 text-xs text-slate-500 admin-dark:text-slate-400">
               {notification.message}
             </p>
+            {notification.link && (
+              <p className="truncate text-[11px] font-semibold text-primary-600 admin-dark:text-primary-400">
+                🔗 {notification.link}
+              </p>
+            )}
             <span className="mt-1 inline-block rounded-md bg-ink/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 admin-dark:text-slate-400">
               {notification.origin === "automatic" ? "Automatic" : "Manual"}
               {" · "}

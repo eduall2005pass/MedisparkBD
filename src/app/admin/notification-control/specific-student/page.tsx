@@ -38,6 +38,7 @@ export default function SpecificStudentNotificationsPage() {
   const [studentUid, setStudentUid] = useState("");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [link, setLink] = useState("");
   const [notifications, setNotifications] = useState<AdminNotification[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -169,6 +170,7 @@ export default function SpecificStudentNotificationsPage() {
         body: JSON.stringify({
           title: title.trim(),
           message: message.trim(),
+          link: link.trim(),
           audience: "student",
           targetUid: selectedStudent.uid,
           targetEmail: selectedStudent.email,
@@ -190,6 +192,7 @@ export default function SpecificStudentNotificationsPage() {
           body: JSON.stringify({
             title: title.trim(),
             body: message.trim(),
+            url: link.trim(),
             audience: "specific",
             email: selectedStudent.email,
           }),
@@ -203,6 +206,7 @@ export default function SpecificStudentNotificationsPage() {
       );
       setTitle("");
       setMessage("");
+      setLink("");
       setStudentUid("");
       setSearch("");
       await loadBase();
@@ -378,6 +382,17 @@ export default function SpecificStudentNotificationsPage() {
               onChange={(event) => setMessage(event.target.value)}
               placeholder="Write the notification message…"
               className={`${inputClass} resize-none`}
+            />
+          </label>
+          <label className="block">
+            <span className={labelClass}>Link on tap (optional)</span>
+            <input
+              type="text"
+              value={link}
+              maxLength={1024}
+              onChange={(event) => setLink(event.target.value)}
+              placeholder="/courses/specialmedicalexambatch"
+              className={inputClass}
             />
           </label>
           <button
