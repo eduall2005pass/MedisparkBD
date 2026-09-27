@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAnyPermission, requirePermission } from "@/lib/admin";
 import { logAdminAction } from "@/lib/administration";
 import {
+  backfillExamRulesLang,
   deleteExamRule,
-  fetchExamRules,
   reorderExamRules,
   saveExamRule,
 } from "@/lib/exam-rules";
@@ -23,8 +23,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "A valid exam is required." }, { status: 400 });
   }
   const lang = request.nextUrl.searchParams.get("lang")?.toLowerCase() === "english" ? "english" : "bangla";
+  // Older exams have Bangla rows only — auto-fill the missing language
+  // (standard rules translated, custom text copied) on first open.
+  const rules = await backfillExamRulesLang(examId, lang);
   return NextResponse.json(
-    { examId, lang, rules: await fetchExamRules(examId, lang) },
+    { examId, lang, rules },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

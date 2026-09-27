@@ -131,6 +131,36 @@ export async function deleteExamRule(
   return fetchExamRules(examId, lang);
 }
 
+/** Backfill one language from the other when an older exam has rows in only
+ * one language (e.g. Bangla seeded before bilingual support existed).
+ * Standard-titled rules get the proper translated text; custom rules are
+ * copied as-is so the admin can translate them. Returns current rows. */
+export async function backfillExamRulesLang(examId: string, lang: ExamRuleLang): Promise<ExamRule[]> {
+  await ensureExamRulesTable();
+  const key = normalizeRuleLang(lang);
+  const rows = await fetchExamRules(examId, key);
+  if (rows.length > 0) return rows;
+  const other = await fetchExamRules(examId, key === "english" ? "bangla" : "english");
+  if (other.length === 0) return rows;
+  let template: string | null = null;
+  try {
+    const t = await query<{ rule_template: string | null }[]>(`SELECT rule_template FROM exams WHERE id = ? LIMIT 1`, [examId]);
+    template = t[0]?.rule_template ?? null;
+  } catch {
+    template = null;
+  }
+  const standards = buildDefaultExamRules(examId, template, key);
+  const byTitle = new Map(standards.map((s) => [s.title.trim().toLowerCase(), s.text]));
+  for (const r of other) {
+    const translated = byTitle.get((r.title ?? "").trim().toLowerCase()) ?? r.text;
+    await exec(
+      `INSERT INTO exam_rules (exam_id, lang, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?, ?)`,
+      [examId, key, r.title ?? "", translated, r.sortOrder],
+    );
+  }
+  return fetchExamRules(examId, key);
+}
+
 /** Reorder rules within ONE exam + language from an ordered id list. */
 export async function reorderExamRules(
   examId: string,
