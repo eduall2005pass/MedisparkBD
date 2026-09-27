@@ -50,6 +50,15 @@ const nextConfig: NextConfig = {
     // NOTE: no custom Cache-Control for /_next/static/* — Next.js already
     // serves those hashed assets as `public, max-age=31536000, immutable`
     // and warns if you try to override it.
+    // Service worker + manifest must stay fresh (never immutable-cached).
+    {
+      source: "/sw.js",
+      headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }],
+    },
+    {
+      source: "/manifest.webmanifest",
+      headers: [{ key: "Cache-Control", value: "public, max-age=3600" }],
+    },
     {
       source: "/:path*.(jpg|jpeg|png|webp|avif|svg|ico|woff|woff2)",
       headers: [

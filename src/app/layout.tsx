@@ -21,6 +21,7 @@ import {
 import { Suspense } from "react";
 import { unstable_cache } from "next/cache";
 import { GlobalLoadingProvider } from "@/components/GlobalLoading";
+import PwaRegister from "@/components/pwa/PwaRegister";
 import "./globals.css";
 
 // Branding/settings change rarely — cache layout data for 60s so every page
@@ -71,6 +72,20 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s | ${seo.siteTitle || "MediSpark"}`,
     },
     description,
+    manifest: "/manifest.webmanifest",
+    themeColor: "#0b1220",
+    appleWebApp: {
+      capable: true,
+      title: "MediSpark",
+      statusBarStyle: "black-translucent",
+    },
+    icons: {
+      icon: [
+        { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+        { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      ],
+      apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    },
     keywords: seo.keywords
       ? seo.keywords
           .split(",")
@@ -128,6 +143,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
       </head>
       <body className="flex min-h-full flex-col bg-dark-950 text-neutral-300">
+        <PwaRegister />
         <Suspense fallback={null}>
           <GlobalLoadingProvider>
             <ThemeProvider>

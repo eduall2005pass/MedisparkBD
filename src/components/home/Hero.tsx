@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { HeroSettings } from "@/lib/hero-constants";
 import { DEFAULT_HERO_SETTINGS } from "@/lib/hero-constants";
+import InstallAppButton from "@/components/pwa/InstallAppButton";
 
 export default function Hero({
   hero = DEFAULT_HERO_SETTINGS,
@@ -53,12 +54,7 @@ export default function Hero({
                 {hero.buttonText}
               </Link>
             )}
-            <Link
-              href="/dashboard"
-              className="rounded-xl border border-ink/20 bg-ink/5 px-6 py-3.5 text-center font-semibold text-heading transition hover:border-primary-500/60 hover:bg-ink/10"
-            >
-              Dashboard
-            </Link>
+            <InstallAppButton />
           </div>
         </div>
       </div>

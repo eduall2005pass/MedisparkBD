@@ -33,11 +33,9 @@ export function currentPushState(): PushPermissionState {
 }
 
 async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
-  // The worker uses ES module imports, so it must be registered as a module.
-  const registration = await navigator.serviceWorker.register(
-    "/firebase-messaging-sw.js?v=2",
-    { type: "module" },
-  );
+  // Single root-scope worker: PWA asset cache + Firebase push together.
+  // (Legacy /firebase-messaging-sw.js registrations are superseded by scope.)
+  const registration = await navigator.serviceWorker.register("/sw.js");
   await navigator.serviceWorker.ready;
   return registration;
 }
