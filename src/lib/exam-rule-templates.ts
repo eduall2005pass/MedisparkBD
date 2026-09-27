@@ -125,6 +125,49 @@ export async function fetchTemplateRules(template: RuleTemplateKey): Promise<Tem
   }
 }
 
+/** One-time import from the legacy exam_rule_templates.rules JSON column
+ * (template_key → template). Returns true when anything was imported. */
+async function importLegacyRules(template: RuleTemplateKey): Promise<boolean> {
+  try {
+    const rows = await query<{ rules: unknown }[]>(
+      `SELECT rules FROM exam_rule_templates WHERE template_key = ? LIMIT 1`,
+      [template],
+    );
+    const raw = rows[0]?.rules;
+    if (!raw) return false;
+    let parsed: unknown = raw;
+    if (typeof raw === "string") {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return false;
+      }
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) return false;
+    const items: Array<{ title: string; text: string }> = [];
+    for (const entry of parsed) {
+      if (typeof entry === "string") {
+        if (entry.trim()) items.push({ title: "", text: entry.trim() });
+      } else if (entry && typeof entry === "object") {
+        const o = entry as Record<string, unknown>;
+        const text = String(o.text ?? o.rule_text ?? o.detail ?? "").trim();
+        if (!text) continue;
+        items.push({ title: String(o.title ?? o.rule_title ?? "").trim().slice(0, 191), text });
+      }
+    }
+    if (items.length === 0) return false;
+    for (let i = 0; i < items.length; i += 1) {
+      await exec(
+        `INSERT INTO exam_rule_template_items (template, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`,
+        [template, items[i].title, items[i].text, i + 1],
+      );
+    }
+    return true;
+  } catch {
+    return false; // legacy table/column missing — fall back to built-ins
+  }
+}
+
 /** Seed one template with defaults when it has no rows yet. Returns current rows. */
 export async function seedTemplateIfEmpty(template: RuleTemplateKey): Promise<TemplateRule[]> {
   await ensureTemplateTable();
@@ -133,12 +176,17 @@ export async function seedTemplateIfEmpty(template: RuleTemplateKey): Promise<Te
     [template],
   );
   if (existing.length === 0) {
-    const defaults = buildDefaultTemplateRules(template);
-    for (let i = 0; i < defaults.length; i += 1) {
-      await exec(
-        `INSERT INTO exam_rule_template_items (template, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`,
-        [template, defaults[i].title, defaults[i].text, i + 1],
-      );
+    // First prefer existing rules from the legacy template table so nothing
+    // the admin wrote before is lost; otherwise seed the built-in set.
+    const imported = await importLegacyRules(template);
+    if (!imported) {
+      const defaults = buildDefaultTemplateRules(template);
+      for (let i = 0; i < defaults.length; i += 1) {
+        await exec(
+          `INSERT INTO exam_rule_template_items (template, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`,
+          [template, defaults[i].title, defaults[i].text, i + 1],
+        );
+      }
     }
   }
   return fetchTemplateRules(template);
