@@ -143,7 +143,10 @@ export default function InstallAppButton() {
     });
     const onBeforeInstall = (event: Event) => {
       event.preventDefault();
+      // A fresh event = a fresh native-prompt chance (Chrome re-fires this
+      // on later page loads after a dismiss), so reset the used flag.
       setDeferred(event as BeforeInstallPromptEvent);
+      setPromptUsed(false);
     };
     const onInstalled = () => {
       setInstalled(true);
@@ -178,26 +181,36 @@ export default function InstallAppButton() {
     return () => document.removeEventListener("keydown", onKey);
   }, [guideOpen, minimized]);
 
-  const handleClick = useCallback(async () => {
-    if (deferred && !promptUsed) {
-      setPromptUsed(true);
-      try {
-        await deferred.prompt();
-        const choice = await deferred.userChoice;
-        if (choice.outcome === "accepted") {
-          setInstalled(true);
-          setDeferred(null);
-          return;
-        }
-      } catch {
-        // Fall through to the guide.
+  /** Fire Chrome's native install popup. True when the user accepted. */
+  const tryNativeInstall = useCallback(async (): Promise<boolean> => {
+    if (!deferred || promptUsed) return false;
+    setPromptUsed(true);
+    try {
+      await deferred.prompt();
+      const choice = await deferred.userChoice;
+      if (choice.outcome === "accepted") {
+        setInstalled(true);
+        setDeferred(null);
+        setGuideOpen(false);
+        setMinimized(false);
+        return true;
       }
-      setDeferred(null);
+    } catch {
+      // Native popup unavailable — fall through to the guide steps.
     }
+    // One event object can only prompt once — drop it so the next
+    // beforeinstallprompt (next page load) becomes the new chance.
+    setDeferred(null);
+    return false;
+  }, [deferred, promptUsed]);
+
+  const handleClick = useCallback(async () => {
+    const accepted = await tryNativeInstall();
+    if (accepted) return;
     setGuideTab(detectBrowser());
     setMinimized(false);
     setGuideOpen(true);
-  }, [deferred, promptUsed]);
+  }, [tryNativeInstall]);
 
   if (installed) {
     // Already running inside the installed app → the original Dashboard
@@ -266,6 +279,22 @@ export default function InstallAppButton() {
             <p className="mt-1 text-xs leading-relaxed text-neutral-400">
               Pick your browser below and follow the steps — takes less than a minute.
             </p>
+            {deferred && !promptUsed ? (
+              <button
+                type="button"
+                onClick={() => void tryNativeInstall()}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3 text-sm font-extrabold text-white shadow-lg shadow-primary-900/40 transition hover:bg-primary-500 active:scale-[0.98]"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 19h16" />
+                </svg>
+                Install Now
+              </button>
+            ) : (
+              <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-amber-200">
+                No native popup right now? Reload this page once, then tap “Install as App” again — Chrome will offer the install popup.
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap gap-1.5">
               {GUIDE_ORDER.map((key) => (
                 <button
