@@ -130,7 +130,7 @@ export async function reorderExamRules(
 
 /** MediSpark's standard rule set for brand-new exams (editable afterwards).
  * Template-aware: Academic / Medical / Varsity texts come from the central
- * Exam Rules page (exam_rule_templates). Falls back to built-ins. */
+ * Exam Rules page (exam_rule_template_items). Falls back to built-ins. */
 export function buildDefaultExamRules(examId: string, template?: string | null): ExamRule[] {
   const key = String(template ?? "").toLowerCase() === "medical" ? "medical" : String(template ?? "").toLowerCase() === "university" || String(template ?? "").toLowerCase() === "varsity" ? "university" : "academic";
   const negative =
@@ -199,7 +199,7 @@ export async function seedDefaultExamRules(examId: string, template?: string | n
     await ensureTemplateTable();
     const key = normalizeTemplate(template);
     const tplRows = await query<{ rule_title: string | null; rule_text: string; sort_order: number }[]>(
-      `SELECT rule_title, rule_text, sort_order FROM exam_rule_templates WHERE template = ? ORDER BY sort_order ASC`,
+      `SELECT rule_title, rule_text, sort_order FROM exam_rule_template_items WHERE template = ? ORDER BY sort_order ASC`,
       [key],
     );
     if (tplRows.length > 0) {

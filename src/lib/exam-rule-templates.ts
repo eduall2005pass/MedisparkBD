@@ -44,14 +44,14 @@ export function ensureTemplateTable(): Promise<void> {
   if (!tableReady) {
     tableReady = (async () => {
       await exec(
-        `CREATE TABLE IF NOT EXISTS exam_rule_templates (
+        `CREATE TABLE IF NOT EXISTS exam_rule_template_items (
           id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
           template VARCHAR(32) NOT NULL,
           rule_title VARCHAR(191) NOT NULL DEFAULT '',
           rule_text TEXT NOT NULL,
           sort_order INT NOT NULL DEFAULT 0,
           created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          KEY exam_rule_templates_tpl_idx (template)
+          KEY exam_rule_template_items_tpl_idx (template)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
       );
     })().catch((error) => {
@@ -116,7 +116,7 @@ export async function fetchTemplateRules(template: RuleTemplateKey): Promise<Tem
   try {
     await ensureTemplateTable();
     const rows = await query<TemplateRow[]>(
-      `SELECT id, template, rule_title, rule_text, sort_order FROM exam_rule_templates WHERE template = ? ORDER BY sort_order ASC, id ASC`,
+      `SELECT id, template, rule_title, rule_text, sort_order FROM exam_rule_template_items WHERE template = ? ORDER BY sort_order ASC, id ASC`,
       [template],
     );
     return rows.map(rowToRule);
@@ -129,14 +129,14 @@ export async function fetchTemplateRules(template: RuleTemplateKey): Promise<Tem
 export async function seedTemplateIfEmpty(template: RuleTemplateKey): Promise<TemplateRule[]> {
   await ensureTemplateTable();
   const existing = await query<{ id: number }[]>(
-    `SELECT id FROM exam_rule_templates WHERE template = ? LIMIT 1`,
+    `SELECT id FROM exam_rule_template_items WHERE template = ? LIMIT 1`,
     [template],
   );
   if (existing.length === 0) {
     const defaults = buildDefaultTemplateRules(template);
     for (let i = 0; i < defaults.length; i += 1) {
       await exec(
-        `INSERT INTO exam_rule_templates (template, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`,
+        `INSERT INTO exam_rule_template_items (template, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`,
         [template, defaults[i].title, defaults[i].text, i + 1],
       );
     }
@@ -153,18 +153,18 @@ export async function saveTemplateRule(input: Record<string, unknown>): Promise<
   const existingId = Number(input.id);
   if (Number.isInteger(existingId) && existingId > 0) {
     await exec(
-      `UPDATE exam_rule_templates SET rule_title = ?, rule_text = ? WHERE id = ? AND template = ?`,
+      `UPDATE exam_rule_template_items SET rule_title = ?, rule_text = ? WHERE id = ? AND template = ?`,
       [title, text, existingId, template],
     );
     return fetchTemplateRules(template);
   }
   const maxRows = await query<{ m: number | null }[]>(
-    `SELECT MAX(sort_order) AS m FROM exam_rule_templates WHERE template = ?`,
+    `SELECT MAX(sort_order) AS m FROM exam_rule_template_items WHERE template = ?`,
     [template],
   );
   const nextOrder = (maxRows[0]?.m ?? 0) + 1;
   await exec(
-    `INSERT INTO exam_rule_templates (template, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`,
+    `INSERT INTO exam_rule_template_items (template, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`,
     [template, title, text, nextOrder],
   );
   return fetchTemplateRules(template);
@@ -172,14 +172,14 @@ export async function saveTemplateRule(input: Record<string, unknown>): Promise<
 
 export async function deleteTemplateRule(template: RuleTemplateKey, id: number): Promise<TemplateRule[]> {
   await ensureTemplateTable();
-  await exec(`DELETE FROM exam_rule_templates WHERE id = ? AND template = ?`, [id, template]);
+  await exec(`DELETE FROM exam_rule_template_items WHERE id = ? AND template = ?`, [id, template]);
   return fetchTemplateRules(template);
 }
 
 export async function reorderTemplateRules(template: RuleTemplateKey, orderedIds: number[]): Promise<TemplateRule[]> {
   await ensureTemplateTable();
   for (let i = 0; i < orderedIds.length; i += 1) {
-    await exec(`UPDATE exam_rule_templates SET sort_order = ? WHERE id = ? AND template = ?`, [
+    await exec(`UPDATE exam_rule_template_items SET sort_order = ? WHERE id = ? AND template = ?`, [
       i + 1,
       orderedIds[i],
       template,
