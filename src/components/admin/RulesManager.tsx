@@ -69,12 +69,12 @@ export default function RulesManager({ standalone = false }: { standalone?: bool
         updated?: string;
         error?: string;
       } | null;
-      if (!res.ok) throw new Error(data?.error ?? "Failed to load the reference.");
+      if (!res.ok) throw new Error(data?.error ?? "লোড হয়নি।");
       setSections(Array.isArray(data?.sections) ? data.sections : []);
       if (Array.isArray(data?.categories) && data.categories.length > 0) setCategories(data.categories);
       setUpdated(data?.updated ?? "");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load the reference.");
+      setError(e instanceof Error ? e.message : "লোড হয়নি।");
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,7 @@ export default function RulesManager({ standalone = false }: { standalone?: bool
   if (!gate.ready) {
     return (
       <section className="mx-auto max-w-4xl px-3 py-10 sm:px-6">
-        <AccessLoading label="Verifying admin access…" />
+        <AccessLoading label="অ্যাডমিন চেক হচ্ছে…" />
       </section>
     );
   }
@@ -98,9 +98,9 @@ export default function RulesManager({ standalone = false }: { standalone?: bool
     return (
       <section className="mx-auto max-w-lg px-4 py-16 text-center">
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8">
-          <p className="text-lg font-extrabold text-red-600">Admin access required</p>
+          <p className="text-lg font-extrabold text-red-600">অ্যাডমিন লগইন লাগবে</p>
           <p className="mt-2 text-sm text-neutral-600 admin-dark:text-slate-400">
-            Sign in with an authorized MediSpark BD admin account to read the internal reference.
+            ভেতরের নিয়ম দেখতে অনুমোদিত MediSpark BD অ্যাডমিন অ্যাকাউন্ট দিয়ে লগইন করুন।
           </p>
         </div>
       </section>
@@ -110,33 +110,33 @@ export default function RulesManager({ standalone = false }: { standalone?: bool
   return (
     <section className="mx-auto max-w-4xl px-3 py-6 sm:px-6 sm:py-8">
       <header>
-        <p className="text-xs font-bold uppercase tracking-widest text-[#234e9f] admin-dark:text-[#93c5fd]">Internal · Admin-only</p>
+        <p className="text-xs font-bold uppercase tracking-widest text-[#234e9f] admin-dark:text-[#93c5fd]">শুধু অ্যাডমিনদের জন্য</p>
         <h1 className="mt-1 text-2xl font-extrabold text-[#0b1e3a] sm:text-3xl admin-dark:text-white">
-          How MediSpark BD Works
+          MediSpark BD কীভাবে চলে
         </h1>
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500 admin-dark:text-[#8da0c0]">
-          Complete reference of the rules already applied across the website — authentication, courses,
-          exams, payments, Q&amp;A, media, database, and deployment. Every entry cites the source file
-          where the behavior lives.{updated ? ` Last verified ${updated}.` : ""}
+          ওয়েবসাইটের সব নিয়ম এক জায়গায় — লগইন, কোর্স,
+          পরীক্ষা, পেমেন্ট, প্রশ্নোত্তর, মিডিয়া, ডাটাবেজ আর সার্ভার। প্রতিটার সাথে সোর্স ফাইল
+          লেখা আছে।{updated ? ` সর্বশেষ চেক ${updated}।` : ""}
         </p>
       </header>
 
       <div className={`${cardClass} mt-5 p-4`}>
         <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
           <div>
-            <label className={labelClass} htmlFor="rules-q">Search the reference</label>
+            <label className={labelClass} htmlFor="rules-q">নিয়ম খুঁজুন</label>
             <input
               id="rules-q"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="e.g. negative marking, coupon, bearer token…"
+              placeholder="যেমন: নেগেটিভ মার্কিং, কুপন, ভর্তি…"
               className={inputClass}
             />
           </div>
           <div>
-            <label className={labelClass} htmlFor="rules-cat">Area</label>
+            <label className={labelClass} htmlFor="rules-cat">বিভাগ</label>
             <select id="rules-cat" value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
-              <option value="">All areas ({totalItems} rules)</option>
+              <option value="">সব বিভাগ ({totalItems}টি নিয়ম)</option>
               {categories.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
@@ -146,16 +146,16 @@ export default function RulesManager({ standalone = false }: { standalone?: bool
       </div>
 
       {loading ? (
-        <div className={`${cardClass} mt-4 p-6`}><AccessLoading label="Loading reference…" /></div>
+        <div className={`${cardClass} mt-4 p-6`}><AccessLoading label="লোড হচ্ছে…" /></div>
       ) : error ? (
         <div className={`${cardClass} mt-4 p-6 text-center`}>
           <p className="text-sm font-bold text-red-600">{error}</p>
-          <button type="button" onClick={() => void fetchDoc()} className={`${buttonSecondaryClass} mt-3`}>Try again</button>
+          <button type="button" onClick={() => void fetchDoc()} className={`${buttonSecondaryClass} mt-3`}>আবার চেষ্টা করুন</button>
         </div>
       ) : sections.length === 0 ? (
         <div className={`${cardClass} mt-4 p-10 text-center`}>
-          <p className="text-base font-extrabold text-[#0b1e3a] admin-dark:text-white">No matching rules</p>
-          <p className="mt-1 text-sm text-slate-500">Try a different search term or area.</p>
+          <p className="text-base font-extrabold text-[#0b1e3a] admin-dark:text-white">কিছু পাওয়া যায়নি</p>
+          <p className="mt-1 text-sm text-slate-500">অন্য শব্দ বা বিভাগ দিয়ে খুঁজে দেখুন।</p>
         </div>
       ) : (
         <div className="mt-6 space-y-8">
@@ -172,7 +172,7 @@ export default function RulesManager({ standalone = false }: { standalone?: bool
                     </div>
                     <p className="mt-1.5 text-sm leading-relaxed text-slate-600 admin-dark:text-slate-300">{item.text}</p>
                     <p className="mt-2 font-mono text-[11px] leading-relaxed text-slate-400 admin-dark:text-[#8da0c0]">
-                      Source: {item.source}
+                      সোর্স: {item.source}
                     </p>
                   </div>
                 ))}

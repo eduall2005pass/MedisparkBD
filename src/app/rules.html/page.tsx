@@ -4,8 +4,8 @@ import RulesManager from "@/components/admin/RulesManager";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Rules — MediSpark Admin",
-  description: "Internal admin-only rules. Authorized administrators only.",
+  title: "নিয়ম — MediSpark Admin",
+  description: "শুধু অ্যাডমিনদের জন্য ভেতরের নিয়ম।",
   robots: { index: false, follow: false, noarchive: true, nosnippet: true },
 };
 
