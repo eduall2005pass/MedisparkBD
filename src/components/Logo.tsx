@@ -43,6 +43,11 @@ export default function Logo({ size = "default" }: { size?: "default" | "large" 
         width={active.width}
         height={active.height}
         priority
+        fetchPriority="high"
+        quality={100}
+        sizes="(max-width: 640px) 220px, 330px"
+        decoding="async"
+        draggable={false}
         unoptimized={
           displayUrl.startsWith("/api/files/") ||
           displayUrl.startsWith("/uploads/") ||

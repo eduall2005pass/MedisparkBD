@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { AccessLoading, AccessMessage } from "@/components/auth/AccessGuard";
 import { answerIndexToLetter } from "@/lib/paste-mcq-parser";
+import {
+  cacheExamResult,
+  getCachedExamResult,
+} from "@/lib/offline-exam-cache";
 
 type ScriptQuestion = {
   questionId: number;
@@ -45,32 +49,52 @@ export default function ExamResultClient({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showSheet, setShowSheet] = useState(false);
+  // True while the shown result comes from the offline local cache.
+  const [offlineCached, setOfflineCached] = useState(false);
 
   useEffect(() => {
     if (authLoading || profileLoading || !user) return;
     let cancelled = false;
-    (async () => {
+    const uid = user.uid;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      setOfflineCached(false);
       try {
-        const token = await user.getIdToken();
+        const token = await user!.getIdToken();
         const res = await fetch(`/api/exams/${encodeURIComponent(examId)}/result`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           cache: "no-store",
         });
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as { error?: string };
-          if (!cancelled) setError(data.error ?? "No submitted result found for this exam yet.");
-          return;
+          throw new Error(data.error ?? "No submitted result found for this exam yet.");
         }
         const data = (await res.json()) as ResultScript;
+        // Participated exam → mirror the fresh result locally for offline viewing.
+        cacheExamResult(uid, examId, data);
         if (!cancelled) setScript(data);
-      } catch {
-        if (!cancelled) setError("Failed to load result. Please retry.");
+      } catch (err) {
+        // Offline (or fetch failed): fall back to the locally cached result
+        // of this participated exam so it stays viewable without data.
+        const cached = getCachedExamResult<ResultScript>(uid, examId);
+        if (!cancelled && cached) {
+          setScript(cached);
+          setOfflineCached(true);
+        } else if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load result. Please retry.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    }
+    void load();
+    // Network is back → re-fetch dynamically so fresh data replaces the cache.
+    const onOnline = () => void load();
+    window.addEventListener("online", onOnline);
     return () => {
       cancelled = true;
+      window.removeEventListener("online", onOnline);
     };
   }, [authLoading, profileLoading, user, examId]);
 

@@ -15,6 +15,7 @@ import {
   type PublicLivePhase,
 } from "@/lib/public-exam-structure";
 import type { ExamCategory, PublicExam } from "@/lib/public-exams";
+import { getCachedCompletedExamIds, cacheCompletedExamIds } from "@/lib/offline-exam-cache";
 
 type ModeTab = "live" | "practice";
 
@@ -90,24 +91,39 @@ export default function PublicExamCategoryView({
 
   // Strict one-attempt: fetch completed public exam IDs for current student.
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      // No user: clear completed set (no View Result shown)
+      setCompletedSet(new Set());
+      return;
+    }
     let cancelled = false;
     (async () => {
+      // First, try to load from cache for instant UI
+      const cached = getCachedCompletedExamIds(user.uid);
+      if (!cancelled && Array.isArray(cached)) {
+        setCompletedSet(new Set(cached));
+      }
+      // Then fetch from network to get fresh data
       try {
         const token = await user.getIdToken();
         const res = await fetch("/api/exams/completed-public", {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           cache: "no-store",
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          // If network fails, we keep the cached data (if any) already set above.
+          return;
+        }
         const data = (await res.json().catch(() => null)) as {
           completed?: string[];
         } | null;
         if (!cancelled && Array.isArray(data?.completed)) {
+          // Cache the fresh result for offline use
+          cacheCompletedExamIds(user.uid, data.completed);
           setCompletedSet(new Set(data.completed));
         }
       } catch {
-        // ignore
+        // Network error: keep cached data (if any) already set above.
       }
     })();
     return () => {

@@ -9,6 +9,7 @@ import {
   type ExamCategory,
   type PublicExam,
 } from "@/lib/public-exams";
+import { getCachedCompletedExamIds, cacheCompletedExamIds } from "@/lib/offline-exam-cache";
 
 const examSections: { key: PublicExam["status"]; label: string }[] = [
   { key: "Live", label: "Live Exams" },
@@ -60,24 +61,39 @@ export default function PublicExamList({
   const { user } = useAuth();
   const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
 
-  // Strict one-attempt: fetch completed public exam IDs for current student
+  // Strict one-attempt: fetch completed public exam IDs for current student, with offline cache
   useEffect(() => {
-    if (!user || detailsBase) return; // Admin mirror pages never show View Result (admin view)
+    if (!user || detailsBase) {
+      // Admin mirror pages or no user: clear completed set (no View Result shown)
+      setCompletedSet(new Set());
+      return;
+    }
     let cancelled = false;
     (async () => {
+      // First, try to load from cache for instant UI
+      const cached = getCachedCompletedExamIds(user.uid);
+      if (!cancelled && Array.isArray(cached)) {
+        setCompletedSet(new Set(cached));
+      }
+      // Then fetch from network to get fresh data
       try {
         const token = await user.getIdToken();
         const res = await fetch("/api/exams/completed-public", {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           cache: "no-store",
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          // If network fails, we keep the cached data (if any) already set above.
+          return;
+        }
         const data = (await res.json().catch(() => null)) as { completed?: string[] } | null;
         if (!cancelled && Array.isArray(data?.completed)) {
+          // Cache the fresh result for offline use
+          cacheCompletedExamIds(user.uid, data.completed);
           setCompletedSet(new Set(data.completed));
         }
       } catch {
-        // ignore
+        // Network error: keep cached data (if any) already set above.
       }
     })();
     return () => {
