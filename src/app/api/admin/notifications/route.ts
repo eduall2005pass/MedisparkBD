@@ -44,7 +44,33 @@ export async function POST(request: NextRequest) {
   try {
     const notifications = await saveNotification(payload, admin.uid);
     await logAdminAction(admin, "notification.save", String(body.title ?? ""), request);
-    return NextResponse.json({ notifications });
+    // Push to devices on fresh publishes (not on edits): best-effort, never
+    // fails the save. Tapping the push opens the notification link.
+    let push: { sent: number; failed: number } | null = null;
+    const isNew = typeof body.id !== "string" || !body.id.trim();
+    if (isNew && payload.isActive !== false) {
+      try {
+        const { sendPush } = await import("@/lib/push-admin");
+        const { sanitizeNotificationLink } = await import("@/lib/content-admin");
+        const url = sanitizeNotificationLink(body.link) ?? "/dashboard/notifications";
+        const targetUid =
+          payload.audience === "student" && typeof payload.targetUid === "string" && payload.targetUid
+            ? payload.targetUid
+            : undefined;
+        const result = await sendPush({
+          title: String(body.title ?? "MediSpark"),
+          body: String(body.message ?? ""),
+          url,
+          ...(targetUid ? { targetUid } : {}),
+        });
+        push = { sent: result.sent, failed: result.failed };
+        await logAdminAction(admin, "notification.push", `sent=${result.sent} failed=${result.failed}`, request);
+      } catch {
+        // Push infra (Firebase) missing or failing — in-app notice still saved.
+        push = { sent: 0, failed: 0 };
+      }
+    }
+    return NextResponse.json({ notifications, push });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to save the notification.";

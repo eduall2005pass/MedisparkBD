@@ -13,6 +13,8 @@ export type Notification = {
   id: string;
   title: string;
   message: string;
+  /** Optional click-through target (relative /path or absolute https URL). */
+  link: string | null;
   audience: NotificationAudience;
   /** Targeted student uid (audience "student" only). */
   targetUid: string | null;
@@ -53,6 +55,7 @@ type NotificationRow = {
   id: string;
   title: string;
   message: string;
+  link?: string | null;
   audience: string;
   target_uid?: string | null;
   target_email?: string | null;
@@ -102,6 +105,7 @@ function mapNotificationRow(
     id: row.id,
     title: row.title,
     message: row.message,
+    link: typeof row.link === "string" && row.link.trim() ? row.link.trim() : null,
     audience: normalizeAudience(row.audience),
     targetUid: row.target_uid ?? null,
     targetEmail: row.target_email ?? null,
@@ -154,6 +158,12 @@ async function ensureNotificationsTable(): Promise<void> {
     } catch {
       // Column already exists — safe to ignore.
     }
+  }
+  // Click-through link (each ALTER independent so partial migrations converge).
+  try {
+    await exec(`ALTER TABLE notifications ADD COLUMN link VARCHAR(1024) NULL AFTER message`);
+  } catch {
+    // Column already exists — safe to ignore.
   }
   try {
     await exec(
@@ -264,6 +274,19 @@ export async function fetchStudentNotifications(
   }
 }
 
+/**
+ * Sanitize a notification click-through link. Allows relative in-app paths
+ * ("/courses/...") and absolute https URLs. Anything else → null.
+ */
+export function sanitizeNotificationLink(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim().slice(0, 1024);
+  if (!v) return null;
+  if (v.startsWith("/")) return v;
+  if (/^https:\/\//i.test(v)) return v;
+  return null;
+}
+
 /** Persistently mark ONE notification as read for a student. */
 export async function markNotificationRead(
   notificationId: string,
@@ -371,6 +394,10 @@ export async function saveNotification(
     typeof input.eventKey === "string" && input.eventKey.trim()
       ? input.eventKey.trim().slice(0, 191)
       : null;
+  // Link is only overwritten when the caller explicitly sends the key —
+  // silent callers (automatic templates, toggles) never wipe an existing link.
+  const hasLinkKey = "link" in input;
+  const link = hasLinkKey ? sanitizeNotificationLink(input.link) : null;
   const id =
     typeof input.id === "string" && input.id.trim()
       ? input.id.trim()
@@ -378,9 +405,10 @@ export async function saveNotification(
           .toString()
           .padStart(6, "0")}`;
   await exec(
-    `INSERT INTO notifications (id, title, message, audience, is_active, created_by, target_uid, target_email, target_course_id, origin, event_key)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO notifications (id, title, message, link, audience, is_active, created_by, target_uid, target_email, target_course_id, origin, event_key)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE title = VALUES(title), message = VALUES(message),
+       link = ${hasLinkKey ? "VALUES(link)" : "link"},
        audience = VALUES(audience), is_active = VALUES(is_active),
        target_uid = VALUES(target_uid), target_email = VALUES(target_email),
        target_course_id = VALUES(target_course_id)`,
@@ -388,6 +416,7 @@ export async function saveNotification(
       id,
       title,
       message,
+      link,
       audience,
       input.isActive === false ? 0 : 1,
       adminUid,

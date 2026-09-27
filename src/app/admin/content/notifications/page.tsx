@@ -16,12 +16,13 @@ type Notification = {
   id: string;
   title: string;
   message: string;
+  link?: string | null;
   audience: "all" | "students" | "admins";
   isActive: boolean;
   createdAt: string;
 };
 
-const EMPTY = { id: "", title: "", message: "", audience: "all" as "all" | "students" | "admins" };
+const EMPTY = { id: "", title: "", message: "", link: "", audience: "all" as "all" | "students" | "admins" };
 
 export default function NotificationsPage() {
   const gate = useAdminGate();
@@ -63,25 +64,27 @@ export default function NotificationsPage() {
           ...(form.id ? { id: form.id } : {}),
           title: form.title,
           message: form.message,
+          link: form.link.trim(),
           audience: form.audience,
           isActive: true,
         }),
       });
-      const data = (await response.json().catch(() => null)) as { error?: string; notifications?: Notification[] } | null;
+      const data = (await response.json().catch(() => null)) as { error?: string; notifications?: Notification[]; push?: { sent: number; failed: number } | null } | null;
       if (!response.ok) {
         setNotice({ kind: "error", text: data?.error ?? "Failed to save." });
         return;
       }
       setItems(data?.notifications ?? []);
       setForm(EMPTY);
-      setNotice({ kind: "success", text: form.id ? "Notification updated." : "Notification published." });
+      const pushInfo = data?.push && !form.id ? ` Push sent to ${data.push.sent} device${data.push.sent === 1 ? "" : "s"}.` : "";
+      setNotice({ kind: "success", text: `${form.id ? "Notification updated." : "Notification published."}${pushInfo}` });
     } finally {
       setBusy(false);
     }
   }
 
   function startEdit(item: Notification) {
-    setForm({ id: item.id, title: item.title, message: item.message, audience: item.audience });
+    setForm({ id: item.id, title: item.title, message: item.message, link: item.link ?? "", audience: item.audience });
     setNotice(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -92,7 +95,7 @@ export default function NotificationsPage() {
       const response = await fetch("/api/admin/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...gate.headers },
-        body: JSON.stringify({ id: item.id, title: item.title, message: item.message, audience: item.audience, isActive: !item.isActive }),
+        body: JSON.stringify({ id: item.id, title: item.title, message: item.message, link: item.link ?? "", audience: item.audience, isActive: !item.isActive }),
       });
       const data = (await response.json().catch(() => null)) as { notifications?: Notification[] } | null;
       if (data?.notifications) setItems(data.notifications);
@@ -139,6 +142,8 @@ export default function NotificationsPage() {
             onChange={(event) => setForm({ ...form, title: event.target.value })} />
           <textarea className={inputClass} rows={3} placeholder="Message" aria-label="Message" value={form.message}
             onChange={(event) => setForm({ ...form, message: event.target.value })} />
+          <input className={inputClass} placeholder="Link on tap (optional) — e.g. /courses/specialmedicalexambatch" aria-label="Link on tap" value={form.link}
+            onChange={(event) => setForm({ ...form, link: event.target.value })} />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <select className={`${inputClass} max-w-48`} value={form.audience} aria-label="Audience"
               onChange={(event) => setForm({ ...form, audience: event.target.value as typeof form.audience })}>
@@ -167,6 +172,9 @@ export default function NotificationsPage() {
                 {item.title}
               </span>
               <span className="block line-clamp-2 text-xs text-slate-500 admin-dark:text-slate-400">{item.message}</span>
+              {item.link && (
+                <span className="mt-1 block truncate text-[11px] font-semibold text-primary-600 admin-dark:text-primary-400">🔗 {item.link}</span>
+              )}
               <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-slate-400">
                 {item.audience} · {new Date(item.createdAt).toLocaleDateString()}
               </span>

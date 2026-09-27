@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
 type Notification = {
   id: string;
   title: string;
   message: string;
+  link?: string | null;
   audience: "all" | "students" | "admins" | "enrolled" | "student";
   isRead: boolean;
   createdAt: string;
@@ -44,6 +46,7 @@ function broadcastUnreadCount(unreadCount: number): void {
 
 export default function NotificationsList() {
   const { user } = useAuth();
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[] | null>(null);
   const [error, setError] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
@@ -119,6 +122,19 @@ export default function NotificationsList() {
       }
     },
     [user, markingId, notifications],
+  );
+
+  const openNotification = useCallback(
+    (item: Notification) => {
+      if (!item.isRead) void markRead(item.id);
+      // Click-through: relative links route in-app, absolute https URLs
+      // (e.g. https://medisparkbd.com/courses/...) open directly.
+      if (item.link) {
+        if (item.link.startsWith("/")) router.push(item.link);
+        else window.location.href = item.link;
+      }
+    },
+    [markRead, router],
   );
 
   const markAllRead = useCallback(async () => {
@@ -201,25 +217,29 @@ export default function NotificationsList() {
             </div>
           )}
           <ul className="mt-4 space-y-4">
-            {notifications.map((notification) => (
+            {notifications.map((notification) => {
+              const clickable = !notification.isRead || Boolean(notification.link);
+              return (
               <li key={notification.id}>
                 <article
-                  onClick={() => void markRead(notification.id)}
+                  onClick={() => void openNotification(notification)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      void markRead(notification.id);
+                      void openNotification(notification);
                     }
                   }}
-                  tabIndex={notification.isRead ? -1 : 0}
-                  role={notification.isRead ? undefined : "button"}
+                  tabIndex={clickable ? 0 : -1}
+                  role={clickable ? "button" : undefined}
                   aria-label={
-                    notification.isRead
-                      ? notification.title
-                      : `Mark as read: ${notification.title}`
+                    notification.link
+                      ? `Open: ${notification.title}`
+                      : notification.isRead
+                        ? notification.title
+                        : `Mark as read: ${notification.title}`
                   }
                   className={`rounded-2xl border bg-dark-900 p-6 shadow-lg shadow-black/20 transition duration-300 hover:border-primary-600/60 hover:shadow-primary-900/30 sm:p-7 ${
-                    notification.isRead
+                    notification.isRead && !notification.link
                       ? "border-ink/10"
                       : "cursor-pointer border-primary-500/40 bg-primary-600/[0.04]"
                   }`}
@@ -238,6 +258,11 @@ export default function NotificationsList() {
                       <p className="mt-1.5 text-sm leading-relaxed text-neutral-400">
                         {notification.message}
                       </p>
+                      {notification.link && (
+                        <p className="mt-2 inline-flex items-center gap-1 rounded-lg border border-primary-500/40 bg-primary-600/10 px-2.5 py-1 text-[11px] font-extrabold text-primary-300">
+                          Tap to open →
+                        </p>
+                      )}
                       <time
                         className="mt-3 block text-xs font-semibold text-neutral-500"
                         dateTime={notification.createdAt}
@@ -248,7 +273,8 @@ export default function NotificationsList() {
                   </div>
                 </article>
               </li>
-            ))}
+              );
+            })}
           </ul>
         </>
       )}

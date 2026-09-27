@@ -202,9 +202,11 @@ export default function Navbar({ config }: { config?: NavbarConfig }) {
             </svg>
             {userUid && unreadCount !== null && unreadCount > 0 && (
               <span
-                className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-primary-500"
+                className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary-500 px-1 text-[10px] font-extrabold leading-none text-white"
                 aria-label={`${unreadCount} unread notifications`}
-              />
+              >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
             )}
           </Link>
 
