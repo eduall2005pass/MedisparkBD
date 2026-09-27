@@ -153,7 +153,12 @@ function loadReadIds(): number[] {
     const raw = window.localStorage.getItem(NOTIF_READ_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((v): v is number => typeof v === "number") : [];
+    // Normalize through Number() — server ids may arrive as strings and a
+    // strict includes() would then never match, leaving the badge stuck.
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((v) => Number(v))
+      .filter((n): n is number => Number.isFinite(n));
   } catch {
     return [];
   }
@@ -211,22 +216,25 @@ function loadReadIds(): number[] {
 
   // Keep the feed fresh while the admin panel is open
   // (initial load + 30s polling + window focus + every bell open).
+  // Returns the fresh payload so open-handlers can act on it (auto-read).
   const loadRecent = useCallback(async () => {
-    if (!gate.ready) return;
+    if (!gate.ready) return null;
     try {
       const response = await fetch("/api/admin/activity/recent", {
         cache: "no-store",
         headers: gate.headers,
       });
-      if (!response.ok) return;
+      if (!response.ok) return null;
       const data = (await response.json()) as {
         logs?: RecentActivity[];
         pending?: PendingItem[];
       };
       if (Array.isArray(data.logs)) setNotifItems(data.logs);
       if (Array.isArray(data.pending)) setPendingItems(data.pending);
+      return data;
     } catch {
       // Bell stays quiet on failure — never blocks the panel.
+      return null;
     }
   }, [gate.ready, gate.headers]);
 
@@ -243,33 +251,48 @@ function loadReadIds(): number[] {
   }, [gate.ready, loadRecent]);
 
   // Badge = pending work + unread activity. Pending clears on
-  // approve/reject; activity clears via mark-as-read below.
+  // approve/reject; activity clears when the bell is opened or via
+  // mark-as-read below.
   const pendingCount = pendingItems.length;
   const unreadActivity = useMemo(
-    () => notifItems.filter((item) => !readIds.includes(item.id)),
+    () => notifItems.filter((item) => !readIds.includes(Number(item.id))),
     [notifItems, readIds],
   );
   const badgeCount = pendingCount + unreadActivity.length;
 
   const persistReadIds = (ids: number[]) => {
-    setReadIds(ids);
+    const clean = ids
+      .map((v) => Number(v))
+      .filter((n): n is number => Number.isFinite(n));
+    setReadIds(clean);
     try {
-      window.localStorage.setItem(NOTIF_READ_KEY, JSON.stringify(ids.slice(-200)));
+      window.localStorage.setItem(NOTIF_READ_KEY, JSON.stringify(clean.slice(-200)));
     } catch {}
   };
 
   const markOneRead = (id: number) => {
-    if (readIds.includes(id)) return;
-    persistReadIds([...readIds, id]);
+    const n = Number(id);
+    if (!Number.isFinite(n) || readIds.includes(n)) return;
+    persistReadIds([...readIds, n]);
   };
 
-  const markAllRead = () => {
-    persistReadIds([...readIds, ...notifItems.map((item) => item.id)]);
+  const markAllRead = (items: RecentActivity[] = notifItems) => {
+    persistReadIds([
+      ...readIds,
+      ...items.map((item) => Number(item.id)).filter((n) => Number.isFinite(n)),
+    ]);
   };
 
   const toggleNotif = () => {
     setNotifOpen((open) => {
-      if (!open) void loadRecent();
+      if (!open) {
+        // Opening the bell marks currently-visible activity as seen, so the
+        // badge actually drops. Pending work stays until approved/rejected.
+        void loadRecent().then((data) => {
+          const logs = Array.isArray(data?.logs) ? data.logs : notifItems;
+          markAllRead(logs);
+        });
+      }
       return !open;
     });
   };
@@ -603,7 +626,7 @@ function loadReadIds(): number[] {
                       {unreadActivity.length > 0 && (
                         <button
                           type="button"
-                          onClick={markAllRead}
+                          onClick={() => markAllRead()}
                           className="rounded-full px-2 py-0.5 text-[10px] font-bold text-primary-700 transition hover:bg-primary-600/10 admin-dark:text-primary-400"
                         >
                           Mark all read
