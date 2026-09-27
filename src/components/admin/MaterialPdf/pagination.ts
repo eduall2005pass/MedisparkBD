@@ -240,14 +240,6 @@ export function paginateQuestionsDebug(
       },
     };
   }
-  const budgetFor = (answerCount: number): number => {
-    if (opts.fixedColumnHeight !== undefined) return fixed;
-    return columnBudgetFor(answerCount, titleReserve);
-  };
-  const pageCapacityFor = (answerCount: number): number => {
-    const col = budgetFor(answerCount);
-    return twoColumn ? col * 2 : col;
-  };
   const pages: PaginatedPage[] = [];
   let current: PdfMaterialQuestion[] = [];
   let colA: PdfMaterialQuestion[] = [];
@@ -255,16 +247,26 @@ export function paginateQuestionsDebug(
   let currentItems: PaginateDebugItem[] = [];
   let colH: [number, number] = [0, 0];
   let curAnswers = 0;
-  // Per-column topic continuity for the header chip (each column's first
-  // block shows its topic header, like qi === 0 did for pages).
-  let lastTopic: [string, string] = ["", ""];
   let col: 0 | 1 = 0;
+  let lastGlobalTopic = "";
 
   const pageEmpty = () => current.length === 0;
   const pageUsed = () => colH[0] + colH[1];
 
+  const curPageNo = () => pages.length + 1;
+
+  const budgetFor = (pageNo: number, answerCount: number): number => {
+    if (opts.fixedColumnHeight !== undefined) return fixed;
+    const isPage1 = pageNo === 1;
+    return columnBudgetFor(answerCount, isPage1 && titleReserve);
+  };
+  const pageCapacityFor = (pageNo: number, answerCount: number): number => {
+    const col = budgetFor(pageNo, answerCount);
+    return twoColumn ? col * 2 : col;
+  };
+
   const flushDebugPage = (pageNo: number) => {
-    const capacityH = pageCapacityFor(curAnswers);
+    const capacityH = pageCapacityFor(pageNo, curAnswers);
     const usedH = pageUsed();
     debug.pages.push({
       page: pageNo,
@@ -272,7 +274,7 @@ export function paginateQuestionsDebug(
       usedH,
       remainingH: Math.max(0, capacityH - usedH),
       fillRatio: capacityH > 0 ? usedH / capacityH : 0,
-      columnBudgetH: budgetFor(curAnswers),
+      columnBudgetH: budgetFor(pageNo, curAnswers),
       colUsedH: [colH[0], colH[1]],
       items: currentItems,
     });
@@ -294,14 +296,12 @@ export function paginateQuestionsDebug(
     currentItems = [];
     colH = [0, 0];
     curAnswers = 0;
-    lastTopic = ["", ""];
     col = 0;
   };
 
-  const headerFor = (q: PdfMaterialQuestion, topic: string, c: 0 | 1): boolean => {
-    if (q.isStandaloneImage || topic === "") return false;
-    const colBlocks = c === 0 ? colA : colB;
-    return colBlocks.length === 0 || topic !== lastTopic[c];
+  const headerFor = (q: PdfMaterialQuestion, topic: string): boolean => {
+    if (q.isStandaloneImage || !topic) return false;
+    return topic !== lastGlobalTopic;
   };
 
   const place = (q: PdfMaterialQuestion, h: number, topic: string, c: 0 | 1, topicHeader: boolean) => {
@@ -315,8 +315,10 @@ export function paginateQuestionsDebug(
       column: c,
     });
     colH[c] += h;
-    if (!q.isStandaloneImage) curAnswers += 1;
-    lastTopic[c] = topic;
+    if (!q.isStandaloneImage) {
+      curAnswers += 1;
+      if (topic) lastGlobalTopic = topic;
+    }
   };
 
   for (let i = 0; i < questions.length; i++) {
@@ -324,8 +326,9 @@ export function paginateQuestionsDebug(
     const topic = topicOf(q);
     const baseH = estimateQuestionHeight(q, spacing);
     const nextAnswers = curAnswers + (q.isStandaloneImage ? 0 : 1);
-    const B = budgetFor(nextAnswers);
-    const showHere = headerFor(q, topic, col);
+    const pNo = curPageNo();
+    const B = budgetFor(pNo, nextAnswers);
+    const showHere = headerFor(q, topic);
     const needHere = baseH + (showHere ? TOPIC_HEADER_HEIGHT_PX : 0);
 
     if (pageEmpty() || colH[col] + needHere <= B) {
@@ -337,7 +340,8 @@ export function paginateQuestionsDebug(
 
     if (col === 0 && twoColumn) {
       // Whole block moves to the right column — never split across columns.
-      const showRight = headerFor(q, topic, 1);
+      // Topic Header stays with the MCQ (never orphaned).
+      const showRight = headerFor(q, topic);
       const needRight = baseH + (showRight ? TOPIC_HEADER_HEIGHT_PX : 0);
       if (needRight <= B) {
         debug.breaks.push({
@@ -345,7 +349,7 @@ export function paginateQuestionsDebug(
           column: 0,
           atQuestion: i,
           usedH: pageUsed(),
-          capacityH: pageCapacityFor(curAnswers),
+          capacityH: pageCapacityFor(pNo, curAnswers),
           remainingH: B - colH[0],
           nextH: needRight,
           reason: `next block (${Math.round(needRight)}px) exceeds left-column remaining ${Math.round(B - colH[0])}px → whole block to right column`,
@@ -362,14 +366,15 @@ export function paginateQuestionsDebug(
       column: 1,
       atQuestion: i,
       usedH: pageUsed(),
-      capacityH: pageCapacityFor(curAnswers),
-      remainingH: pageCapacityFor(curAnswers) - pageUsed(),
+      capacityH: pageCapacityFor(pNo, curAnswers),
+      remainingH: pageCapacityFor(pNo, curAnswers) - pageUsed(),
       nextH: needHere,
-      reason: `next block (${Math.round(needHere)}px) exceeds remaining ${Math.round(pageCapacityFor(curAnswers) - pageUsed())}px → whole block to new page`,
+      reason: `next block (${Math.round(needHere)}px) exceeds remaining ${Math.round(pageCapacityFor(pNo, curAnswers) - pageUsed())}px → whole block to new page`,
     });
     flushPage();
     col = 0;
-    const showFresh = headerFor(q, topic, 0);
+    const nextPNo = curPageNo();
+    const showFresh = headerFor(q, topic);
     const freshNeed = baseH + (showFresh ? TOPIC_HEADER_HEIGHT_PX : 0);
     place(q, freshNeed, topic, 0, showFresh);
   }

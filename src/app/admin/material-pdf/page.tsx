@@ -45,34 +45,105 @@ function mapParserToQuestions(parsed: ReturnType<typeof parsePastedMcqs>, topic 
   });
 }
 
+function isExplicitTopicHeader(line: string): string | null {
+  const t = line.trim();
+  if (!t) return null;
+  const topicRe = /^\s*(?:topic|টপিক|বিষয়|বিষয়|অধ্যায়|অধ্যায়|chapter|unit)\s*[:：\-–—]?\s*(.+?)\s*$/i;
+  const m1 = t.match(topicRe);
+  if (m1 && (m1[1] ?? "").trim()) return (m1[1] ?? "").trim().replace(/^[:：\-–—\s]+/, "").trim();
+
+  const bracketRe = /^\s*\[\s*([^\]\n]{1,80})\s*\]\s*$/;
+  const m2 = t.match(bracketRe);
+  if (m2 && (m2[1] ?? "").trim()) return (m2[1] ?? "").trim();
+
+  const borderRe = /^\s*[-=*~#]{2,}\s*([^-\n=*~#]{2,80})\s*[-=*~#]{2,}\s*$/;
+  const m3 = t.match(borderRe);
+  if (m3 && (m3[1] ?? "").trim()) return (m3[1] ?? "").trim();
+
+  return null;
+}
+
+function isQuestionStartLine(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  return (
+    /^\s*(?:(?:প্রশ্ন\s*(?:নং\.?|No\.?)?|Question\s*(?:No\.?)?|Q\s*[\.\-]?)\s*0*\d+|(?:\d+|[০-৯]+)\s*[\.\)\।\)\-]\-?)\s+/i.test(t) ||
+    /^\s*(?:QUESTION\s*[:\-])/i.test(t)
+  );
+}
+
+function isOptionOrAnswerOrStem(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  // Option marker
+  if (/^\s*(?:\([A-Da-dকখগঘ1-4১-৪]\)|\[[A-Da-dকখগঘ1-4১-৪]\]|[A-Da-dকখগঘ1-4১-৪]\s*[\.\)\:\-\—।\)])/i.test(t)) return true;
+  // Answer or Explanation prefix
+  if (/^\s*(?:Ans(?:wer)?\.?|Correct|উত্তর|সঠিক\s*উত্তর|ব্যাখ্যা|Explanation|Explan\.?|MARK|MARKS)\b/i.test(t)) return true;
+  // Stem / passage indicator phrases
+  if (/(?:উদ্দীপক|অনুচ্ছেদ|পড়|পড়িয়া|পড়ে|লক্ষ\s*কর|লক্ষ্য\s*কর|উত্তর\s*দাও|stem|passage|context|following\s+information|based\s+on)/i.test(t)) return true;
+  // Ends with or contains question mark
+  if (/[?？]/.test(t)) return true;
+  return false;
+}
+
 /**
- * Split pasted text into topic sections. A section starts at a line like:
- *   Topic: Cell Biology · টপিক: কোষ · Topic - X · [Cell Biology]
- * Sections without a header keep topic "". Questions are arranged
- * topic-wise in the preview only when such headers are present.
+ * Split pasted text into topic sections. Supports:
+ * 1) Explicit topic lines: Topic: Cell Biology · টপিক: কোষ · [Cell Biology]
+ * 2) Plain topic names preceding question blocks: Cell Biology \n 1. Question...
+ * Stored as a Topic entity, never mistaken for a question, option, or answer.
  */
 function splitPasteByTopic(raw: string): { topic: string; text: string }[] {
   const lines = raw.split("\n");
   const sections: { topic: string; text: string }[] = [];
   let currentTopic = "";
   let currentLines: string[] = [];
-  const topicRe = /^\s*(?:topic|টপিক|বিষয়|বিষয়|অধ্যায়|অধ্যায়|chapter)\s*[:：\-–]\s*(.+?)\s*$/i;
-  const bracketRe = /^\s*\[([^\]\n]{1,80})\]\s*$/;
-  for (const line of lines) {
-    const m = line.match(topicRe) ?? line.match(bracketRe);
-    if (m && (m[1] ?? "").trim()) {
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const explicitTopic = isExplicitTopicHeader(line);
+
+    if (explicitTopic) {
       if (currentLines.join("\n").trim()) {
         sections.push({ topic: currentTopic, text: currentLines.join("\n") });
       }
-      currentTopic = (m[1] ?? "").trim();
+      currentTopic = explicitTopic;
       currentLines = [];
-    } else {
-      currentLines.push(line);
+      continue;
     }
+
+    const trimmed = line.trim();
+    if (
+      trimmed.length >= 2 &&
+      trimmed.length <= 80 &&
+      !isQuestionStartLine(trimmed) &&
+      !isOptionOrAnswerOrStem(trimmed) &&
+      !/^[.,;:!?।]$/.test(trimmed)
+    ) {
+      // Look ahead for the next non-empty line: must be a question start!
+      let nextNonEmpty = "";
+      for (let j = i + 1; j < lines.length; j++) {
+        if (lines[j].trim()) {
+          nextNonEmpty = lines[j].trim();
+          break;
+        }
+      }
+      if (nextNonEmpty && isQuestionStartLine(nextNonEmpty)) {
+        if (currentLines.join("\n").trim()) {
+          sections.push({ topic: currentTopic, text: currentLines.join("\n") });
+        }
+        currentTopic = trimmed;
+        currentLines = [];
+        continue;
+      }
+    }
+
+    currentLines.push(line);
   }
+
   if (currentLines.join("\n").trim() || sections.length === 0) {
     sections.push({ topic: currentTopic, text: currentLines.join("\n") });
   }
+
   return sections.filter((s) => s.text.trim());
 }
 
@@ -98,6 +169,10 @@ export default function MaterialPdfGeneratorPage() {
   const { user, authLoading } = useAuth();
   const [mode, setMode] = useState<GeneratorMode>("select");
   const [materialName, setMaterialName] = useState("");
+  const [subtitle, setSubtitle] = useState("MCQ Practice Material");
+  const [addTopicModalOpen, setAddTopicModalOpen] = useState(false);
+  const [newTopicName, setNewTopicName] = useState("");
+  const [newTopicAfterQ, setNewTopicAfterQ] = useState<number>(0);
   const [pasteText, setPasteText] = useState("");
   const [questions, setQuestions] = useState<PdfMaterialQuestion[]>([]);
   const [lineSpacing, setLineSpacing] = useState<LineSpacing>("normal");
@@ -190,7 +265,7 @@ export default function MaterialPdfGeneratorPage() {
   // Invalidate generated PDF when preview content changes (requires regeneration)
   const prevPreviewKeyRef = useRef<string>("");
   useEffect(() => {
-    const key = JSON.stringify(questions) + "|" + materialName + "|" + String(lineSpacing)
+    const key = JSON.stringify(questions) + "|" + materialName + "|" + subtitle + "|" + String(lineSpacing)
       + "|" + (watermarkEnabled ? "wm1" : "wm0") + "|" + watermarkOpacity + "|" + watermarkSize + "|" + watermarkPosition
       + "|" + (watermarkLogo ?? "");
     if (prevPreviewKeyRef.current && prevPreviewKeyRef.current !== key && pdfReady) {
@@ -198,7 +273,7 @@ export default function MaterialPdfGeneratorPage() {
       setGenerateError(null);
     }
     prevPreviewKeyRef.current = key;
-  }, [questions, materialName, lineSpacing, watermarkEnabled, watermarkOpacity, watermarkSize, watermarkPosition, watermarkLogo, pdfReady]);
+  }, [questions, materialName, subtitle, lineSpacing, watermarkEnabled, watermarkOpacity, watermarkSize, watermarkPosition, watermarkLogo, pdfReady]);
 
   // Pagination budget is derived from the real page geometry inside
   // paginateQuestionsDebug (content height − header/title overhead − the
@@ -248,6 +323,75 @@ export default function MaterialPdfGeneratorPage() {
     if (!next || next === oldTopic) return;
     setQuestions((prev) => prev.map((q) => (q.topic === oldTopic ? { ...q, topic: next } : q)));
     setToast("Topic renamed");
+  };
+
+  /** Move an entire topic and ALL its associated MCQs up or down. */
+  const handleMoveTopic = (topicName: string, dir: -1 | 1) => {
+    setQuestions((prev) => {
+      const chunks: { topic: string; items: PdfMaterialQuestion[] }[] = [];
+      let curChunk: { topic: string; items: PdfMaterialQuestion[] } | null = null;
+      for (const q of prev) {
+        const t = q.topic ?? "";
+        if (!curChunk || curChunk.topic !== t) {
+          curChunk = { topic: t, items: [q] };
+          chunks.push(curChunk);
+        } else {
+          curChunk.items.push(q);
+        }
+      }
+
+      const idx = chunks.findIndex((c) => c.topic === topicName);
+      if (idx === -1) return prev;
+      const target = idx + dir;
+      if (target < 0 || target >= chunks.length) return prev;
+
+      const [moved] = chunks.splice(idx, 1);
+      chunks.splice(target, 0, moved);
+
+      const flattened = chunks.flatMap((c) => c.items);
+      return sanitizeQuestions(flattened);
+    });
+    setToast(`Topic "${topicName}" moved ${dir === -1 ? "up" : "down"}`);
+  };
+
+  /** Delete a topic header — MCQs are preserved and adopt preceding topic. */
+  const handleDeleteTopic = (topicToDelete: string) => {
+    setQuestions((prev) => {
+      let prevTopic: string | undefined = undefined;
+      const next = prev.map((q) => {
+        if (q.topic === topicToDelete) {
+          return { ...q, topic: prevTopic };
+        }
+        if (q.topic) {
+          prevTopic = q.topic;
+        }
+        return q;
+      });
+      return sanitizeQuestions(next);
+    });
+    setToast(`Topic "${topicToDelete}" removed`);
+  };
+
+  /** Add or assign a Topic Header starting after a given question number. */
+  const handleAddTopic = (topicName: string, startAfterQNumber: number) => {
+    const tName = topicName.trim();
+    if (!tName) return;
+    setQuestions((prev) => {
+      let targetIdx = 0;
+      if (startAfterQNumber > 0) {
+        const found = prev.findIndex((q) => !q.isStandaloneImage && q.qNumber === startAfterQNumber);
+        if (found !== -1) {
+          targetIdx = found + 1;
+        }
+      }
+      if (targetIdx >= prev.length && prev.length > 0) return prev;
+      const next = [...prev];
+      for (let i = targetIdx; i < next.length; i++) {
+        next[i] = { ...next[i], topic: tName };
+      }
+      return sanitizeQuestions(next);
+    });
+    setToast(`Topic "${tName}" added`);
   };
 
   const handleUpdate = (id: string, patch: Partial<PdfMaterialQuestion>) => {
@@ -342,6 +486,16 @@ export default function MaterialPdfGeneratorPage() {
       const next = [...prev];
       const [moved] = next.splice(idx, 1);
       next.splice(target, 0, moved);
+
+      // If moved across topic boundary, adapt topic so it joins the new neighbor topic
+      if (next[target - 1]?.topic && next[target + 1]?.topic && next[target - 1].topic === next[target + 1].topic) {
+        moved.topic = next[target - 1].topic;
+      } else if (target === 0 && next[1]?.topic) {
+        moved.topic = next[1].topic;
+      } else if (target === next.length - 1 && next[target - 1]?.topic) {
+        moved.topic = next[target - 1].topic;
+      }
+
       return sanitizeQuestions(next);
     });
   };
