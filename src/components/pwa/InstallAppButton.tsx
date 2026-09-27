@@ -127,6 +127,7 @@ export default function InstallAppButton() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [promptUsed, setPromptUsed] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const [guideTab, setGuideTab] = useState<BrowserKey>(() => detectBrowser());
 
   useEffect(() => {
@@ -142,6 +143,7 @@ export default function InstallAppButton() {
       setInstalled(true);
       setDeferred(null);
       setGuideOpen(false);
+      setMinimized(false);
     };
     const media = window.matchMedia("(display-mode: standalone)");
     const onMedia = (e: MediaQueryListEvent) => {
@@ -159,13 +161,16 @@ export default function InstallAppButton() {
 
   // Escape closes the guide.
   useEffect(() => {
-    if (!guideOpen) return;
+    if (!guideOpen || minimized) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setGuideOpen(false);
+      if (event.key === "Escape") {
+        setGuideOpen(false);
+        setMinimized(false);
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [guideOpen]);
+  }, [guideOpen, minimized]);
 
   const handleClick = useCallback(async () => {
     if (deferred && !promptUsed) {
@@ -184,6 +189,7 @@ export default function InstallAppButton() {
       setDeferred(null);
     }
     setGuideTab(detectBrowser());
+    setMinimized(false);
     setGuideOpen(true);
   }, [deferred, promptUsed]);
 
@@ -213,28 +219,40 @@ export default function InstallAppButton() {
         </span>
       </button>
 
-      {guideOpen && (
+      {guideOpen && !minimized && (
         <div
           role="dialog"
           aria-modal="true"
           aria-label="How to install the MediSpark app"
           className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-          onClick={() => setGuideOpen(false)}
+          onClick={() => { setGuideOpen(false); setMinimized(false); }}
         >
           <div
             className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-3xl border border-ink/10 bg-dark-900 p-5 shadow-2xl shadow-black/50 sm:rounded-3xl sm:p-6"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <h2 className="text-base font-extrabold text-heading">Install MediSpark</h2>
-              <button
-                type="button"
-                onClick={() => setGuideOpen(false)}
-                aria-label="Close install guide"
-                className="rounded-full bg-dark-800 p-2 text-neutral-400 transition hover:text-heading"
-              >
-                ✕
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMinimized(true)}
+                  aria-label="Minimize install guide"
+                  title="Minimize"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/15 bg-dark-800 text-lg font-bold leading-none text-neutral-200 transition hover:border-primary-500/60 hover:text-heading"
+                >
+                  —
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setGuideOpen(false); setMinimized(false); }}
+                  aria-label="Close install guide"
+                  title="Close"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/15 bg-dark-800 text-sm font-bold leading-none text-neutral-200 transition hover:border-primary-500/60 hover:text-heading"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             <p className="mt-1 text-xs leading-relaxed text-neutral-400">
               Pick your browser below and follow the steps — takes less than a minute.
@@ -267,6 +285,22 @@ export default function InstallAppButton() {
             </ol>
           </div>
         </div>
+      )}
+
+      {guideOpen && minimized && (
+        <button
+          type="button"
+          onClick={() => setMinimized(false)}
+          aria-label="Expand install guide"
+          title="Expand install guide"
+          className="fixed bottom-20 right-4 z-[70] flex items-center gap-2 rounded-full border border-primary-500/50 bg-dark-900/95 px-4 py-3 text-xs font-extrabold text-heading shadow-xl shadow-black/40 backdrop-blur transition hover:bg-dark-850 active:scale-[0.97] sm:bottom-6"
+        >
+          <svg className="h-4 w-4 text-primary-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v12m0 0l-4.5-4.5M12 15l4.5-4.5M4 19h16" />
+          </svg>
+          Install guide
+          <span aria-hidden="true">▲</span>
+        </button>
       )}
     </>
   );
