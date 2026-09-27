@@ -1,0 +1,296 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+
+type BoardRow = {
+  resultId: number;
+  examId: string;
+  examTitle: string;
+  examKind: string;
+  rank: number | null;
+  studentName: string;
+  studentId: string | null;
+  institution: string | null;
+  obtained: number;
+  totalMarks: number;
+  percent: number;
+  correctCount: number | null;
+  wrongCount: number | null;
+  skippedCount: number | null;
+  accuracy: number | null;
+  timeTakenSeconds: number | null;
+  submittedAt: string;
+  submissionType: "manual" | "auto";
+  isSecondTimer: boolean;
+};
+
+type ExamOption = { id: string; title: string; kind: string };
+
+function formatTime(seconds: number | null): string {
+  if (seconds === null || seconds === undefined) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}m ${s}s`;
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function toCsv(rows: BoardRow[]): string {
+  const head = [
+    "Exam", "Kind", "Rank", "Student", "Student ID", "College",
+    "Obtained", "Total", "Percent", "Correct", "Wrong", "Skipped",
+    "Accuracy %", "Time", "Submitted", "Submit Type",
+  ];
+  const esc = (v: unknown) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const lines = rows.map((r) =>
+    [
+      r.examTitle, r.examKind, r.rank ?? "", r.studentName, r.studentId ?? "",
+      r.institution ?? "", r.obtained, r.totalMarks, r.percent,
+      r.correctCount ?? "", r.wrongCount ?? "", r.skippedCount ?? "",
+      r.accuracy ?? "", r.timeTakenSeconds ?? "", formatDate(r.submittedAt),
+      r.submissionType,
+    ].map(esc).join(","),
+  );
+  return [head.join(","), ...lines].join("\n");
+}
+
+export default function ResultBoard() {
+  const [exams, setExams] = useState<ExamOption[]>([]);
+  const [rows, setRows] = useState<BoardRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [examId, setExamId] = useState("");
+  const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20;
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedQ(q.trim());
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/results?exams=1", { cache: "no-store" });
+        const data = (await res.json()) as { exams?: ExamOption[] };
+        if (Array.isArray(data.exams)) setExams(data.exams);
+      } catch {}
+    })();
+  }, []);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const sp = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+      if (examId) sp.set("examId", examId);
+      if (debouncedQ) sp.set("q", debouncedQ);
+      const res = await fetch(`/api/results?${sp.toString()}`, { cache: "no-store" });
+      const data = (await res.json()) as {
+        results?: BoardRow[];
+        total?: number;
+      };
+      setRows(Array.isArray(data.results) ? data.results : []);
+      setTotal(Number(data.total) || 0);
+    } catch {
+      setRows([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [examId, debouncedQ, page]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  const exportCsv = () => {
+    const blob = new Blob(["\uFEFF" + toCsv(rows)], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `medispark-results-p${page}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div>
+      {/* Filters */}
+      <div className="rounded-2xl border border-ink/10 bg-dark-900/60 p-4">
+        <div className="grid gap-3 md:grid-cols-[2fr_1fr_auto]">
+          <div>
+            <label htmlFor="result-q" className="mb-1 block text-xs font-bold uppercase tracking-widest text-neutral-500">
+              Student ID / নাম / কলেজ দিয়ে খুঁজুন
+            </label>
+            <input
+              id="result-q"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="যেমন: MS-AB12CD34, Rahim, Dhaka College…"
+              className="w-full rounded-xl border border-ink/10 bg-dark-950 px-4 py-2.5 text-sm text-heading outline-none transition placeholder:text-neutral-600 focus:border-primary-500/60"
+            />
+          </div>
+          <div>
+            <label htmlFor="result-exam" className="mb-1 block text-xs font-bold uppercase tracking-widest text-neutral-500">
+              পরীক্ষা
+            </label>
+            <select
+              id="result-exam"
+              value={examId}
+              onChange={(e) => {
+                setExamId(e.target.value);
+                setPage(1);
+              }}
+              className="w-full rounded-xl border border-ink/10 bg-dark-950 px-4 py-2.5 text-sm text-heading outline-none transition focus:border-primary-500/60"
+            >
+              <option value="">সব পরীক্ষা ({total}টি ফল)</option>
+              {exams.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={exportCsv}
+              disabled={rows.length === 0}
+              className="w-full rounded-xl border border-primary-500/40 bg-primary-600/10 px-4 py-2.5 text-sm font-bold text-primary-400 transition hover:bg-primary-600/20 disabled:opacity-40 md:w-auto"
+            >
+              Excel (CSV)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-ink/10">
+        <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+          <thead>
+            <tr className="bg-dark-900 text-xs uppercase tracking-wider text-neutral-400">
+              {["Rank", "Student", "Student ID", "College", "Exam", "Score", "%", "✓/✗/–", "Accuracy", "Time", "Submitted"].map((h) => (
+                <th key={h} className="whitespace-nowrap px-3 py-3 font-bold">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={11} className="px-3 py-10 text-center text-neutral-500">
+                  লোড হচ্ছে…
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={11} className="px-3 py-10 text-center text-neutral-500">
+                  কোনো ফল পাওয়া যায়নি। অন্য ID বা পরীক্ষা দিয়ে দেখুন।
+                </td>
+              </tr>
+            ) : (
+              rows.map((r) => (
+                <tr key={r.resultId} className="border-t border-ink/10 transition hover:bg-primary-600/5">
+                  <td className="whitespace-nowrap px-3 py-2.5 font-bold text-primary-400">
+                    {r.rank ?? "—"}
+                  </td>
+                  <td className="max-w-[160px] truncate px-3 py-2.5 font-semibold text-heading">
+                    {r.studentName}
+                    {r.isSecondTimer && (
+                      <span className="ml-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
+                        2nd
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs text-neutral-300">
+                    {r.studentId ?? "—"}
+                  </td>
+                  <td className="max-w-[160px] truncate px-3 py-2.5 text-neutral-400">
+                    {r.institution ?? "—"}
+                  </td>
+                  <td className="max-w-[200px] truncate px-3 py-2.5 text-neutral-300" title={r.examTitle}>
+                    {r.examTitle}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 font-bold text-heading">
+                    {r.obtained}/{r.totalMarks}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-neutral-300">
+                    {r.percent}%
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs">
+                    <span className="text-emerald-400">{r.correctCount ?? "—"}</span>
+                    <span className="text-neutral-600">/</span>
+                    <span className="text-red-400">{r.wrongCount ?? "—"}</span>
+                    <span className="text-neutral-600">/</span>
+                    <span className="text-neutral-400">{r.skippedCount ?? "—"}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-neutral-300">
+                    {r.accuracy !== null ? `${r.accuracy}%` : "—"}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-neutral-400">
+                    {formatTime(r.timeTakenSeconds)}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-neutral-500">
+                    {formatDate(r.submittedAt)}
+                    {r.submissionType === "auto" && (
+                      <span className="ml-1 text-[10px]">(auto)</span>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-xs text-neutral-500">
+          পেজ {page}/{totalPages} · মোট {total}টি ফল
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            className="rounded-xl border border-ink/10 bg-ink/5 px-4 py-2 text-xs font-bold text-neutral-300 transition hover:border-primary-500/50 disabled:opacity-40"
+          >
+            ← আগের
+          </button>
+          <button
+            type="button"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((p) => p + 1)}
+            className="rounded-xl border border-ink/10 bg-ink/5 px-4 py-2 text-xs font-bold text-neutral-300 transition hover:border-primary-500/50 disabled:opacity-40"
+          >
+            পরের →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
