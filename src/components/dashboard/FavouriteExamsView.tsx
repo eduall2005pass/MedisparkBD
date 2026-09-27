@@ -1,67 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth-context";
+import { useFavouriteExams } from "@/hooks/useFavourites";
 import { AccessGate } from "@/components/auth/AccessGuard";
 
-type FavExam = {
-  item_id: string;
-  title: string;
-  duration_minutes: number;
-  total_marks: number;
-  chapter_name: string | null;
-  subject_name: string | null;
-  course_slug: string | null;
-  course_name: string | null;
-  created_at: string;
-};
-
 export default function FavouriteExamsView() {
-  const { user, authLoading } = useAuth();
-  const [items, setItems] = useState<FavExam[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch("/api/my/favourites/details?type=exam", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error("Failed to load favourite exams");
-      const data = (await res.json()) as { items?: FavExam[] };
-      setItems(data.items ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!authLoading && user) void load();
-  }, [authLoading, user, load]);
-
-  const toggle = async (itemId: string) => {
-    if (!user) return;
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch("/api/my/favourites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ itemType: "exam", itemId }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      setItems((prev) => (prev ? prev.filter((i) => i.item_id !== itemId) : prev));
-    } catch {
-      // noop
-    }
-  };
+  const { items, loading, error, toggle } = useFavouriteExams();
 
   return (
     <AccessGate requirement="enrolled" loadingLabel="Loading favourite exams...">
@@ -71,7 +15,7 @@ export default function FavouriteExamsView() {
           <p className="mt-1 text-sm text-neutral-400">Exams you marked as favourite — only yours.</p>
         </header>
 
-        {loading || items === null ? (
+        {loading ? (
           <div className="mt-8 flex flex-col items-center py-16">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
             <p className="mt-3 text-sm font-semibold text-neutral-400">Loading favourite exams...</p>
@@ -79,7 +23,7 @@ export default function FavouriteExamsView() {
         ) : error ? (
           <div className="mt-8 rounded-2xl border border-red-500/30 bg-red-500/10 p-8 text-center">
             <p className="font-bold text-red-300">{error}</p>
-            <button type="button" onClick={() => void load()} className="mt-4 rounded-xl bg-primary-600 px-6 py-2.5 text-sm font-bold text-white">Try Again</button>
+            <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-xl bg-primary-600 px-6 py-2.5 text-sm font-bold text-white">Try Again</button>
           </div>
         ) : items.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-dashed border-ink/15 bg-dark-900/60 p-12 text-center">

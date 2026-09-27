@@ -22,6 +22,7 @@ import { Suspense } from "react";
 import { unstable_cache } from "next/cache";
 import { GlobalLoadingProvider } from "@/components/GlobalLoading";
 import PwaRegister from "@/components/pwa/PwaRegister";
+import { SWRConfig } from "swr";
 import "./globals.css";
 
 // Branding/settings change rarely — cache layout data for 60s so every page
@@ -152,20 +153,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   initialLogo={initialLogo}
                   initialThemeLogos={initialThemeLogos}
                 >
-                  <AuthProvider>
-                    <ExamLockProvider>
-                      <NavHistoryProvider>
-                        <HideOnAdmin>
-                          <AnnouncementBar />
-                          <Navbar config={navbarConfig} />
-                        </HideOnAdmin>
-                        {children}
-                        <HideOnAdmin>
-                          <Footer />
-                          <BottomNav />
-                        </HideOnAdmin>
-                      </NavHistoryProvider>
-                    </ExamLockProvider>
+<AuthProvider>
+                    <SWRConfig value={{ revalidateOnFocus: false, dedupingInterval: 30000 }}>
+                      <ExamLockProvider>
+                        <NavHistoryProvider>
+                          <HideOnAdmin>
+                            <AnnouncementBar />
+                            <Navbar config={navbarConfig} />
+                          </HideOnAdmin>
+                          {children}
+                          <HideOnAdmin>
+                            <Footer />
+                            <BottomNav />
+                          </HideOnAdmin>
+                        </NavHistoryProvider>
+                      </ExamLockProvider>
+                    </SWRConfig>
                   </AuthProvider>
                 </LogoProvider>
               </WebsiteSettingsProvider>

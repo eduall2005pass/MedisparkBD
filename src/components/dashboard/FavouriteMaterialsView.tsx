@@ -1,67 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
-import { useAuth } from "@/lib/auth-context";
+import { useFavouriteMaterials } from "@/hooks/useFavourites";
 import { AccessGate } from "@/components/auth/AccessGuard";
 
-type FavMaterial = {
-  item_id: string;
-  title: string;
-  material_type: string;
-  file_url: string;
-  chapter_name: string;
-  subject_name: string;
-  course_slug: string;
-  course_name: string;
-  created_at: string;
-};
-
 export default function FavouriteMaterialsView() {
-  const { user, authLoading } = useAuth();
-  const [items, setItems] = useState<FavMaterial[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch("/api/my/favourites/details?type=material", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error("Failed to load favourite materials");
-      const data = (await res.json()) as { items?: FavMaterial[] };
-      setItems(data.items ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!authLoading && user) void load();
-  }, [authLoading, user, load]);
-
-  const toggle = async (itemId: string) => {
-    if (!user) return;
-    try {
-      const token = await user.getIdToken();
-      const res = await fetch("/api/my/favourites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ itemType: "material", itemId }),
-      });
-      if (!res.ok) throw new Error("Failed");
-      setItems((prev) => (prev ? prev.filter((i) => String(i.item_id) !== String(itemId)) : prev));
-    } catch {
-      // noop
-    }
-  };
+  const { items, loading, error, toggle } = useFavouriteMaterials();
 
   return (
     <AccessGate requirement="enrolled" loadingLabel="Loading favourite materials...">
@@ -71,7 +15,7 @@ export default function FavouriteMaterialsView() {
           <p className="mt-1 text-sm text-neutral-400">PDFs and materials you saved — only yours.</p>
         </header>
 
-        {loading || items === null ? (
+        {loading ? (
           <div className="mt-8 flex flex-col items-center py-16">
             <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary-500 border-t-transparent" />
             <p className="mt-3 text-sm font-semibold text-neutral-400">Loading favourite materials...</p>
@@ -79,7 +23,7 @@ export default function FavouriteMaterialsView() {
         ) : error ? (
           <div className="mt-8 rounded-2xl border border-red-500/30 bg-red-500/10 p-8 text-center">
             <p className="font-bold text-red-300">{error}</p>
-            <button type="button" onClick={() => void load()} className="mt-4 rounded-xl bg-primary-600 px-6 py-2.5 text-sm font-bold text-white">Try Again</button>
+            <button type="button" onClick={() => window.location.reload()} className="mt-4 rounded-xl bg-primary-600 px-6 py-2.5 text-sm font-bold text-white">Try Again</button>
           </div>
         ) : items.length === 0 ? (
           <div className="mt-8 rounded-2xl border border-dashed border-ink/15 bg-dark-900/60 p-12 text-center">
