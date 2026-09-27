@@ -20,6 +20,7 @@ const TABS: Array<{ key: RuleTemplateKey; label: string; hint: string }> = [
 export default function ExamRuleTemplatesManager() {
   const gate = useAdminGate();
   const [tab, setTab] = useState<RuleTemplateKey>("academic");
+  const [lang, setLang] = useState<"bangla" | "english">("bangla");
   const [rules, setRules] = useState<Rule[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -37,7 +38,7 @@ export default function ExamRuleTemplatesManager() {
     setEditingRule(null);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/exam-rule-templates?template=${tab}`, {
+      const res = await fetch(`/api/admin/exam-rule-templates?template=${tab}&lang=${lang}`, {
         cache: "no-store",
         headers: gate.headers,
       });
@@ -47,7 +48,7 @@ export default function ExamRuleTemplatesManager() {
     } catch {
       setLoadError(true);
     }
-  }, [gate.ready, gate.headers, tab]);
+  }, [gate.ready, gate.headers, tab, lang]);
 
   useEffect(() => {
     void Promise.resolve().then(load);
@@ -80,7 +81,7 @@ export default function ExamRuleTemplatesManager() {
       const res = await fetch("/api/admin/exam-rule-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...gate.headers },
-        body: JSON.stringify({ template: tab, id: editingRule?.id ?? undefined, title: draftTitle.trim(), text: draftText.trim() }),
+        body: JSON.stringify({ template: tab, lang, id: editingRule?.id ?? undefined, title: draftTitle.trim(), text: draftText.trim() }),
       });
       const data = (await res.json().catch(() => null)) as { error?: string; rules?: Rule[] } | null;
       if (!res.ok || !data) {
@@ -104,7 +105,7 @@ export default function ExamRuleTemplatesManager() {
       const res = await fetch("/api/admin/exam-rule-templates", {
         method: "DELETE",
         headers: { "Content-Type": "application/json", ...gate.headers },
-        body: JSON.stringify({ template: tab, id }),
+        body: JSON.stringify({ template: tab, lang, id }),
       });
       const data = (await res.json().catch(() => null)) as { rules?: Rule[] } | null;
       if (res.ok && data?.rules) setRules(data.rules);
@@ -125,7 +126,7 @@ export default function ExamRuleTemplatesManager() {
       const res = await fetch("/api/admin/exam-rule-templates", {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...gate.headers },
-        body: JSON.stringify({ template: tab, order: ids }),
+        body: JSON.stringify({ template: tab, lang, order: ids }),
       });
       const data = (await res.json().catch(() => null)) as { rules?: Rule[] } | null;
       if (res.ok && data?.rules) setRules(data.rules);
@@ -181,10 +182,30 @@ export default function ExamRuleTemplatesManager() {
       </div>
       <p className="mt-2 text-xs text-slate-500">{active.label}: {active.hint}</p>
 
+      <div className="mt-3 flex gap-2">
+        {(["bangla", "english"] as const).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => setLang(l)}
+            className={`flex-1 rounded-xl border px-3 py-2 text-sm font-extrabold transition ${
+              lang === l
+                ? "border-primary-600 bg-primary-600 text-white shadow"
+                : "border-neutral-200 text-slate-500 hover:bg-slate-100 admin-dark:border-zinc-700 admin-dark:text-slate-300 admin-dark:hover:bg-zinc-800"
+            }`}
+          >
+            {l === "bangla" ? "বাংলা" : "English"}
+          </button>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[11px] text-slate-500">
+        {lang === "bangla" ? "Bangla Version-এর student-রা এই নিয়মগুলো দেখবে।" : "English Version-এর student-রা এই নিয়মগুলো দেখবে।"}
+      </p>
+
       <div className="mt-4 rounded-2xl border border-neutral-200 p-4 admin-dark:border-zinc-700">
         <div className="flex items-center justify-between gap-3">
           <h4 className="text-sm font-extrabold uppercase tracking-wide text-[#0b1e3a] admin-dark:text-zinc-100">
-            {active.label} Rules
+            {active.label} Rules ({lang === "bangla" ? "বাংলা" : "English"})
           </h4>
           {!showAdd && (
             <button

@@ -19,6 +19,7 @@ export default function ExamRulesEditor({
 }) {
   const [rules, setRules] = useState<Rule[] | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [lang, setLang] = useState<"bangla" | "english">("bangla");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
@@ -37,7 +38,7 @@ export default function ExamRulesEditor({
     setRules(null);
     try {
       const response = await fetch(
-        `/api/admin/exam-rules?examId=${encodeURIComponent(examId)}`,
+        `/api/admin/exam-rules?examId=${encodeURIComponent(examId)}&lang=${lang}`,
         { cache: "no-store", headers: authHeaders },
       );
       const data = (await response.json()) as { rules?: Rule[] };
@@ -49,7 +50,7 @@ export default function ExamRulesEditor({
       // never a false empty state.
       setLoadError(true);
     }
-  }, [examId, authHeaders]);
+  }, [examId, authHeaders, lang]);
 
   useEffect(() => {
     void Promise.resolve().then(load);
@@ -84,6 +85,7 @@ export default function ExamRulesEditor({
         headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
           examId,
+          lang,
           id: editingRule?.id ?? undefined,
           title: draftTitle.trim(),
           text: draftText.trim(),
@@ -113,7 +115,7 @@ export default function ExamRulesEditor({
       const response = await fetch("/api/admin/exam-rules", {
         method: "DELETE",
         headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify({ examId, id }),
+        body: JSON.stringify({ examId, lang, id }),
       });
       const data = (await response.json().catch(() => null)) as
         | { rules?: Rule[] }
@@ -136,7 +138,7 @@ export default function ExamRulesEditor({
       const response = await fetch("/api/admin/exam-rules", {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify({ examId, order: ids }),
+        body: JSON.stringify({ examId, lang, order: ids }),
       });
       const data = (await response.json().catch(() => null)) as
         | { rules?: Rule[] }
@@ -152,7 +154,7 @@ export default function ExamRulesEditor({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h4 className="text-sm font-extrabold uppercase tracking-wide text-[#0b1e3a] admin-dark:text-zinc-100">
-            Exam Rules
+            Exam Rules ({lang === "bangla" ? "বাংলা" : "English"})
           </h4>
           <p className="mt-0.5 text-xs text-slate-500">
             Shown to students on this exam&apos;s Rules Page only.
@@ -167,6 +169,22 @@ export default function ExamRulesEditor({
             + Add Rule
           </button>
         )}
+      </div>
+      <div className="mt-3 flex gap-2">
+        {(["bangla", "english"] as const).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => { setLang(l); setShowAdd(false); setEditingRule(null); setError(null); }}
+            className={`flex-1 rounded-lg border px-3 py-1.5 text-xs font-extrabold transition ${
+              lang === l
+                ? "border-primary-600 bg-primary-600 text-white"
+                : "border-neutral-200 text-slate-500 hover:bg-slate-100 admin-dark:border-zinc-700 admin-dark:text-slate-300"
+            }`}
+          >
+            {l === "bangla" ? "বাংলা" : "English"}
+          </button>
+        ))}
       </div>
 
       {rules === null && !loadError && (

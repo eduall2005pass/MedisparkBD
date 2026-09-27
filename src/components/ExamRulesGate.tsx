@@ -18,6 +18,11 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rules, setRules] = useState<Rule[]>([]);
+  const [rulesEn, setRulesEn] = useState<Rule[]>([]);
+  // Rules display language — follows the chosen Question Version (Bangla
+  // version → বাংলা rules, English version → English rules). Defaults to
+  // Bangla until the student picks a version.
+  const [rulesLang, setRulesLang] = useState<"bangla" | "english">("bangla");
   const [agreed, setAgreed] = useState(false);
   const [timerType, setTimerType] = useState<"first" | "second" | null>(null);
   const [secondTimerEnabled, setSecondTimerEnabled] = useState(false);
@@ -42,6 +47,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
         });
         const data = (await response.json().catch(() => null)) as {
           rules?: Rule[];
+          rulesEn?: Rule[];
           secondTimerEnabled?: boolean;
           secondTimerDeduction?: number;
           versions?: { totalSlots?: number; coverage?: Record<string, number> } | null;
@@ -51,6 +57,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
         }
         if (cancelled) return;
         setRules(data.rules ?? []);
+        setRulesEn(data.rulesEn ?? data.rules ?? []);
         setVersionCoverage(data.versions?.coverage ?? null);
         setVersionTotal(typeof data.versions?.totalSlots === "number" ? data.versions.totalSlots : null);
         setSecondTimerEnabled(Boolean(data.secondTimerEnabled));
@@ -102,12 +109,14 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
       .then(async (response) => {
         const data = (await response.json().catch(() => null)) as {
           rules?: Rule[];
+          rulesEn?: Rule[];
           secondTimerEnabled?: boolean;
           secondTimerDeduction?: number;
           versions?: { totalSlots?: number; coverage?: Record<string, number> } | null;
         } | null;
         if (!response.ok || !data) throw new Error("Failed to load rules.");
         setRules(data.rules ?? []);
+        setRulesEn(data.rulesEn ?? data.rules ?? []);
         setVersionCoverage(data.versions?.coverage ?? null);
         setVersionTotal(typeof data.versions?.totalSlots === "number" ? data.versions.totalSlots : null);
         setSecondTimerEnabled(Boolean(data.secondTimerEnabled));
@@ -136,6 +145,31 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
     return `/exam/${examId}?begin=1&timer=${timer}&version=${version}`;
   }
 
+  // Rules shown in the version language (English falls back to Bangla when
+  // the admin hasn't written English rules yet).
+  const shown = rulesLang === "english" ? (rulesEn.length > 0 ? rulesEn : rules) : rules;
+
+  function renderLangToggle() {
+    return (
+      <div className="mt-4 flex gap-2">
+        {(["bangla", "english"] as const).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => setRulesLang(l)}
+            className={`flex-1 rounded-xl border px-3 py-2 text-xs font-extrabold transition ${
+              rulesLang === l
+                ? "border-primary-500/60 bg-primary-600/15 text-primary-200"
+                : "border-ink/10 bg-dark-850 text-neutral-400 hover:border-primary-500/30"
+            }`}
+          >
+            {l === "bangla" ? "বাংলা নিয়ম" : "English Rules"}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   function renderVersionSelector() {
     return (
       <div className="mt-6 rounded-2xl border border-primary-600/30 bg-dark-850 p-4 sm:p-5">
@@ -157,7 +191,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
               <button
                 key={option.key}
                 type="button"
-                onClick={() => setQuestionVersion(option.key)}
+                onClick={() => { setQuestionVersion(option.key); setRulesLang(option.key); }}
                 className={`flex items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition ${
                   selected
                     ? "border-primary-500/60 bg-primary-600/10 ring-1 ring-primary-500/30"
@@ -234,7 +268,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
         </div>
       )}
 
-      {!loading && !error && !alreadyAttempted && rules.length === 0 && (
+      {!loading && !error && !alreadyAttempted && rules.length === 0 && rulesEn.length === 0 && (
         <>
           <p className="mt-6 rounded-xl border border-dashed border-ink/15 bg-dark-950/60 p-6 text-center text-sm text-neutral-400">
             No Rules Added.
@@ -326,10 +360,11 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
         </>
       )}
 
-      {!loading && !error && !alreadyAttempted && rules.length > 0 && (
+      {!loading && !error && !alreadyAttempted && shown.length > 0 && (
         <>
+          {renderLangToggle()}
           <ul className="mt-4 space-y-3">
-            {rules.map((rule, index) => (
+            {shown.map((rule, index) => (
               <li
                 key={rule.id ?? `rule-${index}`}
                 className="flex gap-3 rounded-xl border border-ink/10 bg-dark-850 p-3.5"

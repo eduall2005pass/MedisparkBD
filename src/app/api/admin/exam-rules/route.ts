@@ -14,7 +14,7 @@ function unauthorized() {
   return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 }
 
-/** GET ?examId=… — rules of one specific exam (strictly exam-scoped). */
+/** GET ?examId=…&lang=bangla|english — rules of one exam+language. */
 export async function GET(request: NextRequest) {
   const admin = await requireAnyPermission(request, ["manageExams", "managePublicExam"]);
   if (!admin) return unauthorized();
@@ -22,13 +22,14 @@ export async function GET(request: NextRequest) {
   if (!/^[a-z0-9-]{2,64}$/.test(examId)) {
     return NextResponse.json({ error: "A valid exam is required." }, { status: 400 });
   }
+  const lang = request.nextUrl.searchParams.get("lang")?.toLowerCase() === "english" ? "english" : "bangla";
   return NextResponse.json(
-    { examId, rules: await fetchExamRules(examId) },
+    { examId, lang, rules: await fetchExamRules(examId, lang) },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
 
-/** POST — add or edit a rule. Body: { examId, id?, title, text }. */
+/** POST — add or edit a rule. Body: { examId, lang?, id?, title, text }. */
 export async function POST(request: NextRequest) {
   const admin = await requireAnyPermission(request, ["manageExams", "managePublicExam"]);
   if (!admin) return unauthorized();
@@ -53,33 +54,35 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** PUT — reorder within one exam. Body: { examId, order: [id, …] }. */
+/** PUT — reorder within one exam+lang. Body: { examId, lang?, order: [id, …] }. */
 export async function PUT(request: NextRequest) {
   const admin = await requireAnyPermission(request, ["manageExams", "managePublicExam"]);
   if (!admin) return unauthorized();
   const body = (await request.json().catch(() => null)) as
-    | { examId?: unknown; order?: unknown }
+    | { examId?: unknown; order?: unknown; lang?: unknown }
     | null;
   const examId = typeof body?.examId === "string" ? body.examId.trim() : "";
   if (!/^[a-z0-9-]{2,64}$/.test(examId) || !Array.isArray(body?.order)) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
+  const lang = typeof body?.lang === "string" && body.lang.toLowerCase() === "english" ? "english" : "bangla";
   const ids = body!.order.map(Number).filter((id) => Number.isInteger(id) && id > 0);
-  return NextResponse.json({ rules: await reorderExamRules(examId, ids) });
+  return NextResponse.json({ rules: await reorderExamRules(examId, ids, lang) });
 }
 
-/** DELETE — body: { examId, id }. */
+/** DELETE — body: { examId, lang?, id }. */
 export async function DELETE(request: NextRequest) {
   const admin = await requireAnyPermission(request, ["manageExams", "managePublicExam"]);
   if (!admin) return unauthorized();
   const body = (await request.json().catch(() => null)) as
-    | { examId?: unknown; id?: unknown }
+    | { examId?: unknown; id?: unknown; lang?: unknown }
     | null;
   const examId = typeof body?.examId === "string" ? body.examId.trim() : "";
   const id = Number(body?.id);
   if (!/^[a-z0-9-]{2,64}$/.test(examId) || !Number.isInteger(id) || id <= 0) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
-  await logAdminAction(admin, "exam-rules.delete", `exam=${examId} id=${id}`, request);
-  return NextResponse.json({ rules: await deleteExamRule(examId, id) });
+  const lang = typeof body?.lang === "string" && body.lang.toLowerCase() === "english" ? "english" : "bangla";
+  await logAdminAction(admin, "exam-rules.delete", `exam=${examId} lang=${lang} id=${id}`, request);
+  return NextResponse.json({ rules: await deleteExamRule(examId, id, lang) });
 }
