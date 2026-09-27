@@ -303,9 +303,9 @@
 - Serverless functions for API routes
 
 ### Database
-- **Azure Database for MySQL** (managed service)
-- Host: `eduall2005pass.mysql.database.azure.com:3306`
-- TLS required, GIPK (auto primary keys) enabled
+- **VM MariaDB 10.6** (self-hosted on `medispark`)
+- Host: `20.219.193.182:3306`
+- Non-TLS, persistent service + nightly backups
 - Schema managed via SQL migrations
 
 ### Media Storage
@@ -369,7 +369,7 @@ npx tsc --noEmit
 
 ### Database Migrations
 ```bash
-mysql -h eduall2005pass.mysql.database.azure.com \
+mysql -h 20.219.193.182 \
   -u <admin> -p bloodare_medispark < src/sql/<file>.sql
 ```
 

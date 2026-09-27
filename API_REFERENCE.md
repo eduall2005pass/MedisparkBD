@@ -1025,7 +1025,7 @@ Get system information + database status.
 {
   "database": {
     "connected": true,
-    "host": "eduall2005pass.mysql.database.azure.com"
+    "host": "20.219.193.182"
   },
   "firebase": {
     "configured": true,

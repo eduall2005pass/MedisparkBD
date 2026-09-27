@@ -17,10 +17,10 @@
 └─────────────────────────────────────────────────────────┘
                          ↕
 ┌─────────────────────────────────────────────────────────┐
-│         Azure MySQL Database                            │
-│  (eduall2005pass.mysql.database.azure.com:3306)         │
+│         VM MariaDB                                    │
+│  (20.219.193.182:3306)                                │
 │  - All application data stored here                      │
-│  - TLS enforced, GIPK (auto primary keys) enabled       │
+│  - Non-TLS, persistent service + nightly backups        │
 └─────────────────────────────────────────────────────────┘
                          ↕
 ┌─────────────────────────────────────────────────────────┐
@@ -972,10 +972,10 @@ MediSparkBD/
 - Next.js 16 standalone output
 
 ### Database
-- **Azure Database for MySQL** (managed service)
-- Host: `eduall2005pass.mysql.database.azure.com:3306`
+- **VM MariaDB 10.6** (self-hosted on `medispark`)
+- Host: `20.219.193.182:3306`
 - Database: `bloodare_medispark`
-- TLS enforced, GIPK enabled
+- Non-TLS, persistent + nightly backups
 - Schema managed via SQL migrations (`src/sql/*.sql`)
 
 ### Media Storage
@@ -997,7 +997,7 @@ MediSparkBD/
 
 **Database**
 ```
-MYSQL_HOST=eduall2005pass.mysql.database.azure.com
+MYSQL_HOST=20.219.193.182
 MYSQL_PORT=3306
 MYSQL_DATABASE=bloodare_medispark
 MYSQL_USER=<admin>
@@ -1035,7 +1035,7 @@ MEDIA_DELETE_URL=https://medispark.duckdns.org/medifiles-delete
 **Optional**
 ```
 NEXT_PUBLIC_SITE_URL=https://medisparkbd.com (default)
-MYSQL_SSL=true (auto-enabled for Azure hosts)
+MYSQL_SSL=false (for VM MariaDB)
 ```
 
 ---
@@ -1051,9 +1051,9 @@ pnpm dev              # http://localhost:3000
 
 ### Database Migrations
 1. Create a new SQL file in `src/sql/<name>-migration.sql`
-2. Apply to Azure MySQL:
+2. Apply to VM MariaDB:
    ```bash
-   mysql -h eduall2005pass.mysql.database.azure.com -u <admin> -p bloodare_medispark < src/sql/<file>.sql
+   mysql -h 20.219.193.182 -u <admin> -p bloodare_medispark < src/sql/<file>.sql
    ```
 
 ### Type Checking
