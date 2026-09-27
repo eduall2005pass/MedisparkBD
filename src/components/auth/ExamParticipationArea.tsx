@@ -648,12 +648,36 @@ export default function ExamParticipationArea({
   // ── Exam Navigation Lock: hide BottomNav + block navigation during active attempt ──
   // Also locked while the begin=1 flow is preparing the paper, so no exam
   // metadata/counts/timer leak onto the screen before questions are ready.
+  // NOTE: lock intentionally lifts once the outcome shows (free navigation
+  // after submit) — the page-level exam info is hidden separately below.
   useEffect(() => {
     const preparing = autoBegin && loading;
     const locked = (begun || preparing) && !outcome && !terminatedNotice && !alreadyAttempted;
     setExamLocked(locked);
     return () => setExamLocked(false);
   }, [begun, outcome, terminatedNotice, alreadyAttempted, autoBegin, loading, setExamLocked]);
+
+  // After submission the result card is the whole screen: flag the document
+  // so the exam page's own info header (banner + details, rendered above
+  // this component) stays hidden instead of reappearing over the result.
+  useEffect(() => {
+    try {
+      if (outcome) {
+        document.documentElement.setAttribute("data-exam-result", "true");
+      } else {
+        document.documentElement.removeAttribute("data-exam-result");
+      }
+    } catch {
+      // Non-fatal.
+    }
+    return () => {
+      try {
+        document.documentElement.removeAttribute("data-exam-result");
+      } catch {
+        // Non-fatal.
+      }
+    };
+  }, [outcome]);
 
   // Online / offline tracking (non-blocking banner; offline never submits).
   useEffect(() => {

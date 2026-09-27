@@ -509,3 +509,10 @@ html[data-exam-locked="true"] body {
   border-color: #2f5aa0;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
+
+/* ── Post-submit exam result: hide the page-level exam info header ──
+   (banner + details) so the result card starts the screen. The flag is
+   set by ExamParticipationArea once the outcome renders. */
+html[data-exam-result="true"] .exam-page-info {
+  display: none !important;
+}

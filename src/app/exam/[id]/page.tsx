@@ -46,6 +46,8 @@ export default async function ExamDetailPage({ params }: ExamPageProps) {
     <main className="flex-1 bg-dark-950">
       <section className="exam-page-section mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
         <HideDuringExam>
+          {/* Exam banner + info — hidden once the result shows (see data-exam-result). */}
+          <div className="exam-page-info">
           {/* Exam banner */}
           <div className="mt-4 overflow-hidden rounded-2xl border border-ink/10 bg-dark-900 shadow-lg shadow-black/20">
             <div className="relative h-36 w-full bg-gradient-to-br from-primary-600/30 via-dark-900 to-dark-950 sm:h-48">
@@ -88,6 +90,7 @@ export default async function ExamDetailPage({ params }: ExamPageProps) {
 
           {/* Exam info grid */}
           <ExamDetailInfo exam={exam} />
+          </div>
         </HideDuringExam>
 
         <div className="exam-content-wrapper mt-8">
