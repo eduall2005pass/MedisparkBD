@@ -36,6 +36,35 @@ import { useAuth } from "@/lib/auth-context";
 import { useOverlayBackClose } from "@/components/navigation/useOverlayBackClose";
 
 const SIDEBAR_STORAGE_KEY = "medispark-admin-sidebar-collapsed";
+const NOTIF_SEEN_KEY = "medispark-admin-notif-seen";
+
+/** Latest-activity row shape served by GET /api/admin/activity/recent. */
+type RecentActivity = {
+  id: number;
+  adminEmail: string;
+  action: string;
+  detail: string | null;
+  createdAt: string;
+};
+
+/** "course.save" → "Course save" for the bell list. */
+function formatActivityAction(action: string): string {
+  const text = action.replace(/[._-]+/g, " ").trim();
+  return text.length > 0 ? text.charAt(0).toUpperCase() + text.slice(1) : "Activity";
+}
+
+function timeAgo(iso: string): string {
+  const time = Date.parse(iso);
+  if (Number.isNaN(time)) return "";
+  const seconds = Math.max(0, Math.floor((Date.now() - time) / 1000));
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 
 // === Required sidebar structure: HOME separate + MANAGEMENT heading + Home Page Control after Enrollment ===
 const ADMIN_NAV = [
@@ -82,6 +111,21 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  // Notification bell — recent admin activity feed.
+  const notifRef = useRef<HTMLDivElement>(null);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifItems, setNotifItems] = useState<RecentActivity[]>([]);
+  const [notifSeenAt, setNotifSeenAt] = useState<number>(() => {
+    // SSR-safe lazy init — bell's read position from the last visit.
+    try {
+      if (typeof window !== "undefined") {
+        return Number(window.localStorage.getItem(NOTIF_SEEN_KEY)) || 0;
+      }
+    } catch {
+      // Non-fatal — bell simply treats everything as unread.
+    }
+    return 0;
+  });
   // Browser/device Back closes open drawers/overlays first (no navigation).
   useOverlayBackClose(mobileOpen, () => setMobileOpen(false));
   useOverlayBackClose(mobileSearchOpen, () => setMobileSearchOpen(false));
@@ -107,6 +151,68 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, [profileOpen]);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const onClick = (event: MouseEvent) => {
+      if (
+        notifRef.current &&
+        !notifRef.current.contains(event.target as Node)
+      ) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [notifOpen]);
+  useOverlayBackClose(notifOpen, () => setNotifOpen(false));
+
+  // Keep the feed fresh while the admin panel is open
+  // (initial load + 60s polling).
+  useEffect(() => {
+    if (!gate.ready) return;
+    let cancelled = false;
+    const loadRecent = async () => {
+      try {
+        const response = await fetch("/api/admin/activity/recent", {
+          cache: "no-store",
+          headers: gate.headers,
+        });
+        if (!response.ok) return;
+        const data = (await response.json()) as { logs?: RecentActivity[] };
+        if (!cancelled && Array.isArray(data.logs)) setNotifItems(data.logs);
+      } catch {
+        // Bell stays quiet on failure — never blocks the panel.
+      }
+    };
+    void loadRecent();
+    const timer = window.setInterval(() => void loadRecent(), 60_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [gate.ready, gate.headers]);
+
+  const unreadCount = notifItems.filter((item) => {
+    const time = Date.parse(item.createdAt);
+    return !Number.isNaN(time) && time > notifSeenAt;
+  }).length;
+
+  const toggleNotif = () => {
+    setNotifOpen((open) => {
+      if (!open) {
+        // Opening the dropdown marks everything as seen.
+        const now = Date.now();
+        setNotifSeenAt(now);
+        try {
+          window.localStorage.setItem(NOTIF_SEEN_KEY, String(now));
+        } catch {
+          // Non-fatal.
+        }
+      }
+      return !open;
+    });
+  };
 
   // Close the mobile drawer ONLY after a menu item's route has actually
   // changed. Removing the premature onClick handler from the items means
@@ -153,6 +259,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const closeOverlays = () => {
     setMobileOpen(false);
     setProfileOpen(false);
+    setNotifOpen(false);
   };
 
   const active = findActiveAdminNav(pathname);
@@ -405,14 +512,72 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
             <AdminThemeToggle />
 
             {/* Notifications */}
-            <button
-              type="button"
-              aria-label="Notifications"
-              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 text-zinc-700 transition hover:border-primary-500/60 hover:bg-neutral-50 admin-dark:border-zinc-700 admin-dark:text-zinc-200 admin-dark:hover:bg-zinc-800"
-            >
-              <NotificationsIcon className="h-5 w-5" />
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary-600" />
-            </button>
+            <div ref={notifRef} className="relative">
+              <button
+                type="button"
+                onClick={toggleNotif}
+                aria-label="Notifications"
+                aria-expanded={notifOpen}
+                className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-neutral-200 text-zinc-700 transition hover:border-primary-500/60 hover:bg-neutral-50 admin-dark:border-zinc-700 admin-dark:text-zinc-200 admin-dark:hover:bg-zinc-800"
+              >
+                <NotificationsIcon className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-600 px-1 text-[10px] font-bold text-white">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {notifOpen && (
+                <div className="absolute right-0 top-full z-50 mt-2 max-h-[70vh] w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl shadow-black/10 admin-dark:border-zinc-700 admin-dark:bg-zinc-900">
+                  <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3 admin-dark:border-zinc-800">
+                    <p className="text-sm font-bold text-zinc-900 admin-dark:text-zinc-50">
+                      Notifications
+                    </p>
+                    {unreadCount > 0 && (
+                      <span className="rounded-full bg-primary-600/10 px-2 py-0.5 text-[10px] font-bold text-primary-700 admin-dark:text-primary-400">
+                        {unreadCount} new
+                      </span>
+                    )}
+                  </div>
+                  <ul className="max-h-96 divide-y divide-neutral-100 overflow-y-auto admin-dark:divide-zinc-800">
+                    {notifItems.length === 0 ? (
+                      <li className="px-4 py-8 text-center">
+                        <p className="text-sm font-semibold text-zinc-700 admin-dark:text-zinc-200">
+                          No activity yet
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Admin actions will appear here.
+                        </p>
+                      </li>
+                    ) : (
+                      notifItems.map((item) => (
+                        <li key={item.id} className="px-4 py-3">
+                          <p className="text-xs font-bold capitalize text-zinc-900 admin-dark:text-zinc-50">
+                            {formatActivityAction(item.action)}
+                          </p>
+                          {item.detail && (
+                            <p className="mt-0.5 line-clamp-2 text-xs text-zinc-600 admin-dark:text-zinc-300">
+                              {item.detail}
+                            </p>
+                          )}
+                          <p className="mt-1 text-[10px] text-zinc-400">
+                            {item.adminEmail || "Admin"} · {timeAgo(item.createdAt)}
+                          </p>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                  <Link
+                    href="/admin/administration/activity-logs"
+                    onClick={closeOverlays}
+                    className="block border-t border-neutral-100 px-4 py-2.5 text-center text-xs font-bold text-primary-700 transition hover:bg-primary-600/5 admin-dark:border-zinc-800 admin-dark:text-primary-400"
+                  >
+                    View all activity
+                  </Link>
+                </div>
+              )}
+            </div>
 
             {/* Profile */}
             <div ref={profileRef} className="relative">
