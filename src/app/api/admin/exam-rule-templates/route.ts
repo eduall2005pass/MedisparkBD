@@ -3,7 +3,6 @@ import { requireAnyPermission } from "@/lib/admin";
 import { logAdminAction } from "@/lib/administration";
 import {
   deleteTemplateRule,
-  fetchTemplateRules,
   normalizeTemplate,
   reorderTemplateRules,
   saveTemplateRule,
@@ -65,14 +64,3 @@ export async function DELETE(request: NextRequest) {
   await logAdminAction(admin, "exam-rule-templates.delete", `template=${template} id=${id}`, request);
   return NextResponse.json({ rules: await deleteTemplateRule(template, id) });
 }
-
-/** Ensure all three templates exist (used at seed time). */
-export async function ensureAll() {
-  return Promise.all([
-    fetchTemplateRules("academic"),
-    fetchTemplateRules("medical"),
-    fetchTemplateRules("university"),
-  ]);
-}
-
-export { ensureAll as ensureAllTemplates };
