@@ -45,116 +45,10 @@ function mapParserToQuestions(parsed: ReturnType<typeof parsePastedMcqs>, topic 
   });
 }
 
-function isExplicitTopicHeader(line: string): string | null {
-  const t = line.trim();
-  if (!t) return null;
-  const topicRe = /^\s*(?:topic|টপিক|বিষয়|বিষয়|অধ্যায়|অধ্যায়|chapter|unit)\s*[:：\-–—]?\s*(.+?)\s*$/i;
-  const m1 = t.match(topicRe);
-  if (m1 && (m1[1] ?? "").trim()) return (m1[1] ?? "").trim().replace(/^[:：\-–—\s]+/, "").trim();
-
-  const bracketRe = /^\s*\[\s*([^\]\n]{1,80})\s*\]\s*$/;
-  const m2 = t.match(bracketRe);
-  if (m2 && (m2[1] ?? "").trim()) return (m2[1] ?? "").trim();
-
-  const borderRe = /^\s*[-=*~#]{2,}\s*([^-\n=*~#]{2,80})\s*[-=*~#]{2,}\s*$/;
-  const m3 = t.match(borderRe);
-  if (m3 && (m3[1] ?? "").trim()) return (m3[1] ?? "").trim();
-
-  return null;
-}
-
-function isQuestionStartLine(line: string): boolean {
-  const t = line.trim();
-  if (!t) return false;
-  return (
-    /^\s*(?:(?:প্রশ্ন\s*(?:নং\.?|No\.?)?|Question\s*(?:No\.?)?|Q\s*[\.\-]?)\s*0*\d+|(?:\d+|[০-৯]+)\s*[\.\)\।\)\-]\-?)\s+/i.test(t) ||
-    /^\s*(?:QUESTION\s*[:\-])/i.test(t)
-  );
-}
-
-function isOptionOrAnswerOrStem(line: string): boolean {
-  const t = line.trim();
-  if (!t) return false;
-  // Option marker
-  if (/^\s*(?:\([A-Da-dকখগঘ1-4১-৪]\)|\[[A-Da-dকখগঘ1-4১-৪]\]|[A-Da-dকখগঘ1-4১-৪]\s*[\.\)\:\-\—।\)])/i.test(t)) return true;
-  // Answer or Explanation prefix
-  if (/^\s*(?:Ans(?:wer)?\.?|Correct|উত্তর|সঠিক\s*উত্তর|ব্যাখ্যা|Explanation|Explan\.?|MARK|MARKS)\b/i.test(t)) return true;
-  // Stem / passage indicator phrases
-  if (/(?:উদ্দীপক|অনুচ্ছেদ|পড়|পড়িয়া|পড়ে|লক্ষ\s*কর|লক্ষ্য\s*কর|উত্তর\s*দাও|stem|passage|context|following\s+information|based\s+on)/i.test(t)) return true;
-  // Ends with or contains question mark
-  if (/[?？]/.test(t)) return true;
-  return false;
-}
-
-/**
- * Split pasted text into topic sections. Supports:
- * 1) Explicit topic lines: Topic: Cell Biology · টপিক: কোষ · [Cell Biology]
- * 2) Plain topic names preceding question blocks: Cell Biology \n 1. Question...
- * Stored as a Topic entity, never mistaken for a question, option, or answer.
- */
-function splitPasteByTopic(raw: string): { topic: string; text: string }[] {
-  const lines = raw.split("\n");
-  const sections: { topic: string; text: string }[] = [];
-  let currentTopic = "";
-  let currentLines: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const explicitTopic = isExplicitTopicHeader(line);
-
-    if (explicitTopic) {
-      if (currentLines.join("\n").trim()) {
-        sections.push({ topic: currentTopic, text: currentLines.join("\n") });
-      }
-      currentTopic = explicitTopic;
-      currentLines = [];
-      continue;
-    }
-
-    const trimmed = line.trim();
-    if (
-      trimmed.length >= 2 &&
-      trimmed.length <= 80 &&
-      !isQuestionStartLine(trimmed) &&
-      !isOptionOrAnswerOrStem(trimmed) &&
-      !/^[.,;:!?।]$/.test(trimmed)
-    ) {
-      // Look ahead for the next non-empty line: must be a question start!
-      let nextNonEmpty = "";
-      for (let j = i + 1; j < lines.length; j++) {
-        if (lines[j].trim()) {
-          nextNonEmpty = lines[j].trim();
-          break;
-        }
-      }
-      if (nextNonEmpty && isQuestionStartLine(nextNonEmpty)) {
-        if (currentLines.join("\n").trim()) {
-          sections.push({ topic: currentTopic, text: currentLines.join("\n") });
-        }
-        currentTopic = trimmed;
-        currentLines = [];
-        continue;
-      }
-    }
-
-    currentLines.push(line);
-  }
-
-  if (currentLines.join("\n").trim() || sections.length === 0) {
-    sections.push({ topic: currentTopic, text: currentLines.join("\n") });
-  }
-
-  return sections.filter((s) => s.text.trim());
-}
-
-function sanitizeQuestions(questions: PdfMaterialQuestion[]): PdfMaterialQuestion[] {
-  let counter = 0;
-  return questions.map((q) => {
-    if (q.isStandaloneImage) return q;
-    counter += 1;
-    return { ...q, qNumber: counter };
-  });
-}
+import {
+  splitPasteByTopic,
+  sanitizeQuestions,
+} from "@/lib/material-pdf-utils";
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -1150,6 +1044,17 @@ D. 150 দিন
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
+                  type="button"
+                  onClick={() => {
+                    setNewTopicName("");
+                    setNewTopicAfterQ(0);
+                    setAddTopicModalOpen(true);
+                  }}
+                  className="rounded-xl bg-[#0b1e3a] px-4 py-1.5 text-xs font-bold text-white shadow hover:bg-[#123060] admin-dark:bg-[#234e9f]"
+                >
+                  + Add Topic
+                </button>
+                <button
                   onClick={() => standaloneInputRef.current?.click()}
                   className="rounded-xl bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
                 >
@@ -1260,29 +1165,62 @@ D. 150 দিন
                     crossOrigin="anonymous"
                   />
                 )}
-                {/* 6. Top Header — fixed every page */}
-                <div className="flex items-center gap-2 text-[9px] font-semibold tracking-wide text-slate-700">
-                  <span className="shrink-0 font-bold text-[#0b1e3a]">MediSpark Academic and Admission Care</span>
-                  <span className="flex-1 border-b border-dotted border-slate-400 opacity-70" style={{ borderBottomStyle: "dotted", height: 1, marginTop: 6 }} />
-                  <span className="shrink-0 font-bold text-[#0b1e3a]">Page {String(page.pageNumber).padStart(2, "0")}</span>
+                {/* 2. Top Header — compact, consistent every page */}
+                <div className="flex items-center justify-between gap-3 text-[10px] font-bold text-slate-700">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span
+                      className="bangla cursor-text truncate text-[11px] font-extrabold text-[#0b1e3a] outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-1"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) => {
+                        const txt = (e.currentTarget.innerText || "").trim();
+                        if (txt) setMaterialName(txt);
+                      }}
+                      title="Click to edit Material Name (updates across all pages)"
+                    >
+                      {materialName.trim() || "SSC Academic Biology"}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="font-mono text-[11px] font-black text-[#0b1e3a]">
+                      {String(page.pageNumber).padStart(2, "0")}
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-1 border-b border-dotted border-slate-300" style={{ borderBottomStyle: "dotted" }} />
+                <div className="mt-1 border-b border-dotted border-slate-400 opacity-70" style={{ borderBottomStyle: "dotted", height: 1 }} />
 
-                {/* Material Name Title if exists */}
-                {materialName.trim() && (
-                  <div className="mt-3 text-center">
-                    <h2 className="bangla text-[13px] font-extrabold leading-tight text-[#0b1e3a]">{materialName.trim()}</h2>
+                {/* 3. First Page Only — Large Introductory Title Header */}
+                {page.pageNumber === 1 && (
+                  <div className="mt-2.5 mb-2 rounded-xl border border-slate-200 bg-[#f8fafc] py-2.5 px-4 text-center">
+                    <h1
+                      className="bangla cursor-text text-base font-black tracking-tight text-[#0b1e3a] outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-1"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) => {
+                        const txt = (e.currentTarget.innerText || "").trim();
+                        if (txt) setMaterialName(txt);
+                      }}
+                      title="Click to edit Material Name"
+                    >
+                      {materialName.trim() || "SSC Academic Biology"}
+                    </h1>
+                    <p
+                      className="bangla mt-0.5 cursor-text text-[11px] font-bold text-slate-500 outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-1"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) => {
+                        const txt = (e.currentTarget.innerText || "").trim();
+                        setSubtitle(txt);
+                      }}
+                      title="Click to edit Subtitle"
+                    >
+                      {subtitle || "MCQ Practice Material"}
+                    </p>
                   </div>
                 )}
 
-                {/* 7. Two-Column Page Layout with vertical center line.
-                    Explicit JS-assigned columns (page.columns) plus a real
-                    divider element — NOT CSS multicol: the PDF capture
-                    (html2canvas) does not render `column-rule` and cannot
-                    honor `break-inside: avoid` across CSS columns, which cut
-                    MCQs mid-text and dropped the divider from downloads.
-                    Each MCQ block lives wholly in one column by construction. */}
-                <div className="relative mt-3 flex flex-1 gap-[18px]">
+                {/* 4 & 5. Two-Column Page Layout with vertical center divider */}
+                <div className="relative mt-2.5 flex flex-1 gap-[18px]">
                   {page.columns.map((colBlocks, ci) => (
                     <Fragment key={ci}>
                       {ci === 1 && (
@@ -1291,32 +1229,69 @@ D. 150 দিন
                       <div className="min-w-0 flex-1">
                   {/* Blocks: questions + standalone images interleaved already via pagination */}
                   {colBlocks.map((q, qi) => {
-                    // Topic-wise grouping: header whenever the topic changes within the column.
-                    const prevTopic = qi === 0 ? undefined : (colBlocks[qi - 1]!.isStandaloneImage ? "" : (colBlocks[qi - 1]!.topic ?? ""));
+                    const prevInCol = qi === 0 ? null : colBlocks[qi - 1];
+                    const prevTopic = prevInCol
+                      ? (prevInCol.isStandaloneImage ? "" : (prevInCol.topic ?? ""))
+                      : ci === 1
+                        ? (page.columns[0].slice(-1)[0]?.isStandaloneImage ? "" : (page.columns[0].slice(-1)[0]?.topic ?? ""))
+                        : page.pageNumber === 1
+                          ? ""
+                          : (pages[page.pageNumber - 2]?.questions.slice(-1)[0]?.isStandaloneImage ? "" : (pages[page.pageNumber - 2]?.questions.slice(-1)[0]?.topic ?? ""));
                     const showTopic =
                       !q.isStandaloneImage &&
                       !!q.topic?.trim() &&
-                      (qi === 0 || prevTopic !== q.topic);
+                      (page.pageNumber === 1 && ci === 0 && qi === 0 ? true : prevTopic !== q.topic);
                     return (
                       <Fragment key={q.id}>
                         {showTopic && (
                           <div
-                            className="bangla mb-2 break-inside-avoid rounded bg-[#0b1e3a] px-2.5 py-1 text-[11px] font-extrabold text-white"
+                            className="bangla mb-2.5 break-inside-avoid rounded-lg border border-[#0b1e3a]/20 bg-[#0b1e3a] px-3 py-1.5 text-white shadow-sm flex items-center justify-between gap-2"
                             style={{ breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid" } as React.CSSProperties}
                           >
-                            <span
-                              className="cursor-text outline-none focus:bg-white/20 focus:ring-1 focus:ring-white/50 rounded px-0.5"
-                              contentEditable
-                              suppressContentEditableWarning
-                              onBlur={(e) => {
-                                const txt = (e.currentTarget.innerText || "").trim();
-                                if (txt && txt !== q.topic) handleRenameTopic(q.topic ?? "", txt);
-                                else e.currentTarget.innerText = q.topic ?? "";
-                              }}
-                              title="Click to rename topic (updates whole group)"
-                            >
-                              {q.topic}
-                            </span>
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              <span className="text-[9px] font-black uppercase tracking-wider text-amber-300 shrink-0">
+                                TOPIC:
+                              </span>
+                              <span
+                                className="cursor-text text-[11px] font-extrabold truncate outline-none focus:bg-white/20 focus:ring-1 focus:ring-white/50 rounded px-1"
+                                contentEditable
+                                suppressContentEditableWarning
+                                onBlur={(e) => {
+                                  const txt = (e.currentTarget.innerText || "").trim();
+                                  if (txt && txt !== q.topic) handleRenameTopic(q.topic ?? "", txt);
+                                  else e.currentTarget.innerText = q.topic ?? "";
+                                }}
+                                title="Click to rename topic (updates whole group)"
+                              >
+                                {q.topic}
+                              </span>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1 pdf-hide" data-html2canvas-ignore="true">
+                              <button
+                                type="button"
+                                onClick={() => handleMoveTopic(q.topic ?? "", -1)}
+                                title="Move topic up (with all its MCQs)"
+                                className="rounded bg-white/10 hover:bg-white/20 px-1.5 py-0.5 text-[9px] font-bold text-white transition"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveTopic(q.topic ?? "", 1)}
+                                title="Move topic down (with all its MCQs)"
+                                className="rounded bg-white/10 hover:bg-white/20 px-1.5 py-0.5 text-[9px] font-bold text-white transition"
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTopic(q.topic ?? "")}
+                                title="Delete topic header (MCQs remain)"
+                                className="rounded bg-red-500/30 hover:bg-red-500/50 px-1.5 py-0.5 text-[9px] font-bold text-red-200 transition"
+                              >
+                                ×
+                              </button>
+                            </div>
                           </div>
                         )}
                         {q.isStandaloneImage ? (
@@ -1376,22 +1351,9 @@ D. 150 দিন
                         className="mb-3 break-inside-avoid rounded-[2px] p-1"
                         style={{ breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid" } as React.CSSProperties}
                       >
-                        {/* Question text Bold — number editable */}
+                        {/* Question text Bold — automatic continuous numbering */}
                         <div className="flex gap-1.5">
-                          <span className="flex shrink-0 items-start gap-1">
-                            <input
-                              type="number"
-                              value={q.qNumber}
-                              onChange={(e) => {
-                                const n = parseInt(e.target.value, 10);
-                                if (Number.isFinite(n) && n > 0) handleUpdate(q.id, { qNumber: n });
-                              }}
-                              className="pdf-number-input w-8 rounded border border-transparent bg-transparent text-center text-[11px] font-bold text-[#0f172a] outline-none hover:border-[#cbd5e1] focus:border-[#234e9f] focus:bg-white"
-                              style={{ lineHeight: "1" }}
-                              title="Edit question number"
-                            />
-                            <span className="text-[11px] font-bold text-[#0f172a]">.</span>
-                          </span>
+                          <span className="shrink-0 text-[11px] font-bold text-[#0f172a]">{q.qNumber}.</span>
                           <span
                             className="bangla flex-1 cursor-text text-[11px] font-bold leading-[1.7] text-[#0f172a] outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-0.5"
                             contentEditable
@@ -1406,6 +1368,19 @@ D. 150 দিন
                             {q.question || <span className="text-red-400 font-normal">[Empty — click to edit]</span>}
                           </span>
                           <div className="flex shrink-0 gap-1 pdf-hide" data-html2canvas-ignore="true">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const qBefore = q.qNumber > 1 ? q.qNumber - 1 : 0;
+                                setNewTopicAfterQ(qBefore);
+                                setNewTopicName("");
+                                setAddTopicModalOpen(true);
+                              }}
+                              title={`Add Topic starting at Question ${q.qNumber}`}
+                              className="rounded border border-indigo-200 bg-indigo-50 px-1 py-0.5 text-[9px] font-bold text-indigo-700 hover:bg-indigo-100"
+                            >
+                              + Topic
+                            </button>
                             <button onClick={() => handleMoveBlock(q.id, -1)} title="Move up" className="rounded border bg-white px-1 py-0.5 text-[9px] font-bold hover:bg-slate-50">↑</button>
                             <button onClick={() => handleMoveBlock(q.id, 1)} title="Move down" className="rounded border bg-white px-1 py-0.5 text-[9px] font-bold hover:bg-slate-50">↓</button>
                             <button
@@ -1533,17 +1508,23 @@ D. 150 দিন
                   )}
                 </div>
 
-                {/* 12. Answer Box — bottom of every page, bordered */}
-                <div className="mt-auto pt-4">
+                {/* 15. Answer Box — bottom of every page, bordered */}
+                <div className="mt-auto pt-3">
                   <div className="rounded-[6px] border border-[#0f172a] bg-white overflow-hidden">
-                    <div className="border-b border-[#0f172a] bg-[#f8fafc] py-1 text-center">
-                      <span className="bangla text-[11px] font-extrabold tracking-wide text-[#0b1e3a]">উত্তরমালা</span>
+                    <div className="border-b border-[#0f172a] bg-[#f8fafc] py-1 px-3 flex items-center justify-between">
+                      <span className="bangla text-[10px] font-extrabold tracking-wider text-[#0b1e3a]">
+                        ANSWER KEY / উত্তরমালা
+                      </span>
+                      {page.questions.filter((q) => !q.isStandaloneImage).length > 0 && (
+                        <span className="text-[9px] font-bold text-slate-500">
+                          Q{page.questions.filter((q) => !q.isStandaloneImage)[0].qNumber}–Q{page.questions.filter((q) => !q.isStandaloneImage).slice(-1)[0].qNumber}
+                        </span>
+                      )}
                     </div>
                     {page.questions.filter((q) => !q.isStandaloneImage).length === 0 ? (
                       <div className="px-3 py-2 text-center text-xs text-slate-400">—</div>
                     ) : (
                       <div className="p-2">
-                        {/* Two horizontal rows — spec exact: row1 numbers, row2 answers */}
                         <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-center">
                           {page.questions
                             .filter((q) => !q.isStandaloneImage)
@@ -1557,13 +1538,23 @@ D. 150 দিন
                           {page.questions
                             .filter((q) => !q.isStandaloneImage)
                             .map((q) => (
-                              <span key={`ans-${q.id}`} className="min-w-[24px] text-[11px] font-normal text-slate-900">
+                              <span key={`ans-${q.id}`} className="min-w-[24px] text-[11px] font-bold text-[#0b1e3a]">
                                 {q.answer?.trim() ? q.answer.trim().toUpperCase() : "—"}
                               </span>
                             ))}
                         </div>
                       </div>
                     )}
+                  </div>
+                </div>
+
+                {/* 21. Marketing Footer — consistent on all pages */}
+                <div className="mt-2 pt-2 border-t border-slate-200">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded bg-[#0b1e3a] px-2.5 py-1 text-[9px] font-black tracking-wider text-white shrink-0">
+                      MEDISPARK ACADEMIC &amp; ADMISSION CARE
+                    </div>
+                    <div className="flex-1 border-b border-dotted border-slate-400 opacity-70" style={{ borderBottomStyle: "dotted", height: 1 }} />
                   </div>
                 </div>
               </div>
@@ -1619,6 +1610,89 @@ D. 150 দিন
           MediSpark Material PDF Generator • Focused tool: Material Name → Paste → Detect & Format → Edit → Generate → Download • Two-column A4 • Professional print-ready • Images manual only (no OCR)
         </p>
       </div>
+
+      {addTopicModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl admin-dark:bg-[#112544] border border-slate-200 admin-dark:border-[#1e3a65]">
+            <h3 className="text-base font-extrabold text-[#0b1e3a] admin-dark:text-white">
+              Add Topic Header
+            </h3>
+            <p className="mt-1 text-xs text-slate-500 admin-dark:text-[#8da0c0]">
+              Insert a Topic Header to group MCQs topic-wise with automatic continuous numbering.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 admin-dark:text-white">
+                  Topic Name
+                </label>
+                <input
+                  type="text"
+                  value={newTopicName}
+                  onChange={(e) => setNewTopicName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (!newTopicName.trim()) {
+                        setToast("Please enter a topic name");
+                        return;
+                      }
+                      handleAddTopic(newTopicName.trim(), newTopicAfterQ);
+                      setAddTopicModalOpen(false);
+                    }
+                  }}
+                  placeholder="e.g. Genetics, Cell Biology, মানব শারীরতত্ত্ব"
+                  className="bangla mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-[#234e9f] focus:bg-white admin-dark:border-[#1e3a65] admin-dark:bg-[#0a162e] admin-dark:text-white"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-700 admin-dark:text-white">
+                  Add Topic After Question:
+                </label>
+                <select
+                  value={newTopicAfterQ}
+                  onChange={(e) => setNewTopicAfterQ(parseInt(e.target.value, 10))}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none focus:border-[#234e9f] focus:bg-white admin-dark:border-[#1e3a65] admin-dark:bg-[#0a162e] admin-dark:text-white"
+                >
+                  <option value={0}>At the beginning (Before Question 1)</option>
+                  {questions
+                    .filter((q) => !q.isStandaloneImage)
+                    .map((q) => (
+                      <option key={q.id} value={q.qNumber}>
+                        After Question {q.qNumber}: {q.question ? q.question.slice(0, 35) : `Question ${q.qNumber}`}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAddTopicModalOpen(false)}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 admin-dark:border-[#1e3a65] admin-dark:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!newTopicName.trim()) {
+                    setToast("Please enter a topic name");
+                    return;
+                  }
+                  handleAddTopic(newTopicName.trim(), newTopicAfterQ);
+                  setAddTopicModalOpen(false);
+                }}
+                className="rounded-xl bg-[#0b1e3a] px-5 py-2 text-xs font-extrabold text-white shadow hover:bg-[#123060] admin-dark:bg-[#234e9f]"
+              >
+                Add Topic
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-bold text-white shadow-xl admin-dark:bg-white admin-dark:text-slate-900">

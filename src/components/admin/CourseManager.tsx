@@ -35,6 +35,7 @@ export type CatalogCourse = {
   fee: number;
   discountFee: number | null;
   features: string[];
+  examFeatures?: string[];
   overviewTitle: string;
   overview: string[];
   status: "published" | "unpublished";
@@ -57,7 +58,6 @@ const EMPTY_FORM = {
   category: "HSC Academic" as CatalogCourseCategory,
   batchId: "hsc-28",
   image: "",
-  shortDescription: "",
   description: "",
   duration: "",
   fee: "0",
@@ -68,13 +68,10 @@ const EMPTY_FORM = {
   featured: false,
   qaAccess: true,
   contentLayout: "flow-1" as "flow-1" | "flow-2" | "flow-3" | "flow-4" | "flow-5",
-  totalClasses: "",
-  totalExams: "",
   courseDuration: "",
   courseDescription: "",
   courseFeatures: "",
-  courseTopics: "",
-  chapterOverview: "",
+  examFeatures: "",
   teachersJson: "[]",
   routineUrls: [] as string[],
 };
@@ -105,7 +102,6 @@ function toForm(course: CatalogCourse): FormState {
     category: course.category,
     batchId: course.batchId,
     image: course.image ?? "",
-    shortDescription: course.shortDescription ?? "",
     description: course.description ?? "",
     duration: course.duration,
     fee: String(course.fee),
@@ -118,13 +114,10 @@ function toForm(course: CatalogCourse): FormState {
     contentLayout: (course.contentLayout === "flow-1" || course.contentLayout === "flow-2" || course.contentLayout === "flow-3" || course.contentLayout === "flow-4" || course.contentLayout === "flow-5"
       ? course.contentLayout
       : course.contentLayout === "paper" ? "flow-2" : course.contentLayout === "subject" ? "flow-3" : "flow-1"),
-    totalClasses: course.totalClasses != null ? String(course.totalClasses) : "",
-    totalExams: course.totalExams != null ? String(course.totalExams) : "",
     courseDuration: details?.duration ?? "",
     courseDescription: details?.description ?? "",
     courseFeatures: (course.features ?? []).join("\n"),
-    courseTopics: (details?.topics ?? []).join("\n"),
-    chapterOverview: (details?.chapterOverview ?? []).join("\n"),
+    examFeatures: (course.examFeatures ?? []).join("\n"),
     teachersJson: JSON.stringify(details?.teachers ?? []),
     routineUrls: course.routineUrls ?? [],
   };
@@ -299,8 +292,6 @@ export default function CourseManager({
         duration: form.courseDuration.trim() || undefined,
         description: form.courseDescription.trim() || undefined,
         teachers: teachers.length > 0 ? teachers : undefined,
-        topics: form.courseTopics.split("\n").map((s) => s.trim()).filter(Boolean),
-        chapterOverview: form.chapterOverview.split("\n").map((s) => s.trim()).filter(Boolean),
       };
       const response = await fetch("/api/admin/courses", {
         method: "POST",
@@ -310,9 +301,8 @@ export default function CourseManager({
           fee: Number(form.fee) || 0,
           discountFee:
             form.discountFee.trim() === "" ? null : Number(form.discountFee),
-          totalClasses: form.totalClasses.trim() === "" ? null : Number(form.totalClasses),
-          totalExams: form.totalExams.trim() === "" ? null : Number(form.totalExams),
           features: form.courseFeatures.split("\n").map((s) => s.trim()).filter(Boolean),
+          examFeatures: form.examFeatures.split("\n").map((s) => s.trim()).filter(Boolean),
           mentorIds,
           courseDetails,
           routineUrls: form.routineUrls,
@@ -670,13 +660,13 @@ export default function CourseManager({
               </div>
               <div>
                 <label className={labelClass} htmlFor="cm-category">Course Category</label>
-                <select id="cm-category" className={inputClass} value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value as CatalogCourseCategory })}>
+                <select id="cm-category" className={inputClass} value={form.category} disabled>
                   <option value="SSC Academic">SSC Academic</option>
                   <option value="HSC Academic">HSC Academic</option>
                   <option value="Medical Admission">Medical Admission</option>
                   <option value="Varsity Admission">Varsity Admission</option>
                 </select>
+                <p className="mt-1 text-[11px] text-slate-500">Locked — category cannot be changed from this form.</p>
               </div>
               <div>
                 <label className={labelClass} htmlFor="cm-batch">Course Batch</label>
@@ -699,18 +689,6 @@ export default function CourseManager({
                 <label className={labelClass} htmlFor="cm-slug">Slug (auto-generated)</label>
                 <input id="cm-slug" className={inputClass} value={form.slug} disabled={Boolean(editingSlug)}
                   onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })} />
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="cm-total-classes">Total Classes</label>
-                <input id="cm-total-classes" type="number" min="0" className={inputClass} value={form.totalClasses}
-                  placeholder="e.g. 48"
-                  onChange={(e) => setForm({ ...form, totalClasses: e.target.value })} />
-              </div>
-              <div>
-                <label className={labelClass} htmlFor="cm-total-exams">Total Exams</label>
-                <input id="cm-total-exams" type="number" min="0" className={inputClass} value={form.totalExams}
-                  placeholder="e.g. 12"
-                  onChange={(e) => setForm({ ...form, totalExams: e.target.value })} />
               </div>
               <div>
                 <label className={labelClass} htmlFor="cm-fee">Original Course Fee (৳)</label>
@@ -743,6 +721,13 @@ export default function CourseManager({
                     onChange={(e) => setForm({ ...form, qaAccess: e.target.checked })} />
                   Q&A Access: {form.qaAccess ? "ON" : "OFF"}
                 </label>
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelClass} htmlFor="cm-exam-features">Exam Feature (one per line)</label>
+                <textarea id="cm-exam-features" rows={3} className={inputClass} value={form.examFeatures}
+                  placeholder={"Weekly Mock Tests\nChapter-wise Quizzes\nFull Syllabus Mock Exams\nPrevious Year Questions"}
+                  onChange={(e) => setForm({ ...form, examFeatures: e.target.value })} />
+                <p className="mt-1 text-[11px] text-slate-500">Short exam-related features displayed on the Course Card. One feature per line.</p>
               </div>
             </div>
 
@@ -952,11 +937,6 @@ export default function CourseManager({
                 </div>
               </div>
               <div className="sm:col-span-2">
-                <label className={labelClass} htmlFor="cm-short">Short description</label>
-                <textarea id="cm-short" rows={2} className={inputClass} value={form.shortDescription}
-                  onChange={(e) => setForm({ ...form, shortDescription: e.target.value })} />
-              </div>
-              <div className="sm:col-span-2">
                 <label className={labelClass} htmlFor="cm-cd-desc">Course Description (detailed)</label>
                 <textarea id="cm-cd-desc" rows={4} className={inputClass} value={form.courseDescription}
                   placeholder="Detailed description for the course details page..."
@@ -996,18 +976,6 @@ export default function CourseManager({
                     ))}
                   </div>
                 )}
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass} htmlFor="cm-topics">Course Topics (one per line)</label>
-                <textarea id="cm-topics" rows={4} className={inputClass} value={form.courseTopics}
-                  placeholder={"What Will Be Taught:\nBiology fundamentals\nCell structure\nEvolution"}
-                  onChange={(e) => setForm({ ...form, courseTopics: e.target.value })} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass} htmlFor="cm-overview">Chapter/Subject Overview (one per line)</label>
-                <textarea id="cm-overview" rows={4} className={inputClass} value={form.chapterOverview}
-                  placeholder={"Chapter 1: Introduction\nChapter 2: Cell Biology\nChapter 3: Genetics"}
-                  onChange={(e) => setForm({ ...form, chapterOverview: e.target.value })} />
               </div>
             </div>
 
