@@ -259,6 +259,8 @@ export default function CourseManager({
     setEditingSlug(null);
     setShowForm(true);
     setNotice(null);
+    setRoutineError(null);
+    setRoutinePreview(null);
   }
 
   function startEdit(course: CatalogCourse) {
@@ -280,6 +282,8 @@ export default function CourseManager({
     setEditingSlug(course.slug);
     setShowForm(true);
     setNotice(null);
+    setRoutineError(null);
+    setRoutinePreview(null);
   }
 
   async function handleSave() {

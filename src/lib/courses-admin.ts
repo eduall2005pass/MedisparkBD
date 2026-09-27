@@ -179,8 +179,10 @@ type CatalogCourseRow = {
   routine_urls?: string | null;
 };
 
-function parseJsonArray(raw: string | null): string[] {
+function parseJsonArray(raw: unknown): string[] {
   if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map(String).filter((item) => item.length > 0);
+  if (typeof raw !== "string") return [];
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.map(String) : [];
@@ -195,8 +197,10 @@ function toNumber(value: string | number | null): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-function parseJsonObject<T = unknown>(raw: string | null): T | undefined {
+function parseJsonObject<T = unknown>(raw: unknown): T | undefined {
   if (!raw) return undefined;
+  if (typeof raw === "object") return raw as T;
+  if (typeof raw !== "string") return undefined;
   try {
     return JSON.parse(raw) as T;
   } catch {
@@ -661,9 +665,11 @@ export async function saveCatalogCourse(
   // notification (Notification Control → All Students). Fires only on the
   // unpublished → published transition, never on plain edits.
   let wasPublished = false;
+  let prevRoutineUrls: string[] = [];
   try {
     const prev = await fetchCatalogCourse(slug);
     wasPublished = prev?.status === "published";
+    prevRoutineUrls = prev?.routineUrls ?? [];
   } catch {
     // No previous row (new course) or transient read failure.
   }
@@ -737,6 +743,17 @@ export async function saveCatalogCourse(
   }
 
   const saved = await fetchCatalogCourse(slug);
+  // Best-effort cleanup: routine pages removed (or replaced) in this save
+  // are deleted from storage so replaced files never linger or conflict
+  // with the new routine. Runs only after the new list is persisted, and
+  // only for files still absent from the saved row.
+  const finalRoutineUrls = saved?.routineUrls ?? routineUrls;
+  const removed = prevRoutineUrls.filter((url) => !finalRoutineUrls.includes(url));
+  for (const url of removed) {
+    if (url && isLocalUpload(url)) {
+      await removeFile(url).catch(() => undefined);
+    }
+  }
   if (!saved) {
     // The row IS in the database (INSERT succeeded) but the re-read failed
     // under transient DB pressure. Return the submitted payload instead of
