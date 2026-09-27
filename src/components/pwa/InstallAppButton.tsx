@@ -194,14 +194,11 @@ export default function InstallAppButton() {
   }, [deferred, promptUsed]);
 
   if (installed) {
+    // Already running inside the installed app → the original Dashboard
+    // button (opening the app again would be pointless).
     return (
-      <Link href="/" aria-label="Open the MediSpark app" className={BTN_CLASS}>
-        <span className="inline-flex items-center gap-2">
-          <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 3l14 9-14 9V3z" />
-          </svg>
-          Open in App
-        </span>
+      <Link href="/dashboard" aria-label="Go to Dashboard" className={BTN_CLASS}>
+        Dashboard
       </Link>
     );
   }
