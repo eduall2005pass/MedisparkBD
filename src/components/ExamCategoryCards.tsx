@@ -70,6 +70,12 @@ function formatLiveText(count: number): string {
   return `${count} ${count === 1 ? "Exam" : "Exams"} Live Now`;
 }
 
+function formatPracticeText(count: number): string {
+  return count === 1
+    ? "1 Practice Exam Is Available"
+    : `${count} Practice Exams Are Available`;
+}
+
 /**
  * Public Exam section — 4 exam-category cards visually identical to the
  * Course Section (CategoryCard) design system: same layout, border radius,
@@ -83,15 +89,23 @@ function formatLiveText(count: number): string {
 export default function ExamCategoryCards({
   basePath = "/exam/category",
   initialCounts,
+  initialPracticeCounts,
 }: {
   basePath?: string;
   initialCounts?: Partial<LiveCounts> | null;
+  initialPracticeCounts?: Partial<LiveCounts> | null;
 }) {
   const [liveCounts, setLiveCounts] = useState<Record<ExamCategory, number | null>>({
     "ssc-academic": initialCounts?.["ssc-academic"] ?? null,
     "hsc-academic": initialCounts?.["hsc-academic"] ?? null,
     "medical-admission": initialCounts?.["medical-admission"] ?? null,
     "varsity-admission": initialCounts?.["varsity-admission"] ?? null,
+  });
+  const [practiceCounts, setPracticeCounts] = useState<Record<ExamCategory, number | null>>({
+    "ssc-academic": initialPracticeCounts?.["ssc-academic"] ?? null,
+    "hsc-academic": initialPracticeCounts?.["hsc-academic"] ?? null,
+    "medical-admission": initialPracticeCounts?.["medical-admission"] ?? null,
+    "varsity-admission": initialPracticeCounts?.["varsity-admission"] ?? null,
   });
 
   useEffect(() => {
@@ -100,7 +114,7 @@ export default function ExamCategoryCards({
       try {
         const res = await fetch("/api/public-exams/live-counts", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { counts: LiveCounts };
+        const data = (await res.json()) as { counts?: LiveCounts; practiceCounts?: LiveCounts };
         if (cancelled) return;
         if (data?.counts) {
           setLiveCounts({
@@ -108,6 +122,14 @@ export default function ExamCategoryCards({
             "hsc-academic": data.counts["hsc-academic"] ?? 0,
             "medical-admission": data.counts["medical-admission"] ?? 0,
             "varsity-admission": data.counts["varsity-admission"] ?? 0,
+          });
+        }
+        if (data?.practiceCounts) {
+          setPracticeCounts({
+            "ssc-academic": data.practiceCounts["ssc-academic"] ?? 0,
+            "hsc-academic": data.practiceCounts["hsc-academic"] ?? 0,
+            "medical-admission": data.practiceCounts["medical-admission"] ?? 0,
+            "varsity-admission": data.practiceCounts["varsity-admission"] ?? 0,
           });
         }
       } catch {
@@ -133,6 +155,7 @@ export default function ExamCategoryCards({
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         {categoryCards.map(({ key, label, Icon }) => {
           const count = liveCounts[key];
+          const practiceCount = practiceCounts[key];
           return (
           <Link
             key={key}
@@ -152,8 +175,9 @@ export default function ExamCategoryCards({
               </h3>
             </div>
 
-            {/* Dynamic live count — replaces static description */}
-            <div className="relative mt-3 flex items-center gap-2 text-sm font-semibold">
+            {/* Dynamic live count (left) + practice count (right) — same row */}
+            <div className="relative mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold">
+              <span className="flex min-w-0 items-center gap-2">
               {count === null ? (
                 <>
                   <span className="relative flex h-2.5 w-2.5 shrink-0">
@@ -177,6 +201,12 @@ export default function ExamCategoryCards({
                   </span>
                   <span className="text-emerald-400">{formatLiveText(count)}</span>
                 </>
+              )}
+              </span>
+              {practiceCount !== null && (
+                <span className="shrink-0 text-right text-sky-400">
+                  {formatPracticeText(practiceCount)}
+                </span>
               )}
             </div>
 

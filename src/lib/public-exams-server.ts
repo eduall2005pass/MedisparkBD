@@ -158,6 +158,55 @@ export async function fetchAdminPublicExams(): Promise<PublicExam[]> {
 }
 
 /**
+ * Practice exam counts per Public Exam category — used by the 4 category cards
+ * on /exam and /admin/exams/public. Counts ONLY static Practice exams
+ * (published + examMode === "practice", incl. legacy `kind = "practice"` rows
+ * normalized server-side). Live-mode exams are NEVER counted here — not even
+ * ones past their End Time (post-live Practice phase). Returns 0 for
+ * categories with no practice exams.
+ */
+export const fetchPracticeExamCounts = unstable_cache(async (): Promise<Record<ExamCategory, number>> => {
+  const counts = {} as Record<ExamCategory, number>;
+  for (const category of examCategories) counts[category.key] = 0;
+
+  try {
+    const categories = await fetchActiveCourseCategories();
+    const idToKey = new Map<string, ExamCategory>();
+    for (const item of examCategories) {
+      const slug = examCategorySlugs[item.key];
+      const match = categories.find(
+        (category) =>
+          category.slug.toLowerCase() === slug ||
+          category.slug.toLowerCase().startsWith(slug),
+      );
+      if (match) idToKey.set(match.id, item.key);
+    }
+
+    const exams = await fetchPublicExams();
+    for (const exam of exams) {
+      // Practice Exam counts only — live-mode exams belong to Live Exam.
+      if ((exam.examMode ?? "live") !== "practice") continue;
+      if (!exam.published) continue;
+      let key: ExamCategory | undefined;
+      if (exam.categoryId && idToKey.has(exam.categoryId)) {
+        key = idToKey.get(exam.categoryId);
+      } else {
+        // Legacy exam without category_id — infer via heuristic (same 4 categories as resolveExamCategoryId).
+        try {
+          key = categorizeExam(exam);
+        } catch {
+          key = undefined;
+        }
+      }
+      if (key && counts[key] !== undefined) counts[key] += 1;
+    }
+  } catch {
+    // On DB errors return zero counts — cards still render.
+  }
+  return counts;
+}, ['practiceExamCounts'], { revalidate: 30, tags: ['exams'] });
+
+/**
  * Live exam counts per Public Exam category — used by the 4 category cards
  * on /exam and /admin/exams/public. Counts ONLY currently Live exams
  * (published + deriveStatus === "Live") that belong to each category via

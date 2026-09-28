@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import ExamCategoryCards from "@/components/ExamCategoryCards";
-import { fetchLiveExamCounts } from "@/lib/public-exams-server";
+import { fetchLiveExamCounts, fetchPracticeExamCounts } from "@/lib/public-exams-server";
 
 export const revalidate = 300;
 
@@ -16,10 +16,13 @@ export const metadata: Metadata = {
  * category page (/exam/category/<key>).
  */
 export default async function ExamPage() {
-  const initialCounts = await fetchLiveExamCounts();
+  const [initialCounts, initialPracticeCounts] = await Promise.all([
+    fetchLiveExamCounts(),
+    fetchPracticeExamCounts(),
+  ]);
   return (
     <main className="flex-1 bg-dark-950">
-      <ExamCategoryCards initialCounts={initialCounts} />
+      <ExamCategoryCards initialCounts={initialCounts} initialPracticeCounts={initialPracticeCounts} />
     </main>
   );
 }
