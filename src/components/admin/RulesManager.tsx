@@ -181,7 +181,7 @@ export default function RulesManager({ standalone = false }: { standalone?: bool
       <header>
         <p className="text-xs font-bold uppercase tracking-widest text-[#234e9f] admin-dark:text-[#93c5fd]">শুধু অ্যাডমিনদের জন্য</p>
         <h1 className="mt-1 text-2xl font-extrabold text-[#0b1e3a] sm:text-3xl admin-dark:text-white">
-          MediSpark BD কীভাবে চলে
+          Readme
         </h1>
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500 admin-dark:text-[#8da0c0]">
           ওয়েবসাইটের সব নিয়ম এক জায়গায় — লগইন, কোর্স,
