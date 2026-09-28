@@ -1054,6 +1054,9 @@ export default function ExamManager({
                       <option value="hsc-28">HSC 28</option>
                       <option value="hsc-27">HSC 27</option>
                       <option value="hsc-26">HSC 26</option>
+                      <option value="ssc-28">SSC 28</option>
+                      <option value="ssc-27">SSC 27</option>
+                      <option value="ssc-26">SSC 26</option>
                     </select>
                   </div>
                   <div>
@@ -1351,6 +1354,9 @@ export default function ExamManager({
                       <option value="hsc-28">HSC 28</option>
                       <option value="hsc-27">HSC 27</option>
                       <option value="hsc-26">HSC 26</option>
+                      <option value="ssc-28">SSC 28</option>
+                      <option value="ssc-27">SSC 27</option>
+                      <option value="ssc-26">SSC 26</option>
                     </select>
                   </div>
                   <div>
