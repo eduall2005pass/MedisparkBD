@@ -289,7 +289,7 @@ export default function FooterManagementPage() {
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, contactPhone: e.target.value }))
                   }
-                  placeholder="+880 1XXX-XXXXXX"
+                  placeholder="+8801XXXXXXXXX"
                   className={inputClass}
                 />
               </label>

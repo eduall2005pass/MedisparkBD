@@ -259,7 +259,7 @@ export default function GeneralSettingsPage() {
                   type="tel"
                   value={form.contactPhone}
                   onChange={(e) => setForm((prev) => ({ ...prev, contactPhone: e.target.value }))}
-                  placeholder="+880 1XXX-XXXXXX"
+                  placeholder="+8801XXXXXXXXX"
                   className={inputClass}
                 />
               </label>

@@ -94,7 +94,7 @@ export const DEFAULT_PAYMENT_CARD: PaymentCardConfig = {
 
   senderEnabled: true,
   senderLabel: "Payment From Number",
-  senderPlaceholder: "01XXXXXXXXX",
+  senderPlaceholder: "+8801XXXXXXXXX",
 
   pendingNoteEnabled: true,
   pendingNote:

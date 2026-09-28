@@ -11,6 +11,14 @@ import { AccessLoading } from "@/components/auth/AccessGuard";
 import { useAdminToast } from "@/components/admin/AdminToastProvider";
 import { getSocialPlatformIcon } from "@/components/social-icons";
 import type { SocialLink, SocialPlatformKey } from "@/lib/social-links-constants";
+import {
+  BD_PHONE_MESSAGE,
+  EMAIL_MESSAGE,
+  URL_MESSAGE,
+  isValidEmail,
+  isValidHttpUrl,
+  normalizeBdPhone,
+} from "@/lib/form-validation";
 
 /**
  * Website Information — Premium Navy Blue Smart Theme
@@ -331,6 +339,20 @@ export default function WebsiteInformationPage() {
 
   const saveAll = useCallback(async () => {
     if (!user) return;
+    if (contactPhone.trim() !== "" && !normalizeBdPhone(contactPhone)) {
+      toast.showToast("error", BD_PHONE_MESSAGE);
+      return;
+    }
+    if (contactEmail.trim() !== "" && !isValidEmail(contactEmail)) {
+      toast.showToast("error", `Support email: ${EMAIL_MESSAGE}`);
+      return;
+    }
+    for (const link of links) {
+      if (link.url?.trim() && !isValidHttpUrl(link.url)) {
+        toast.showToast("error", `${link.key} URL: ${URL_MESSAGE}`);
+        return;
+      }
+    }
     setSaving(true);
     const errors: string[] = [];
 
@@ -599,7 +621,7 @@ export default function WebsiteInformationPage() {
               value={contactPhone}
               onChange={(e) => setContactPhone(e.target.value)}
               className={`${inputClass} mt-1.5`}
-              placeholder="+880 1XXX-XXXXXX"
+              placeholder="+8801XXXXXXXXX"
             />
           </div>
           <div className="sm:col-span-1">

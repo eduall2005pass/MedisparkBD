@@ -148,9 +148,9 @@ export default function AdminsPage() {
         >
           <input className={inputClass} placeholder="Firebase UID" aria-label="Firebase UID" value={form.uid}
             onChange={(event) => setForm({ ...form, uid: event.target.value.trim() })} />
-          <input className={inputClass} type="email" placeholder="Email" aria-label="Email" value={form.email}
+          <input className={inputClass} type="email" placeholder="e.g. admin@medispark.com" aria-label="Email" value={form.email}
             onChange={(event) => setForm({ ...form, email: event.target.value.trim() })} />
-          <input className={inputClass} placeholder="Display name" aria-label="Display name" value={form.displayName}
+          <input className={inputClass} placeholder="e.g. Tanvir Hasan" aria-label="Display name" value={form.displayName}
             onChange={(event) => setForm({ ...form, displayName: event.target.value })} />
           <select className={inputClass} aria-label="Role" value={form.role}
             onChange={(event) => setForm({ ...form, role: event.target.value })}>

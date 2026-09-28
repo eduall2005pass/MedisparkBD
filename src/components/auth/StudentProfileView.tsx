@@ -330,6 +330,8 @@ export default function StudentProfileView() {
                     type="text"
                     value={fullName}
                     onChange={(event) => setFullName(event.target.value)}
+                    placeholder="e.g. Rahim Uddin"
+                    maxLength={100}
                     className={inputClass}
                   />
                 </div>
@@ -343,6 +345,8 @@ export default function StudentProfileView() {
                     type="text"
                     value={institution}
                     onChange={(event) => setInstitution(event.target.value)}
+                    placeholder="e.g. Dhaka College"
+                    maxLength={150}
                     className={inputClass}
                   />
                 </div>

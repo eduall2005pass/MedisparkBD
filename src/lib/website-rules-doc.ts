@@ -169,7 +169,7 @@ export const RULE_DOC_SECTIONS: RuleDocSection[] = [
       {
         id: "ENR-02",
         title: "পেইড কোর্সে পেমেন্ট প্রমাণ লাগে",
-        text: "পেইড ভর্তিতে লাগে: transactionId (৪–৬৪ অক্ষর), senderMobile (01XXXXXXXXX ফরম্যাট), paymentMethod (bkash/nagad), চাইলে couponCode। সার্ভার চেক করে: রেজিস্টার্ড শিক্ষার্থী কি না, কোর্স আছে কি না, আগে active ভর্তি আছে কি না, transaction ID আগে ব্যবহার হয়নি কি না। সব ঠিক থাকলে pending ভর্তি + পেমেন্ট রেকর্ড হয়।",
+        text: "পেইড ভর্তিতে লাগে: transactionId (৪–৬৪ অক্ষর), senderMobile (+8801XXXXXXXXX ফরম্যাট), paymentMethod (bkash/nagad), চাইলে couponCode। সার্ভার চেক করে: রেজিস্টার্ড শিক্ষার্থী কি না, কোর্স আছে কি না, আগে active ভর্তি আছে কি না, transaction ID আগে ব্যবহার হয়নি কি না। সব ঠিক থাকলে pending ভর্তি + পেমেন্ট রেকর্ড হয়।",
         source: "CODEBASE_SUMMARY.md → Course Enrollment, API_REFERENCE.md → /api/enrollments",
       },
       {

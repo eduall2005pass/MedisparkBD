@@ -227,12 +227,12 @@ export default function CouponsPage() {
           </div>
           <div>
             <label className={labelClass} htmlFor="cp-value">Value</label>
-            <input id="cp-value" type="number" min="0" className={inputClass} value={form.value}
+            <input id="cp-value" type="number" min="0" max={form.discountType === "percent" ? 100 : undefined} className={inputClass} value={form.value} placeholder={form.discountType === "percent" ? "e.g. 10 (= 10%)" : "e.g. 200 (= ৳200 off)"}
               onChange={(event) => setForm({ ...form, value: event.target.value })} />
           </div>
           <div>
             <label className={labelClass} htmlFor="cp-max">Max uses (0 = unlimited)</label>
-            <input id="cp-max" type="number" min="0" className={inputClass} value={form.maxUses}
+            <input id="cp-max" type="number" min="0" step="1" className={inputClass} value={form.maxUses} placeholder="e.g. 100"
               onChange={(event) => setForm({ ...form, maxUses: event.target.value })} />
           </div>
           <div>

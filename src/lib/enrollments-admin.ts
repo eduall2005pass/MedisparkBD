@@ -583,7 +583,7 @@ export async function getPaymentCard(): Promise<{
     txPlaceholder: "e.g. 8N7DQK2XLM",
     senderEnabled: true,
     senderLabel: "Payment From Number",
-    senderPlaceholder: "01XXXXXXXXX",
+    senderPlaceholder: "+8801XXXXXXXXX",
     pendingNoteEnabled: true,
     pendingNote:
       "Submit payment details — enrollment stays Pending Validation until admin verifies payment.",

@@ -413,7 +413,7 @@ export default function PaymentCardPage() {
                     id="sender-placeholder"
                     className={inputClass}
                     maxLength={PAYMENT_CARD_MAX.senderPlaceholder}
-                    value={config?.senderPlaceholder ?? "01XXXXXXXXX"}
+                    value={config?.senderPlaceholder ?? "+8801XXXXXXXXX"}
                     onChange={(e) => patch({ senderPlaceholder: e.target.value })}
                   />
                 </div>
@@ -667,7 +667,7 @@ function PreviewCard({ config }: { config: PaymentCardConfig | null }) {
                 {config.senderLabel || "Payment Number"}
               </label>
               <div className="mt-1 w-full truncate rounded-xl border border-ink/15 bg-dark-900 px-2 py-2 text-xs text-neutral-600 sm:px-3 sm:py-2.5 sm:text-sm">
-                {config.senderPlaceholder || "01XXXXXXXXX"}
+                {config.senderPlaceholder || "+8801XXXXXXXXX"}
               </div>
             </div>
           )}

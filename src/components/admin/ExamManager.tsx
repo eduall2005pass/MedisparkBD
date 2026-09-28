@@ -1122,7 +1122,7 @@ export default function ExamManager({
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="ex-duration">Duration (minutes)</label>
-                    <input id="ex-duration" type="number" min="1" className={inputClass} value={form.durationMinutes}
+                    <input id="ex-duration" type="number" min="1" max="600" className={inputClass} value={form.durationMinutes} placeholder="e.g. 30"
                       onChange={(event) => setForm({ ...form, durationMinutes: event.target.value })} />
                   </div>
                   <div>
@@ -1186,13 +1186,13 @@ export default function ExamManager({
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="ex-qcount">Total Questions</label>
-                    <input id="ex-qcount" type="number" min="1" max="500" className={inputClass} value={(form as unknown as { questionCount: string }).questionCount}
+                    <input id="ex-qcount" type="number" min="1" max="500" className={inputClass} value={(form as unknown as { questionCount: string }).questionCount} placeholder="e.g. 30"
                       onChange={(event) => setForm({ ...form, questionCount: event.target.value } as unknown as typeof form)} />
                     <p className="mt-1 text-[11px] text-slate-500">Q01..Q{String((form as unknown as { questionCount: string }).questionCount || "0").padStart(2, "0")} slots will be auto-created.</p>
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="ex-mpq">Marks Per Question</label>
-                    <input id="ex-mpq" type="number" min="0.5" step="0.5" className={inputClass} value={(form as unknown as { marksPerQuestion: string }).marksPerQuestion}
+                    <input id="ex-mpq" type="number" min="0.5" max="100" step="0.5" className={inputClass} value={(form as unknown as { marksPerQuestion: string }).marksPerQuestion} placeholder="e.g. 1"
                       onChange={(event) => setForm({ ...form, marksPerQuestion: event.target.value } as unknown as typeof form)} />
                   </div>
                   <div>
@@ -1415,7 +1415,7 @@ export default function ExamManager({
                   </div>
                   <div>
                     <label className={labelClass} htmlFor="ex-duration">Duration (minutes)</label>
-                    <input id="ex-duration" type="number" min="1" className={inputClass} value={form.durationMinutes}
+                    <input id="ex-duration" type="number" min="1" max="600" className={inputClass} value={form.durationMinutes} placeholder="e.g. 30"
                       onChange={(event) => setForm({ ...form, durationMinutes: event.target.value })} />
                   </div>
                   <div className="sm:col-span-2 rounded-xl border border-neutral-200 p-3 admin-dark:border-zinc-700">

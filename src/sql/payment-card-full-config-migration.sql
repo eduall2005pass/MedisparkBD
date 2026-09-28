@@ -19,7 +19,7 @@ ALTER TABLE payment_card
   ADD COLUMN tx_placeholder VARCHAR(80) NOT NULL DEFAULT 'e.g. 8N7DQK2XLM' AFTER tx_label,
   ADD COLUMN sender_enabled TINYINT(1) NOT NULL DEFAULT 1 AFTER tx_placeholder,
   ADD COLUMN sender_label VARCHAR(40) NOT NULL DEFAULT 'Payment From Number' AFTER sender_enabled,
-  ADD COLUMN sender_placeholder VARCHAR(40) NOT NULL DEFAULT '01XXXXXXXXX' AFTER sender_label,
+  ADD COLUMN sender_placeholder VARCHAR(40) NOT NULL DEFAULT '+8801XXXXXXXXX' AFTER sender_label,
   ADD COLUMN pending_note_enabled TINYINT(1) NOT NULL DEFAULT 1 AFTER sender_placeholder,
   ADD COLUMN pending_note VARCHAR(500) NOT NULL DEFAULT 'Submit payment details — enrollment stays Pending Validation until admin verifies payment.' AFTER pending_note_enabled,
   ADD COLUMN cancel_enabled TINYINT(1) NOT NULL DEFAULT 1 AFTER pending_note,

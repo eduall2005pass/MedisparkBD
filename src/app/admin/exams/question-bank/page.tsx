@@ -165,7 +165,7 @@ export default function QuestionBankPage() {
         >
           <div>
             <label className={labelClass} htmlFor="qb-subject">Subject</label>
-            <input id="qb-subject" className={inputClass} value={form.subject}
+            <input id="qb-subject" className={inputClass} value={form.subject} placeholder="e.g. Biology"
               onChange={(event) => setForm({ ...form, subject: event.target.value })} />
           </div>
           <div>
@@ -175,7 +175,7 @@ export default function QuestionBankPage() {
           </div>
           <div className="sm:col-span-2">
             <label className={labelClass} htmlFor="qb-text">Question</label>
-            <textarea id="qb-text" rows={2} className={inputClass} value={form.question}
+            <textarea id="qb-text" rows={2} className={inputClass} value={form.question} placeholder="e.g. Which organelle is the powerhouse of the cell?"
               onChange={(event) => setForm({ ...form, question: event.target.value })} />
           </div>
           {form.options.map((option, index) => (
@@ -192,7 +192,7 @@ export default function QuestionBankPage() {
                   {form.correctIndex === index ? "correct ✓" : "mark correct"}
                 </button>
               </label>
-              <input id={`qb-opt-${index}`} className={inputClass} value={option}
+              <input id={`qb-opt-${index}`} className={inputClass} value={option} placeholder={`e.g. ${["Mitochondria", "Nucleus", "Ribosome", "Golgi body"][index] ?? "Option"}`}
                 onChange={(event) =>
                   setForm({
                     ...form,

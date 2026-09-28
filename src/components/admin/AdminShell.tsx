@@ -92,6 +92,7 @@ const ADMIN_NAV = [
   { label: "Course Content Control", href: "/admin/course-content-control", icon: BookOpenIcon },
   { label: "Material PDF Generator", href: "/admin/material-pdf", icon: ExamsIcon },
   { label: "Public Exam Control", href: "/admin/public-exam-control", icon: ExamsIcon },
+  { label: "Exam Rules", href: "/admin/exam-rules", icon: ExamsIcon },
   { label: "Q&A Control", href: "/admin/qa-control", icon: FaqIcon },
   { label: "Dashboard Control", href: "/admin/dashboard-control", icon: DashboardIcon },
   { label: "Student Control", href: "/admin/student-control", icon: StudentsIcon },

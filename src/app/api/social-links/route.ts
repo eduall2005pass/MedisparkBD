@@ -8,6 +8,7 @@ import {
   type SocialLinkUpdate,
 } from "@/lib/social-links";
 import { isSocialPlatformKey, type SocialPlatformKey, getSocialLabel } from "@/lib/social-links-constants";
+import { URL_MESSAGE, isValidHttpUrl } from "@/lib/form-validation";
 
 // Public content: edge-cached for fast loads (60s revalidation).
 export const revalidate = 300;
@@ -43,14 +44,18 @@ export async function PUT(request: NextRequest) {
     }
     const label = typeof entry.label === "string" && entry.label.trim().length > 0 ? entry.label.trim() : getSocialLabel(rawKey);
     const icon = typeof entry.icon === "string" && entry.icon.trim().length > 0 ? entry.icon.trim() : null;
+    const urlRaw = typeof entry.url === "string" ? entry.url.trim() : "";
+    if (urlRaw !== "" && !isValidHttpUrl(urlRaw)) {
+      return NextResponse.json(
+        { error: `${getSocialLabel(rawKey)} URL: ${URL_MESSAGE}` },
+        { status: 400 },
+      );
+    }
     updates.push({
       key: rawKey as SocialPlatformKey,
       label,
       icon,
-      url:
-        typeof entry.url === "string" && entry.url.trim().length > 0
-          ? entry.url.trim()
-          : null,
+      url: urlRaw !== "" ? urlRaw : null,
       isActive: entry.isActive === true || entry.isActive === "true" || entry.isActive === "1",
     });
   }
