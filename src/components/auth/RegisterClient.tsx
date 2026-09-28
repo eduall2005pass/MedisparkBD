@@ -7,6 +7,12 @@ import Logo from "@/components/Logo";
 import { useAuth } from "@/lib/auth-context";
 import { saveProfileWithUniqueStudentId } from "@/lib/student-id";
 import {
+  BD_PHONE_MESSAGE,
+  isValidPersonName,
+  normalizeBdPhone,
+  normalizeHttpUrl,
+} from "@/lib/form-validation";
+import {
   STUDENT_LEVELS,
   batchLabelFor,
   batchYearOptions,
@@ -77,11 +83,27 @@ export default function RegisterClient() {
 
     const trimmedName = fullName.trim();
     const trimmedInstitution = institution.trim();
-    const trimmedContact = contactNumber.trim();
-    const trimmedFacebook = facebookUrl.trim();
+    const phone = normalizeBdPhone(contactNumber);
+    const facebook = normalizeHttpUrl(facebookUrl);
 
-    if (!trimmedName || !gender || !trimmedInstitution || !studentLevel || !hscBatch || !trimmedContact) {
+    if (!trimmedName || !gender || !trimmedInstitution || !studentLevel || !hscBatch || !contactNumber.trim()) {
       setError("Please fill in all required fields.");
+      return;
+    }
+    if (!isValidPersonName(trimmedName)) {
+      setError("Please enter your real name (letters only, 2–100 characters).");
+      return;
+    }
+    if (trimmedInstitution.length < 2 || trimmedInstitution.length > 150) {
+      setError("Institution name must be 2–150 characters.");
+      return;
+    }
+    if (!phone) {
+      setError(BD_PHONE_MESSAGE);
+      return;
+    }
+    if (facebook === null) {
+      setError("Facebook link must be a valid URL (e.g. https://facebook.com/yourprofile).");
       return;
     }
 
@@ -96,9 +118,9 @@ export default function RegisterClient() {
           institution: trimmedInstitution,
           hscBatch,
           studentLevel,
-          contactNumber: trimmedContact,
+          contactNumber: phone,
           email: user.email ?? "",
-          facebookUrl: trimmedFacebook,
+          facebookUrl: facebook,
           profilePictureUrl: "",
         },
         pictureFile,
@@ -289,9 +311,11 @@ export default function RegisterClient() {
             <input
               id="contactNumber"
               type="tel"
+              inputMode="tel"
               value={contactNumber}
               onChange={(event) => setContactNumber(event.target.value)}
-              placeholder="e.g. 01XXXXXXXXX"
+              placeholder="e.g. +8801XXXXXXXXX"
+              maxLength={14}
               className={inputClass}
             />
           </div>

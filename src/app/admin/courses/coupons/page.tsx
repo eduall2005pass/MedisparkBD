@@ -12,6 +12,11 @@ import {
   buttonDangerClass,
   type Notice,
 } from "@/components/admin/admin-ui";
+import {
+  normalizeCouponCode,
+  toIntInRange,
+  toNumberInRange,
+} from "@/lib/form-validation";
 
 type Coupon = {
   code: string;
@@ -57,8 +62,26 @@ export default function CouponsPage() {
   }
 
   async function save() {
-    if (!form.code.trim()) {
-      setNotice({ kind: "error", text: "Enter a coupon code." });
+    const code = normalizeCouponCode(form.code);
+    if (!code || code.length < 3) {
+      setNotice({ kind: "error", text: "Coupon code must be 3+ letters/numbers (dashes allowed)." });
+      return;
+    }
+    const maxValue = form.discountType === "percent" ? 100 : 10000000;
+    const value = toNumberInRange(form.value, 0, maxValue);
+    if (value === null || (form.discountType === "percent" && value <= 0)) {
+      setNotice({
+        kind: "error",
+        text: form.discountType === "percent" ? "Percent value must be 1–100." : "Flat value must be 0 or more.",
+      });
+      return;
+    }
+    if (toIntInRange(form.maxUses, 0, 1000000) === null) {
+      setNotice({ kind: "error", text: "Max uses must be a whole number (0 = unlimited)." });
+      return;
+    }
+    if (form.startsAt && form.expiresAt && form.startsAt > form.expiresAt) {
+      setNotice({ kind: "error", text: "Start date must be before the expiry date." });
       return;
     }
     setBusy(true);

@@ -1,4 +1,5 @@
 import { exec, query } from "@/lib/mysql";
+import { normalizeCouponCode } from "@/lib/form-validation";
 
 // Admin Panel → Courses → Coupons. Discount codes validated at checkout.
 
@@ -106,10 +107,11 @@ export async function saveCoupon(
   input: Record<string, unknown>,
 ): Promise<Coupon> {
   await ensureCouponsTable();
-  const rawCode = typeof input.code === "string" ? input.code.trim().toUpperCase() : "";
-  if (!/^[A-Z0-9_-]{3,64}$/.test(rawCode)) {
+  const code = normalizeCouponCode(input.code);
+  if (!code || code.length < 3 || code.length > 64) {
     throw new Error("Code must be 3-64 letters, numbers, dashes or underscores.");
   }
+  const rawCode = code;
   const discountType = input.discountType === "flat" ? "flat" : "percent";
   const value = Math.max(0, Number(input.value) || 0);
   if (discountType === "percent" && value > 100) {
@@ -120,6 +122,15 @@ export async function saveCoupon(
     const date = new Date(raw);
     return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 19).replace("T", " ");
   };
+  const startsAt = toDateTime(input.startsAt);
+  const expiresAt = toDateTime(input.expiresAt);
+  if (startsAt && expiresAt && startsAt > expiresAt) {
+    throw new Error("Start date must be before the expiry date.");
+  }
+  const maxUses = Math.max(0, Math.floor(Number(input.maxUses) || 0));
+  if (maxUses > 1000000) {
+    throw new Error("Max uses looks too large (max 1,000,000).");
+  }
 
   const existing = await query<{ used_count: number }[]>(
     `SELECT used_count FROM coupons WHERE code = ? LIMIT 1`,
@@ -136,10 +147,10 @@ export async function saveCoupon(
       rawCode,
       discountType,
       value,
-      Math.max(0, Number(input.maxUses) || 0),
+      maxUses,
       existing[0]?.used_count ?? 0,
-      toDateTime(input.startsAt),
-      toDateTime(input.expiresAt),
+      startsAt,
+      expiresAt,
       input.isActive === false ? 0 : 1,
     ],
   );

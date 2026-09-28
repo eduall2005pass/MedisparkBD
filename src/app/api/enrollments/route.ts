@@ -12,6 +12,12 @@ import {
 } from "@/lib/enrollment-applications";
 import { getCourse } from "@/lib/courses";
 import { getLiveCourses } from "@/lib/course-catalog";
+import {
+  BD_PHONE_MESSAGE,
+  isValidTxnId,
+  normalizeBdPhone,
+  TXN_ID_MESSAGE,
+} from "@/lib/form-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -98,11 +104,10 @@ export async function POST(request: NextRequest) {
   const fee = typeof body?.fee === "number" && body.fee > 0 ? body.fee : 0;
   const rawCouponCode =
     typeof body?.couponCode === "string" ? body.couponCode.trim() : "";
-  // Step 4 — paid-course payment proof.
+  // Step 4 — paid-course payment proof (stored canonical +8801XXXXXXXXX).
   const transactionId =
     typeof body?.transactionId === "string" ? body.transactionId.trim() : "";
-  const senderMobile =
-    typeof body?.senderMobile === "string" ? body.senderMobile.trim() : "";
+  const senderMobile = normalizeBdPhone(body?.senderMobile);
   const paymentMethod =
     body?.paymentMethod === "bkash" || body?.paymentMethod === "nagad"
       ? body.paymentMethod
@@ -186,17 +191,11 @@ export async function POST(request: NextRequest) {
     }
 
     // 4) Required payment information + format validation.
-    if (!transactionId || transactionId.length < 4 || transactionId.length > 64) {
-      return NextResponse.json(
-        { error: "A valid Transaction ID (4–64 characters) is required." },
-        { status: 400 },
-      );
+    if (!isValidTxnId(transactionId)) {
+      return NextResponse.json({ error: TXN_ID_MESSAGE }, { status: 400 });
     }
-    if (!/^01[3-9]\d{8}$/.test(senderMobile)) {
-      return NextResponse.json(
-        { error: "Enter a valid Sender Mobile Number (e.g. 01XXXXXXXXX)." },
-        { status: 400 },
-      );
+    if (!senderMobile) {
+      return NextResponse.json({ error: BD_PHONE_MESSAGE }, { status: 400 });
     }
 
     // 5) Transaction ID must not already be used by any application.
@@ -311,7 +310,7 @@ export async function POST(request: NextRequest) {
           courseName,
           transactionId,
           paidAmount: finalFee,
-          senderMobile,
+          senderMobile: senderMobile ?? "",
           paymentMethod,
           couponCode: appliedCouponCode,
         });
@@ -331,7 +330,7 @@ export async function POST(request: NextRequest) {
         await exec(
           `UPDATE enrollments SET payment_transaction_id = ?, payment_amount = ?, payment_sender = ?, payment_method = ?
            WHERE student_uid = ? AND course_id = ?`,
-          [transactionId, finalFee, senderMobile, paymentMethod, user.uid, courseId],
+          [transactionId, finalFee, senderMobile ?? "", paymentMethod, user.uid, courseId],
         );
       } catch {
         // Migration pending — admin UI falls back gracefully.

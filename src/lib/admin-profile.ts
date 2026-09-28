@@ -1,5 +1,10 @@
 import { exec, query, ensureColumn } from "@/lib/mysql";
 import { saveFile, removeFile, isLocalUpload } from "@/lib/storage";
+import {
+  BD_PHONE_MESSAGE,
+  isValidPersonName,
+  normalizeBdPhone,
+} from "@/lib/form-validation";
 
 // Admin Panel → Profile. Display profile lives in the `admins` table;
 // photos are uploaded into `uploads` (LONGBLOB) and served via /api/files.
@@ -62,15 +67,25 @@ export async function updateAdminProfile(
   const params: unknown[] = [];
 
   if (typeof input.displayName === "string") {
-    const value = input.displayName.trim();
-    if (value.length > 0) {
-      updates.push("display_name = ?");
-      params.push(value);
+    const value = input.displayName.trim().replace(/\s+/g, " ");
+    if (value.length === 0) throw new Error("Display name cannot be empty.");
+    if (!isValidPersonName(value)) {
+      throw new Error("Display name must be letters only (2–100 characters).");
     }
+    updates.push("display_name = ?");
+    params.push(value);
   }
   if (typeof input.phoneNumber === "string") {
-    updates.push("phone_number = ?");
-    params.push(input.phoneNumber.trim().slice(0, 32));
+    const raw = input.phoneNumber.trim();
+    if (raw === "") {
+      updates.push("phone_number = ?");
+      params.push(null);
+    } else {
+      const phone = normalizeBdPhone(raw);
+      if (!phone) throw new Error(BD_PHONE_MESSAGE);
+      updates.push("phone_number = ?");
+      params.push(phone);
+    }
   }
   if (updates.length > 0) {
     await exec(`UPDATE admins SET ${updates.join(", ")} WHERE uid = ?`, [

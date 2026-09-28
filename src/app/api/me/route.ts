@@ -4,6 +4,13 @@ import { query, exec, parseDate, isMysqlConfigured, ensureColumn } from "@/lib/m
 import { saveFile } from "@/lib/storage";
 import { randomStudentId } from "@/lib/student-id";
 import type { StudentProfile } from "@/lib/auth-context";
+import {
+  BD_PHONE_MESSAGE,
+  isValidEmail,
+  isValidPersonName,
+  normalizeBdPhone,
+  normalizeHttpUrl,
+} from "@/lib/form-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -136,7 +143,36 @@ export async function POST(request: NextRequest) {
   }
 
   const email = readField("email");
-  const facebookUrl = readField("facebookUrl");
+  const rawFacebook = readField("facebookUrl");
+  const facebookUrl = normalizeHttpUrl(rawFacebook) ?? "";
+  const phone = normalizeBdPhone(fields.contactNumber);
+  if (!isValidPersonName(fields.fullName)) {
+    return NextResponse.json(
+      { error: "Please enter your real name (letters only, 2–100 characters)." },
+      { status: 400 },
+    );
+  }
+  if (fields.institution.length < 2 || fields.institution.length > 150) {
+    return NextResponse.json(
+      { error: "Institution name must be 2–150 characters." },
+      { status: 400 },
+    );
+  }
+  if (!phone) {
+    return NextResponse.json({ error: BD_PHONE_MESSAGE }, { status: 400 });
+  }
+  if (rawFacebook.trim() !== "" && facebookUrl === "") {
+    return NextResponse.json(
+      { error: "Facebook link must be a valid URL (e.g. https://facebook.com/yourprofile)." },
+      { status: 400 },
+    );
+  }
+  if (email !== "" && !isValidEmail(email)) {
+    return NextResponse.json(
+      { error: "Enter a valid email address." },
+      { status: 400 },
+    );
+  }
   // Student level/category — defaults to HSC Academic for legacy clients.
   const rawStudentLevel = readField("studentLevel");
   const studentLevel =
@@ -198,7 +234,7 @@ export async function POST(request: NextRequest) {
           fields.institution,
           fields.hscBatch,
           studentLevel,
-          fields.contactNumber,
+          phone,
           email,
           facebookUrl,
           profilePictureUrl,
@@ -234,7 +270,7 @@ export async function POST(request: NextRequest) {
     institution: fields.institution,
     hscBatch: fields.hscBatch,
     studentLevel,
-    contactNumber: fields.contactNumber,
+    contactNumber: phone,
     email,
     facebookUrl,
     profilePictureUrl,
@@ -279,7 +315,26 @@ export async function PATCH(request: NextRequest) {
       { status: 400 },
     );
   }
-  const facebookUrl = readField("facebookUrl");
+  if (!isValidPersonName(fullName)) {
+    return NextResponse.json(
+      { error: "Please enter your real name (letters only, 2–100 characters)." },
+      { status: 400 },
+    );
+  }
+  if (institution.length < 2 || institution.length > 150) {
+    return NextResponse.json(
+      { error: "Institution name must be 2–150 characters." },
+      { status: 400 },
+    );
+  }
+  const rawFacebook = readField("facebookUrl");
+  const facebookUrl = normalizeHttpUrl(rawFacebook ?? "");
+  if (facebookUrl === null) {
+    return NextResponse.json(
+      { error: "Facebook link must be a valid URL (e.g. https://facebook.com/yourprofile)." },
+      { status: 400 },
+    );
+  }
 
   const picture = formData.get("picture");
   if (picture instanceof File && picture.size > 0) {

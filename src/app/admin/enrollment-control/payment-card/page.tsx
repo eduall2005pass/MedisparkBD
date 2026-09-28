@@ -9,6 +9,7 @@ import {
   DEFAULT_PAYMENT_CARD,
   PAYMENT_CARD_MAX,
 } from "@/lib/payment-card-config";
+import { BD_PHONE_MESSAGE, normalizeBdPhone } from "@/lib/form-validation";
 
 /**
  * Enrollment Control → Payment Card management.
@@ -73,6 +74,14 @@ export default function PaymentCardPage() {
 
   async function save() {
     if (!config || saving || !user) return;
+    if (config.bkashEnabled && !normalizeBdPhone(config.bkashNumber)) {
+      toast.showToast("error", `bKash number: ${BD_PHONE_MESSAGE}`);
+      return;
+    }
+    if (config.nagadEnabled && !normalizeBdPhone(config.nagadNumber)) {
+      toast.showToast("error", `Nagad number: ${BD_PHONE_MESSAGE}`);
+      return;
+    }
     setSaving(true);
     try {
       const token = await user.getIdToken();
@@ -134,7 +143,7 @@ export default function PaymentCardPage() {
                   id="bkash-number"
                   inputMode="tel"
                   className={inputClass}
-                  placeholder="01XXXXXXXXX"
+                  placeholder="+8801XXXXXXXXX"
                   maxLength={PAYMENT_CARD_MAX.bkashNumber}
                   value={config?.bkashNumber ?? ""}
                   onChange={(e) => patch({ bkashNumber: e.target.value })}
@@ -172,7 +181,7 @@ export default function PaymentCardPage() {
                   id="nagad-number"
                   inputMode="tel"
                   className={inputClass}
-                  placeholder="01XXXXXXXXX"
+                  placeholder="+8801XXXXXXXXX"
                   maxLength={PAYMENT_CARD_MAX.nagadNumber}
                   value={config?.nagadNumber ?? ""}
                   onChange={(e) => patch({ nagadNumber: e.target.value })}

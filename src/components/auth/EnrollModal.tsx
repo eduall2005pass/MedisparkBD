@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useOverlayBackClose } from "@/components/navigation/useOverlayBackClose";
 import { useCourseAccess } from "@/lib/course-access";
 import { enrollInCourse } from "@/lib/enrollments";
+import { BD_PHONE_MESSAGE, isValidTxnId, normalizeBdPhone, TXN_ID_MESSAGE } from "@/lib/form-validation";
 import { formatFee, getPayableFee } from "@/lib/courses";
 import type { Course } from "@/lib/courses";
 
@@ -202,14 +203,14 @@ export default function EnrollModal({
     if (isPaid) {
       const errors: Record<string, string> = {};
       const txn = transactionId.trim();
-      const mobile = senderMobile.trim();
-      if (txn.length < 4 || txn.length > 64) {
-        errors.transactionId = "Transaction ID is required (4–64 characters).";
+      const mobile = normalizeBdPhone(senderMobile);
+      if (!isValidTxnId(txn)) {
+        errors.transactionId = TXN_ID_MESSAGE;
       }
-      if (!/^01[3-9]\d{8}$/.test(mobile)) {
-        errors.senderMobile = "Enter a valid mobile number (e.g. 01XXXXXXXXX).";
+      if (!mobile) {
+        errors.senderMobile = BD_PHONE_MESSAGE;
       }
-      if (Object.keys(errors).length > 0) {
+      if (!mobile || Object.keys(errors).length > 0) {
         setFieldErrors(errors);
         return;
       }
@@ -649,8 +650,8 @@ export default function EnrollModal({
                     inputMode="numeric"
                     value={senderMobile}
                     onChange={(event) => setSenderMobile(event.target.value)}
-                    placeholder={paymentCard?.senderPlaceholder || "01XXXXXXXXX"}
-                    maxLength={11}
+                    placeholder={paymentCard?.senderPlaceholder || "+8801XXXXXXXXX"}
+                    maxLength={14}
                     className={`mt-1 w-full truncate rounded-xl border bg-dark-900 px-2 py-2 text-xs text-heading placeholder:text-neutral-600 outline-none transition focus:border-primary-500/70 sm:px-3 sm:py-2.5 sm:text-sm ${
                       fieldErrors.senderMobile ? "border-red-500/60" : "border-ink/15"
                     }`}

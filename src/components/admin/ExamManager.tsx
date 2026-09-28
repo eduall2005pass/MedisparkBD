@@ -17,6 +17,7 @@ import {
 } from "@/components/admin/admin-ui";
 import ExamPaperEditor from "@/components/admin/ExamPaperEditor";
 import ExamRulesEditor from "@/components/admin/ExamRulesEditor";
+import { URL_MESSAGE, isValidHttpUrl } from "@/lib/form-validation";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MediaUploadField } from "@/components/admin/MediaUploadField";
@@ -498,6 +499,27 @@ export default function ExamManager({
       const mpq = Number((form as unknown as Record<string, unknown>).marksPerQuestion);
       if (!Number.isFinite(mpq) || mpq <= 0) {
         setNotice({ kind: "error", text: "Marks Per Question must be a positive number." });
+        return;
+      }
+      if (mpq > 100) {
+        setNotice({ kind: "error", text: "Marks Per Question looks too large (max 100)." });
+        return;
+      }
+      if (form.title.trim().length < 3 || form.title.trim().length > 200) {
+        setNotice({ kind: "error", text: "Exam title must be 3–200 characters." });
+        return;
+      }
+      const dur = Number(form.durationMinutes);
+      if (!Number.isFinite(dur) || dur < 1 || dur > 600) {
+        setNotice({ kind: "error", text: "Duration must be 1–600 minutes." });
+        return;
+      }
+      if (form.scheduledAt && form.endsAt && new Date(form.scheduledAt).getTime() >= new Date(form.endsAt).getTime()) {
+        setNotice({ kind: "error", text: "End time must be after the start time." });
+        return;
+      }
+      if (form.bannerUrl && !isValidHttpUrl(form.bannerUrl)) {
+        setNotice({ kind: "error", text: `Banner URL: ${URL_MESSAGE}` });
         return;
       }
     }

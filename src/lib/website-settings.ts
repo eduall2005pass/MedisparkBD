@@ -2,6 +2,15 @@ import { query, parseDate } from "@/lib/mysql";
 import { saveFile, removeFile, isLocalUpload } from "@/lib/storage";
 import { fetchAdminAccount } from "@/lib/admin";
 import {
+  BD_PHONE_MESSAGE,
+  EMAIL_MESSAGE,
+  URL_MESSAGE,
+  cleanText,
+  isValidEmail,
+  isValidHttpUrl,
+  normalizeBdPhone,
+} from "@/lib/form-validation";
+import {
   DEFAULT_WEBSITE_SETTINGS,
   WEBSITE_SETTINGS_ID,
   FAVICON_STORAGE_DIR,
@@ -195,10 +204,19 @@ export async function saveWebsiteSettings(
     existingRow = null;
   }
 
-  const siteName = input.siteName?.trim() || existingRow?.site_name || DEFAULT_WEBSITE_SETTINGS.siteName;
-  const tagline = input.tagline !== undefined ? input.tagline.trim() : (existingRow?.tagline ?? DEFAULT_WEBSITE_SETTINGS.tagline);
-  const contactEmail = input.contactEmail !== undefined ? input.contactEmail.trim() : (existingRow?.contact_email ?? DEFAULT_WEBSITE_SETTINGS.contactEmail);
-  const contactPhone = input.contactPhone !== undefined ? input.contactPhone.trim() : (existingRow?.contact_phone ?? "");
+  const siteNameRaw = input.siteName?.trim() || existingRow?.site_name || DEFAULT_WEBSITE_SETTINGS.siteName;
+  const siteName = cleanText(siteNameRaw, 2, 120) ?? DEFAULT_WEBSITE_SETTINGS.siteName;
+  const tagline = input.tagline !== undefined ? input.tagline.trim().slice(0, 500) : (existingRow?.tagline ?? DEFAULT_WEBSITE_SETTINGS.tagline);
+  const emailRaw = input.contactEmail !== undefined ? input.contactEmail.trim() : (existingRow?.contact_email ?? DEFAULT_WEBSITE_SETTINGS.contactEmail);
+  if (emailRaw !== "" && !isValidEmail(emailRaw)) throw new Error(EMAIL_MESSAGE);
+  const contactEmail = emailRaw;
+  const phoneRaw = input.contactPhone !== undefined ? input.contactPhone.trim() : (existingRow?.contact_phone ?? "");
+  let contactPhone = phoneRaw;
+  if (phoneRaw !== "") {
+    const phone = normalizeBdPhone(phoneRaw);
+    if (!phone) throw new Error(BD_PHONE_MESSAGE);
+    contactPhone = phone;
+  }
   const address =
     input.address !== undefined
       ? input.address.trim().slice(0, 500)
@@ -232,6 +250,8 @@ export async function saveWebsiteSettings(
   }
   const facebookUrl = input.facebookUrl !== undefined ? input.facebookUrl.trim() : (existingRow?.facebook_url ?? "");
   const youtubeUrl = input.youtubeUrl !== undefined ? input.youtubeUrl.trim() : (existingRow?.youtube_url ?? "");
+  if (facebookUrl !== "" && !isValidHttpUrl(facebookUrl)) throw new Error(`Facebook URL: ${URL_MESSAGE}`);
+  if (youtubeUrl !== "" && !isValidHttpUrl(youtubeUrl)) throw new Error(`YouTube URL: ${URL_MESSAGE}`);
 
   // Footer-specific values
   const copyrightText =
@@ -542,13 +562,4 @@ export async function removeFavicon(adminUid: string): Promise<WebsiteSettings> 
         : Boolean(existingRow.show_contact),
     baseStudentCount: typeof existingRow?.base_student_count === "number" ? existingRow.base_student_count : 0,
   };
-}
-
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch {
-    return false;
-  }
 }

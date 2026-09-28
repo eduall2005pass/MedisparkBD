@@ -65,6 +65,28 @@ export default function QuestionBankPage() {
   }
 
   async function save() {
+    if (form.question.trim().length < 3 || form.question.trim().length > 5000) {
+      setNotice({ kind: "error", text: "Question text must be 3–5000 characters." });
+      return;
+    }
+    const filledOptions = form.options.filter((o) => o.trim().length > 0);
+    if (filledOptions.length < 2) {
+      setNotice({ kind: "error", text: "Fill in at least 2 options." });
+      return;
+    }
+    if (form.options.some((o) => o.length > 2000)) {
+      setNotice({ kind: "error", text: "Each option must be under 2000 characters." });
+      return;
+    }
+    const marks = Number(form.marks);
+    if (!Number.isFinite(marks) || marks <= 0 || marks > 100) {
+      setNotice({ kind: "error", text: "Marks must be between 0.5 and 100." });
+      return;
+    }
+    if (form.explanation.length > 5000) {
+      setNotice({ kind: "error", text: "Explanation must be under 5000 characters." });
+      return;
+    }
     setBusy(true);
     setNotice(null);
     try {

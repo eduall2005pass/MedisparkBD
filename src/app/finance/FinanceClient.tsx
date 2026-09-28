@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { FINANCE_CATEGORIES, formatBDT } from "@/lib/finance-validation";
+import { FINANCE_CATEGORIES, formatBDT, validateCostInput } from "@/lib/finance-validation";
 
 const PAYMENT_METHODS = ["Cash", "Bank", "Card", "Mobile Banking", "Other"];
 const STATUSES = ["paid", "pending", "cancelled"] as const;
@@ -274,6 +274,23 @@ export default function FinanceClient() {
   async function handleSave() {
     setSaving(true);
     setFormError(null);
+    const checked = validateCostInput({
+      costDate: form.costDate,
+      category: form.category,
+      itemName: form.itemName,
+      description: form.description || null,
+      amount: Number(form.amount),
+      paidBy: form.paidBy,
+      paymentMethod: form.paymentMethod,
+      status: form.status,
+      receiptUrl: form.receiptUrl || null,
+      note: form.note || null,
+    });
+    if (!checked.ok) {
+      setFormError(checked.error);
+      setSaving(false);
+      return;
+    }
     try {
       const token = user ? await user.getIdToken() : null;
       if (!token) throw new Error("Please log in as an admin first.");

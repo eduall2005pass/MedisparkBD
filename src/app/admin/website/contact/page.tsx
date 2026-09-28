@@ -3,6 +3,14 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { AccessLoading, AccessMessage } from "@/components/auth/AccessGuard";
+import {
+  BD_PHONE_MESSAGE,
+  EMAIL_MESSAGE,
+  URL_MESSAGE,
+  isValidEmail,
+  isValidHttpUrl,
+  normalizeBdPhone,
+} from "@/lib/form-validation";
 
 type Notice = { kind: "success" | "error"; text: string };
 
@@ -137,6 +145,32 @@ export default function ContactInformationPage() {
 
   async function handleSave() {
     if (!user) return;
+    if (form.contactPhone.trim() !== "" && !normalizeBdPhone(form.contactPhone)) {
+      setNotice({ kind: "error", text: BD_PHONE_MESSAGE });
+      return;
+    }
+    if (form.contactEmail.trim() !== "" && !isValidEmail(form.contactEmail)) {
+      setNotice({ kind: "error", text: `Contact email: ${EMAIL_MESSAGE}` });
+      return;
+    }
+    if (form.facebookUrl.trim() !== "" && !isValidHttpUrl(form.facebookUrl)) {
+      setNotice({ kind: "error", text: `Facebook URL: ${URL_MESSAGE}` });
+      return;
+    }
+    if (form.youtubeUrl.trim() !== "" && !isValidHttpUrl(form.youtubeUrl)) {
+      setNotice({ kind: "error", text: `YouTube URL: ${URL_MESSAGE}` });
+      return;
+    }
+    for (const link of form.otherContactLinks) {
+      if ((link.label.trim() === "") !== (link.href.trim() === "")) {
+        setNotice({ kind: "error", text: "Each extra contact link needs both a label and a link." });
+        return;
+      }
+      if (link.href.trim() !== "" && !isValidHttpUrl(link.href)) {
+        setNotice({ kind: "error", text: `Extra link "${link.label.trim()}": ${URL_MESSAGE}` });
+        return;
+      }
+    }
     setBusy(true);
     setNotice(null);
     try {

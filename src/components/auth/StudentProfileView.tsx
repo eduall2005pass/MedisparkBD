@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { updateStudentProfile } from "@/lib/student-id";
+import { isValidPersonName, normalizeHttpUrl } from "@/lib/form-validation";
 import MediSparkLoader from "@/components/MediSparkLoader";
 
 const inputClass =
@@ -103,9 +104,21 @@ export default function StudentProfileView() {
     if (!user) return;
     const trimmedName = fullName.trim();
     const trimmedInstitution = institution.trim();
-    const trimmedFacebookId = facebookId.trim();
+    const facebook = normalizeHttpUrl(facebookId);
     if (!trimmedName || !trimmedInstitution) {
       setError("Name and institution cannot be empty.");
+      return;
+    }
+    if (!isValidPersonName(trimmedName)) {
+      setError("Please enter your real name (letters only, 2–100 characters).");
+      return;
+    }
+    if (trimmedInstitution.length < 2 || trimmedInstitution.length > 150) {
+      setError("Institution name must be 2–150 characters.");
+      return;
+    }
+    if (facebook === null) {
+      setError("Facebook link must be a valid URL (e.g. https://facebook.com/yourprofile).");
       return;
     }
 
@@ -122,7 +135,7 @@ export default function StudentProfileView() {
           hscBatch: profile.hscBatch,
           contactNumber: profile.contactNumber,
           email: profile.email,
-          facebookUrl: trimmedFacebookId,
+          facebookUrl: facebook,
         },
         pictureFile,
       );

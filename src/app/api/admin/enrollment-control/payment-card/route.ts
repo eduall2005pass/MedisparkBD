@@ -3,6 +3,7 @@ import { requireAnyPermission } from "@/lib/admin";
 import { logAdminAction } from "@/lib/administration";
 import { getPaymentCard, savePaymentCard } from "@/lib/payment-card";
 import { PAYMENT_CARD_MAX } from "@/lib/payment-card-config";
+import { BD_PHONE_MESSAGE, normalizeBdPhone } from "@/lib/form-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -82,17 +83,25 @@ export async function PUT(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (config.bkashEnabled && !/^[0-9+\- ]{6,40}$/.test(config.bkashNumber)) {
-    return NextResponse.json(
-      { error: "Enter a valid bKash number." },
-      { status: 400 },
-    );
+  if (config.bkashEnabled) {
+    const phone = normalizeBdPhone(config.bkashNumber);
+    if (!phone) {
+      return NextResponse.json(
+        { error: `bKash number: ${BD_PHONE_MESSAGE}` },
+        { status: 400 },
+      );
+    }
+    config.bkashNumber = phone;
   }
-  if (config.nagadEnabled && !/^[0-9+\- ]{6,40}$/.test(config.nagadNumber)) {
-    return NextResponse.json(
-      { error: "Enter a valid Nagad number." },
-      { status: 400 },
-    );
+  if (config.nagadEnabled) {
+    const phone = normalizeBdPhone(config.nagadNumber);
+    if (!phone) {
+      return NextResponse.json(
+        { error: `Nagad number: ${BD_PHONE_MESSAGE}` },
+        { status: 400 },
+      );
+    }
+    config.nagadNumber = phone;
   }
 
   try {

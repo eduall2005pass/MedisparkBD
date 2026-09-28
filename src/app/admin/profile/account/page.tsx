@@ -11,6 +11,7 @@ import {
   buttonPrimaryClass,
   type Notice,
 } from "@/components/admin/admin-ui";
+import { BD_PHONE_MESSAGE, normalizeBdPhone } from "@/lib/form-validation";
 
 type Profile = {
   uid: string;
@@ -58,6 +59,11 @@ export default function AccountPage() {
   async function saveDetails() {
     setBusy(true);
     setNotice(null);
+    if (phoneNumber.trim() !== "" && !normalizeBdPhone(phoneNumber)) {
+      setNotice({ kind: "error", text: BD_PHONE_MESSAGE });
+      setBusy(false);
+      return;
+    }
     try {
       const response = await fetch("/api/admin/profile", {
         method: "PATCH",
@@ -151,7 +157,8 @@ export default function AccountPage() {
           </div>
           <div>
             <label className={labelClass} htmlFor="pf-phone">Phone number</label>
-            <input id="pf-phone" className={inputClass} value={phoneNumber}
+            <input id="pf-phone" type="tel" inputMode="tel" className={inputClass} value={phoneNumber}
+              placeholder="+8801XXXXXXXXX" maxLength={14}
               onChange={(event) => setPhoneNumber(event.target.value)} />
           </div>
         </div>
