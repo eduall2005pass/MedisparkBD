@@ -53,3 +53,6 @@ AGENTS.md
 local.env
 vercel.env
 all.env
+
+# student phone export (PII — never commit/push)
+students-phones.txt
