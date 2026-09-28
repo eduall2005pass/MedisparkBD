@@ -1,4 +1,5 @@
 import { query, parseDate } from "@/lib/mysql";
+import { revalidatePath } from "next/cache";
 import { saveFile, removeFile, isLocalUpload } from "@/lib/storage";
 import { fetchAdminAccount } from "@/lib/admin";
 import {
@@ -196,6 +197,14 @@ export async function saveHomepageCourse(
     await removeFile(previousImagePath);
   }
 
+  // Cards render inside the / ISR page (300s, direct DB read) — bust it now
+  // so edits apply immediately. Best-effort.
+  try {
+    (revalidatePath as unknown as (path: string, type: "page" | "layout") => void)("/", "page");
+  } catch {
+    // Cache backend unavailable — readers fall back to timed revalidation.
+  }
+
   const account = await fetchAdminAccount(adminUid);
   const displayName = account?.displayName ?? account?.email ?? adminUid;
 
@@ -240,6 +249,12 @@ export async function removeHomepageCourseImage(slug: HomepageCourseSlug, adminU
   );
   if (typeof storagePath === "string" && isLocalUpload(storagePath)) {
     await removeFile(storagePath);
+  }
+  // Same homepage ISR bust as saveHomepageCourse above. Best-effort.
+  try {
+    (revalidatePath as unknown as (path: string, type: "page" | "layout") => void)("/", "page");
+  } catch {
+    // Cache backend unavailable — readers fall back to timed revalidation.
   }
   const account = await fetchAdminAccount(adminUid);
   const displayName = account?.displayName ?? account?.email ?? adminUid;

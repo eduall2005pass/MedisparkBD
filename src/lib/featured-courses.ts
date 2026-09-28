@@ -1,5 +1,6 @@
 import { exec, query } from "@/lib/mysql";
 import { getFeaturedCourses } from "@/lib/courses";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 // Featured Course system — SINGLE SOURCE OF TRUTH:
 // `catalog_courses.is_featured`, toggled from Admin Panel → Courses
@@ -130,6 +131,25 @@ export async function saveFeaturedCourses(
       `UPDATE catalog_courses SET is_featured = 1, sort_order = ? WHERE slug = ?`,
       [index + 1, slugs[index]],
     );
+  }
+
+  // Homepage banner + featured section read via the `banner-slides` /
+  // `featured-courses` tags — bust them now so the change is live
+  // immediately instead of after the 300s ISR window.
+  try {
+    (revalidateTag as unknown as (tag: string, profile: string) => void)("banner-slides", "max");
+  } catch {
+    // Best-effort.
+  }
+  try {
+    (revalidateTag as unknown as (tag: string, profile: string) => void)("featured-courses", "max");
+  } catch {
+    // Best-effort.
+  }
+  try {
+    (revalidatePath as unknown as (path: string, type: "page" | "layout") => void)("/", "page");
+  } catch {
+    // Best-effort.
   }
 
   return fetchAllFeaturedCourses();

@@ -1,9 +1,32 @@
 import { exec, query } from "@/lib/mysql";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 let ensureNotificationsTableReady = false;
 let ensureJerseysTableReady = false;
 // Admin Panel → Content. Notifications broadcast + jersey catalog.
 // Media library reads the shared `uploads` table (see src/lib/storage.ts).
+
+/**
+ * Bust every live-website cache that renders jerseys so admin
+ * save/reorder/delete/featured-toggle applies immediately: the homepage
+ * banner embeds featured jerseys (fetchBannerSlides, 300s) and the jersey
+ * gallery + / ISR page render active jerseys. Best-effort — never fail the
+ * DB write itself.
+ */
+function bustJerseyCaches(): void {
+  for (const tag of ["banner-slides", "jerseys"]) {
+    try {
+      (revalidateTag as unknown as (tag: string, profile: string) => void)(tag, "max");
+    } catch {
+      // Cache backend unavailable — readers fall back to timed revalidation.
+    }
+  }
+  try {
+    (revalidatePath as unknown as (path: string, type: "page" | "layout") => void)("/", "page");
+  } catch {
+    // Same as above.
+  }
+}
 
 export type NotificationAudience = "all" | "students" | "admins" | "enrolled" | "student";
 
@@ -558,6 +581,7 @@ export async function saveJersey(
       [nameValue, noteValue, imageValue, linkValue, priceValue, isActiveValue, featuredValue, id],
     );
   }
+  bustJerseyCaches();
   return fetchJerseys();
 }
 
@@ -569,12 +593,14 @@ export async function reorderJerseys(orderedIds: string[]): Promise<JerseyItem[]
   for (let index = 0; index < ids.length; index += 1) {
     await exec(`UPDATE jerseys SET sort_order = ? WHERE id = ?`, [index, ids[index]]);
   }
+  bustJerseyCaches();
   return fetchJerseys();
 }
 
 export async function deleteJersey(id: string): Promise<void> {
   await ensureJerseysTable();
   await exec(`DELETE FROM jerseys WHERE id = ?`, [id]);
+  bustJerseyCaches();
 }
 
 // ── Media library ────────────────────────────────────────────────────────

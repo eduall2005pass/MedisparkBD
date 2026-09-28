@@ -154,7 +154,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   initialThemeLogos={initialThemeLogos}
                 >
 <AuthProvider>
-                    <SWRConfig value={{ revalidateOnFocus: false, dedupingInterval: 30000 }}>
+                    <SWRConfig value={{ revalidateOnFocus: false, revalidateOnReconnect: true, dedupingInterval: 30000 }}>
                       <ExamLockProvider>
                         <NavHistoryProvider>
                           <HideOnAdmin>

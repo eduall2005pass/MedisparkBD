@@ -29,6 +29,58 @@ function safeGet<T>(key: string): T | null {
   }
 }
 
+/**
+ * Offline fallback must never serve months-old data as if it were fresh.
+ * Slow-network users see the cached snapshot while the live fetch is
+ * pending — cap it at 7 days so a deleted exam/result eventually drops
+ * out even when the network keeps failing.
+ */
+const OFFLINE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isFresh(cachedAt: unknown): boolean {
+  return (
+    typeof cachedAt === "number" &&
+    Number.isFinite(cachedAt) &&
+    Date.now() - cachedAt <= OFFLINE_CACHE_TTL_MS
+  );
+}
+
+function safeGetFresh<T extends { cachedAt?: unknown }>(key: string): T | null {
+  const cached = safeGet<T>(key);
+  if (!cached || !isFresh(cached.cachedAt)) {
+    if (cached) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {
+        // Ignore cleanup failures.
+      }
+    }
+    return null;
+  }
+  return cached;
+}
+
+/** Remove all offline snapshots for a student (call on logout). */
+export function clearOfflineCache(uid: string): void {
+  if (!uid || typeof window === "undefined") return;
+  for (const suffix of ["completed-exam-ids", "my-exam-results"]) {
+    try {
+      window.localStorage.removeItem(keyFor(uid, suffix));
+    } catch {
+      // Ignore.
+    }
+  }
+  try {
+    const prefix = keyFor(uid, "exam-result:");
+    for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith(prefix)) window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore.
+  }
+}
+
 function safeSet(key: string, value: unknown): void {
   try {
     window.localStorage.setItem(key, JSON.stringify(value));
@@ -55,7 +107,7 @@ export function cacheCompletedExamIds(uid: string, ids: string[]): void {
 
 export function getCachedCompletedExamIds(uid: string): string[] | null {
   if (!uid || typeof window === "undefined") return null;
-  const cached = safeGet<CompletedCache>(keyFor(uid, "completed-exam-ids"));
+  const cached = safeGetFresh<CompletedCache>(keyFor(uid, "completed-exam-ids"));
   return Array.isArray(cached?.ids) ? cached.ids : null;
 }
 
@@ -73,7 +125,7 @@ export function cacheExamResult<T>(uid: string, examId: string, script: T): void
 
 export function getCachedExamResult<T>(uid: string, examId: string): T | null {
   if (!uid || !examId || typeof window === "undefined") return null;
-  const cached = safeGet<ResultCache<T>>(keyFor(uid, `exam-result:${examId}`));
+  const cached = safeGetFresh<ResultCache<T>>(keyFor(uid, `exam-result:${examId}`));
   return cached?.script ?? null;
 }
 
@@ -91,6 +143,6 @@ export function cacheMyResults<T>(uid: string, data: T): void {
 
 export function getCachedMyResults<T>(uid: string): T | null {
   if (!uid || typeof window === "undefined") return null;
-  const cached = safeGet<MyResultsCache<T>>(keyFor(uid, "my-exam-results"));
+  const cached = safeGetFresh<MyResultsCache<T>>(keyFor(uid, "my-exam-results"));
   return (cached?.data as T | undefined) ?? null;
 }

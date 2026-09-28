@@ -361,13 +361,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadUserData]);
 
   const logout = useCallback(async () => {
+    // Drop this student's offline exam snapshots so the next login on a
+    // shared device never sees the previous student's cached results.
+    try {
+      const uid = user?.uid;
+      if (uid) {
+        const { clearOfflineCache } = await import("@/lib/offline-exam-cache");
+        clearOfflineCache(uid);
+      }
+    } catch {
+      // Cache cleanup must never block logout.
+    }
     if (auth) {
       await signOut(auth);
     }
     setUser(null);
     setProfile(null);
     setEnrollments([]);
-  }, []);
+  }, [user?.uid]);
 
 const access = useMemo<StudentAccess>(() => {
     const activeEnrollments = enrollments.filter(isActiveEnrollment);

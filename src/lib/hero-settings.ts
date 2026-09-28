@@ -1,4 +1,5 @@
 import { query } from "@/lib/mysql";
+import { revalidatePath } from "next/cache";
 import { saveFile, removeFile } from "@/lib/storage";
 import {
   DEFAULT_HERO_SETTINGS,
@@ -196,6 +197,14 @@ export async function saveHeroSettings(
       adminUid,
     ],
   );
+
+  // Hero renders inside the / ISR page (300s, direct DB read) — bust it now
+  // so headline/toggle/image changes apply immediately. Best-effort.
+  try {
+    (revalidatePath as unknown as (path: string, type: "page" | "layout") => void)("/", "page");
+  } catch {
+    // Cache backend unavailable — readers fall back to timed revalidation.
+  }
 
   return fetchHeroSettings();
 }

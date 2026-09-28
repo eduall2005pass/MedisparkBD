@@ -1,7 +1,7 @@
 import { exec, parseJsonColumn, query, ensureColumn, withTransaction } from "@/lib/mysql";
 import { seedDefaultExamRules } from "@/lib/exam-rules";
 import { strictAnswerIndex } from "@/lib/paste-mcq-parser";
-import { revalidateTag, unstable_cache } from "next/cache";
+import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
 let ensureTablesReady = false;
 let ensureSettingsTableReady = false;
@@ -16,6 +16,20 @@ function invalidateExamsCache(): void {
     (revalidateTag as unknown as (tag: string, profile: string) => void)("exams", "max");
   } catch {
     // revalidateTag may not be available in all runtimes (e.g. during build)
+  }
+  // Featured public exams render as homepage banner slides (fetchBannerSlides
+  // embeds fetchFeaturedPublicExams in its 300s cache) — bust that layer and
+  // the / ISR page too, otherwise an un-featured/deleted exam lingers on the
+  // banner and shows up as stale content on slow networks.
+  try {
+    (revalidateTag as unknown as (tag: string, profile: string) => void)("banner-slides", "max");
+  } catch {
+    // Best-effort.
+  }
+  try {
+    (revalidatePath as unknown as (path: string, type: "page" | "layout") => void)("/", "page");
+  } catch {
+    // Best-effort.
   }
 }
 

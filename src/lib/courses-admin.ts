@@ -1,6 +1,29 @@
 import { exec, query, ensureColumn } from "@/lib/mysql";
 import { removeFile, isLocalUpload } from "@/lib/storage";
 import { nextUnifiedPosition } from "@/lib/chapter-content-order";
+import { revalidatePath, revalidateTag } from "next/cache";
+
+/**
+ * Bust every live-website cache that renders courses/banners so admin
+ * save/unpublish/delete/featured-toggle applies immediately instead of
+ * lingering for the 300s homepage / 300s banner-slides windows (which is
+ * what users see as "deleted course still shows on slow network" via
+ * stale-while-revalidate). Best-effort — never fail the DB write itself.
+ */
+function bustCourseLiveCaches(): void {
+  for (const tag of ["banner-slides", "featured-courses", "course-categories"]) {
+    try {
+      (revalidateTag as unknown as (tag: string, profile: string) => void)(tag, "max");
+    } catch {
+      // Cache backend unavailable — readers fall back to timed revalidation.
+    }
+  }
+  try {
+    (revalidatePath as unknown as (path: string, type: "page" | "layout") => void)("/", "page");
+  } catch {
+    // Same as above.
+  }
+}
 let tablesReady = false;
 let taxonomyTablesReady = false;
 let assignmentTableReady = false;
@@ -779,6 +802,7 @@ export async function saveCatalogCourse(
     // under transient DB pressure. Return the submitted payload instead of
     // reporting an error — otherwise admins see "Saving…" stuck forever
     // while the course actually exists (and a duplicate add would collide).
+    bustCourseLiveCaches();
     return {
       slug,
       name,
@@ -812,6 +836,7 @@ export async function saveCatalogCourse(
     };
   }
   saved.mentorIds = await fetchCourseMentorIds(slug);
+  bustCourseLiveCaches();
   if (!wasPublished && saved.status === "published") {
     // Fully non-blocking + exactly-once: publishing already succeeded.
     void import("@/lib/notification-events")
@@ -903,6 +928,7 @@ export async function setCatalogCourseFlags(
   }
   const saved = await fetchCatalogCourse(slug);
   if (!saved) throw new Error("Failed to update the course.");
+  bustCourseLiveCaches();
   if (
     patch.status === "published" &&
     existing.status !== "published" &&
@@ -959,6 +985,7 @@ export async function deleteCatalogCourse(slug: string): Promise<boolean> {
       }
     }
   }
+  bustCourseLiveCaches();
   return true;
 }
 
@@ -984,6 +1011,7 @@ export async function savePricingUpdates(
     );
     count += result.affectedRows ?? 0;
   }
+  if (count > 0) bustCourseLiveCaches();
   return count;
 }
 
@@ -1049,6 +1077,7 @@ async function saveTaxonomy(
       [id, name, raw.isActive === false ? 0 : 1, index],
     );
   }
+  bustCourseLiveCaches();
   return fetchTaxonomy(table);
 }
 
@@ -1062,6 +1091,7 @@ export async function deleteTaxonomyItem(
     await ensureAssignmentTable();
     await exec(`DELETE FROM course_subject_assignments WHERE subject_id = ?`, [id]);
   }
+  bustCourseLiveCaches();
 }
 
 export const fetchCourseCategories = () =>
@@ -1125,6 +1155,7 @@ export async function setSubjectAssignments(
       [subjectId, slug],
     );
   }
+  bustCourseLiveCaches();
 }
 
 /** Single-subject update: rename / toggle / change course assignments. */
@@ -1157,6 +1188,7 @@ export async function updateCourseSubject(
   if (patch.assignedCourseSlugs !== undefined) {
     await setSubjectAssignments(id, patch.assignedCourseSlugs);
   }
+  bustCourseLiveCaches();
   return fetchCourseSubjectDetails();
 }
 

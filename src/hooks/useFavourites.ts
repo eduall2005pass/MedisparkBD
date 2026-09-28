@@ -77,7 +77,10 @@ export function useFavourites() {
     fetcher,
     {
       revalidateOnFocus: false,
-      revalidateOnReconnect: false,
+      // Slow/offline network users come back with a stale favourites list
+      // (possibly referencing deleted courses) — refetch on reconnect so
+      // deletions disappear instead of sticking.
+      revalidateOnReconnect: true,
       dedupingInterval: 30000,
     },
   );

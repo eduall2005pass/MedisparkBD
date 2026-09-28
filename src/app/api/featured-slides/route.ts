@@ -66,5 +66,9 @@ export async function GET() {
     // Featured jerseys are optional — never break the banner API.
   }
 
-  return cachedJson({ slides }, "API_MEDIUM");
+  // No shared/edge caching: the homepage BannerSlider polls this route as its
+  // live source of truth after SSR. A `s-maxage` here would let the edge serve
+  // a pre-mutation response for up to 90s (30s fresh + 60s SWR) and briefly
+  // resurrect a deleted slide client-side. Reads are cheap indexed lookups.
+  return cachedJson({ slides }, "NO_CACHE");
 }

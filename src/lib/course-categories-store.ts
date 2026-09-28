@@ -91,7 +91,11 @@ let schemaEnsured = false;
  */
 function bustCategoryCache(): void {
   try {
-    revalidateTag("course-categories", { expire: 0 });
+    // Next.js 16 uses the "max" profile to bust all cache lifetimes.
+    (revalidateTag as unknown as (tag: string, profile: string) => void)(
+      "course-categories",
+      "max",
+    );
   } catch {
     // Cache backend unavailable — readers fall back to timed revalidation.
   }

@@ -1,4 +1,5 @@
 import { query } from "@/lib/mysql";
+import { revalidatePath } from "next/cache";
 import {
   DEFAULT_HOMEPAGE_ORDER,
   getSectionConfig,
@@ -116,6 +117,14 @@ export async function saveHomepageSections(
         adminUid,
       ],
     );
+  }
+  // Sections (incl. banner on/off) render inside the / ISR page (300s) —
+  // bust it now so the toggle applies immediately instead of lingering as
+  // stale content on slow networks. Best-effort.
+  try {
+    (revalidatePath as unknown as (path: string, type: "page" | "layout") => void)("/", "page");
+  } catch {
+    // Cache backend unavailable — readers fall back to timed revalidation.
   }
   return input;
 }
