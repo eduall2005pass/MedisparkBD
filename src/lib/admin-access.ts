@@ -134,6 +134,9 @@ export const ADMIN_CONTROL_PERMISSIONS: Record<
   // Exam Management (/admin/exams/[id]/manage) belongs to the Public Exam
   // flow — Category → Exam → Manage inherits the parent grant.
   "/admin/exams": ["managePublicExam", "manageExams"],
+  // Central rule templates (Admin → Exam Rules). Mirrors the API pair
+  // requireAnyPermission(["manageExams", "managePublicExam"]).
+  "/admin/exam-rules": ["managePublicExam", "manageExams"],
   // Enrolled-exam lists are course-assigned; course managers keep access.
   "/admin/exams/enrolled": ["managePublicExam", "manageExams", "manageCourses"],
   "/admin/qa-control": ["manageQa", "manageContent"],

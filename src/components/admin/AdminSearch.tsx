@@ -2,11 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  adminCategories,
-  adminProfileCategory,
-  type AdminCategory,
-} from "@/lib/admin-nav";
 import { hasControlAccess, useAdminGate } from "@/components/admin/admin-ui";
 import { SearchIcon } from "@/components/admin/icons";
 
@@ -16,17 +11,37 @@ type SearchEntry = {
   section: string;
 };
 
+// Mirrors the CURRENT sidebar (AdminShell ADMIN_NAV) — every entry must be a
+// real page, otherwise search suggests dead links that never redirect.
 const SEARCH_INDEX: SearchEntry[] = [
-  ...adminCategories,
-  adminProfileCategory,
-].flatMap((category: AdminCategory) => [
-  { label: category.name, href: category.href, section: "Section" },
-  ...category.subsections.map((sub) => ({
-    label: sub.label,
-    href: sub.href,
-    section: category.name,
-  })),
-]);
+  { label: "HOME", href: "/admin", section: "Section" },
+  { label: "Website Control", href: "/admin/website-information", section: "Website" },
+  { label: "Enrollment Control", href: "/admin/enrollment-control", section: "Enrollment" },
+  { label: "Home Page Control", href: "/admin/home-control", section: "Website" },
+  { label: "Course Control", href: "/admin/course-control", section: "Courses" },
+  { label: "Course Content Control", href: "/admin/course-content-control", section: "Courses" },
+  { label: "Material PDF Generator", href: "/admin/material-pdf", section: "Courses" },
+  { label: "Public Exam Control", href: "/admin/public-exam-control", section: "Exams" },
+  { label: "Exam Rules", href: "/admin/exam-rules", section: "Exams" },
+  { label: "Question Bank", href: "/admin/exams/question-bank", section: "Exams" },
+  { label: "Answer Keys", href: "/admin/exams/answer-keys", section: "Exams" },
+  { label: "Exam Results", href: "/admin/exams/results", section: "Exams" },
+  { label: "Exam Settings", href: "/admin/exams/settings", section: "Exams" },
+  { label: "Coupons", href: "/admin/courses/coupons", section: "Courses" },
+  { label: "Q&A Control", href: "/admin/qa-control", section: "Content" },
+  { label: "Dashboard Control", href: "/admin/dashboard-control", section: "Website" },
+  { label: "Student Control", href: "/admin/student-control", section: "Students" },
+  { label: "Result Control", href: "/admin/result-control", section: "Results" },
+  { label: "Notification Control", href: "/admin/notification-control", section: "Content" },
+  { label: "Rules", href: "/admin/rules", section: "System" },
+  { label: "Admin Center", href: "/admin/admin-center", section: "System" },
+  { label: "My Profile", href: "/admin/profile", section: "Account" },
+  { label: "General Settings", href: "/admin/settings", section: "Website" },
+  { label: "Contact Information", href: "/admin/website/contact", section: "Website" },
+  { label: "Footer", href: "/admin/website/footer", section: "Website" },
+  { label: "Social Links", href: "/admin/website/social-links", section: "Website" },
+  { label: "SEO Settings", href: "/admin/website/seo", section: "Website" },
+];
 
 export default function AdminSearch({
   autoFocus = false,
