@@ -46,7 +46,12 @@
 
   <div class="card">
     <h1>📝 Exam Paste Format Guide</h1>
-    <div class="sub">Admin Panel → Add Exam → Paste Questions → <b>Detect Questions</b> — Biology, Physics, Chemistry, English সব সাবজেক্ট। ১০ / ২০ / ৫০ / ১০০+ প্রশ্ন একসাথে। Reaction, subscript, superscript, equation, symbol — সব Unicode-এ লিখলে detect হবে (verified)।</div>
+    <div class="sub">Admin Panel → Add Exam → Paste Questions → <b>Detect Questions</b> — Biology, Physics, Chemistry, English সব সাবজেক্ট। ১০ / ২০ / ৫০ / ১০০+ প্রশ্ন একসাথে। Reaction, subscript, superscript, equation, symbol — সব Unicode-এ লিখলে detect হবে (verified)। / For English version, see below or click English.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <a href="#bangla-guide" style="background:#1a3a78;color:#fff;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:800;text-decoration:none;">বাংলা ভার্সন</a>
+      <a href="#english-guide" style="background:#059669;color:#fff;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:800;text-decoration:none;">English Version</a>
+    </div>
+    <div id="bangla-guide"></div>
     <div class="steps">
       <div class="step"><b>ধাপ ১:</b> নিচের ফরম্যাটে প্রশ্ন paste করুন (উত্তর = শুধু লেবেল)।</div>
       <div class="step"><b>ধাপ ২:</b> <b>Detect Questions</b> চাপুন → সব preview-তে আসবে।</div>
@@ -222,6 +227,184 @@ Answer: B</pre>
       <li>“Needs review” থাকলে ঠিক করে নিন।</li>
       <li>Separate key-তে Missing/Extra warning নেই নিশ্চিত করুন।</li>
       <li>তারপর <b>Save Questions</b>।</li>
+    </ul>
+  </div>
+
+  <div id="english-guide"></div>
+  <div class="card" lang="en">
+    <h1>📝 Exam Paste Format Guide — English Version</h1>
+    <div class="sub">Admin Panel → Add Exam → Paste Questions → <b>Detect Questions</b> — works for Biology, Physics, Chemistry, English. Paste 10 / 20 / 50 / 100+ questions at once. Write reactions, subscripts, superscripts, equations and symbols in Unicode so detection works (verified).</div>
+    <div class="steps">
+      <div class="step"><b>Step 1:</b> Paste questions in the format below (answer = label only).</div>
+      <div class="step"><b>Step 2:</b> Click <b>Detect Questions</b> → all items appear in preview.</div>
+      <div class="step"><b>Step 3:</b> Review and click <b>Save Questions</b>.</div>
+    </div>
+  </div>
+
+  <div class="card ok" lang="en">
+    <span class="tag ok">✓ Biology format (verified)</span>
+    <h2>Write answer as label only (A / B / C / D)</h2>
+<pre id="goodFormatEn">1. Which type of caudal fin is heterocercal? [Dhaka Board 19]
+A. Rui
+B. Lungfish
+C. Taki
+D. Shark
+Answer: D
+
+2. Which animal has a completely four-chambered heart?
+A. Lizard
+B. Crocodile
+C. Turtle
+D. Snake
+Answer: B</pre>
+    <button class="copy" onclick="copyText('goodFormatEn')">📋 Copy format</button>
+    <ul>
+      <li>Question number: <code class="inline">1.</code> <code class="inline">2)</code> <code class="inline">Q1.</code></li>
+      <li>Options: <code class="inline">A. B. C. D.</code> / <code class="inline">(A) (B) (C) (D)</code> / <code class="inline">A) B) C) D)</code></li>
+      <li>Answer: <code class="inline">Answer: D</code> / <code class="inline">Ans: B</code> / <code class="inline">Correct Answer: (B)</code></li>
+      <li>Keep board tag on the question line: <code class="inline">[Dhaka Board 19]</code>. Keep a blank line between questions.</li>
+    </ul>
+  </div>
+
+  <div class="card phy" lang="en">
+    <span class="tag phy">✓ Physics format (verified)</span>
+    <h2>Formula, unit, symbol — in one line, in Unicode</h2>
+<pre id="phyFormatEn">1. An object has velocity v = 10 m/s and mass m = 2 kg. What is the kinetic energy (Eₖ = ½mv²)? [Dhaka Board 19]
+A. 10 J
+B. 20 J
+C. 100 J
+D. 200 J
+Answer: C
+
+2. If θ = 30°, find sinθ + cosθ where Δ = √3/2 and π ≈ 3.14:
+A. 1 + √3/2
+B. (1 + √3)/2
+C. √3
+D. 1/2
+Answer: B</pre>
+    <button class="copy" onclick="copyText('phyFormatEn')">📋 Copy format</button>
+    <ul>
+      <li>Write the formula on the question line: <code class="inline">Eₖ = ½mv²</code>, <code class="inline">sinθ</code>, <code class="inline">√3/2</code>.</li>
+      <li>Units in options: <code class="inline">10 J</code>, <code class="inline">5 Ω</code>, <code class="inline">20 m/s</code>.</li>
+      <li>Write fractions inline: <code class="inline">1/2</code>, <code class="inline">(1 + √3)/2</code>.</li>
+    </ul>
+  </div>
+
+  <div class="card che" lang="en">
+    <span class="tag che">✓ Chemistry format (verified)</span>
+    <h2>Reaction in one line — subscript/superscript in Unicode</h2>
+<pre id="cheFormatEn">1. In the reaction 2H₂ + O₂ → 2H₂O, how many moles of oxygen are needed? [Dhaka Board 19]
+A. 1
+B. 2
+C. 3
+D. 4
+Answer: A
+
+2. How many electrons does Ca²⁺ have? (Ca = 20)
+A. 18
+B. 20
+C. 22
+D. 16
+Answer: A
+
+3. For A + B ⇌ C + D at equilibrium with K꜀ = 4, what is ΔG°?
+A. -3.44 kJ/mol
+B. +3.44 kJ/mol
+C. -34.4 kJ/mol
+D. 0 kJ/mol
+Answer: A</pre>
+    <button class="copy" onclick="copyText('cheFormatEn')">📋 Copy format</button>
+    <ul>
+      <li>Reaction: <code class="inline">2H₂ + O₂ → 2H₂O</code>, reversible: <code class="inline">A + B ⇌ C + D</code>.</li>
+      <li>Compounds: <code class="inline">H₂SO₄</code>, <code class="inline">NaCl</code>. Ions: <code class="inline">Ca²⁺</code>, <code class="inline">SO₄²⁻</code>.</li>
+      <li>Do not type the <code class="inline">₂</code> in H₂ as a normal 2 — copy subscript from the palette above.</li>
+    </ul>
+  </div>
+
+  <div class="card eng" lang="en">
+    <span class="tag eng">✓ English format (verified)</span>
+    <h2>Same rules — question, A–D options, Answer label</h2>
+<pre id="engFormatEn">1. Choose the correct sentence.
+A. He go to school.
+B. He goes to school.
+C. He going to school.
+D. He gone to school.
+Answer: B
+
+2. The synonym of "rapid" is ——.
+A. slow
+B. fast
+C. lazy
+D. dull
+Answer: B
+
+3. Which one is correctly punctuated?
+A. Its raining outside.
+B. It's raining outside.
+C. Its' raining outside.
+D. It raining outside.
+Answer: B</pre>
+    <button class="copy" onclick="copyText('engFormatEn')">📋 Copy format</button>
+    <ul>
+      <li>Question number + one question per block, blank line between questions.</li>
+      <li>Answer line contains only the label: <code class="inline">Answer: B</code> — do not repeat the option text.</li>
+    </ul>
+  </div>
+
+  <div class="card info" lang="en">
+    <span class="tag info">ⓘ Stem / multi-line question rule</span>
+    <h2>How to write extra lines and equations</h2>
+<pre id="stemFormatEn">1. Read the stem and answer:
+- Formula of water is H₂O
+- Formula of salt is NaCl
+Which of the above is correct?
+A. i and ii
+B. Only i
+C. Only ii
+D. None
+Answer: A</pre>
+    <button class="copy" onclick="copyText('stemFormatEn')">📋 Copy format</button>
+    <ul>
+      <li>Write extra lines as <b>plain lines or with <code class="inline">- </code></b> — they stay with the question (verified).</li>
+      <li>Do <b>not</b> start a line inside the stem with <code class="inline">i.</code> <code class="inline">ii.</code> <code class="inline">1.</code> <code class="inline">2.</code> — those are detected as new questions.</li>
+      <li>Always keep equations on <b>one line</b>.</li>
+    </ul>
+  </div>
+
+  <div class="card bad" lang="en">
+    <span class="tag bad">✗ Wrong format (avoid)</span>
+<pre>Answer: (D) Shark     ← wrong (answer not detected, breaks large sets)
+Answer: D              ← correct</pre>
+    <ul>
+      <li>Answer line must contain only a <b>single-letter label</b> — do not repeat the option text.</li>
+      <li>Do not add an <code class="inline">Answer Key:</code> heading in the middle of questions.</li>
+      <li>Do not start a stem line with <code class="inline">A.</code> before the options — it will be treated as an option.</li>
+    </ul>
+  </div>
+
+  <div class="card info" lang="en">
+    <span class="tag info">ⓘ Separate Answer Key (new)</span>
+    <h2>No answers in questions — use Answer source: “Separate”</h2>
+    <ul>
+      <li>Paste questions → Detect (answers stay blank).</li>
+      <li>Paste key: <code class="inline">1-A</code> <code class="inline">2-B</code> … / <code class="inline">1. A</code> … / <code class="inline">1 A</code> … / <code class="inline">1A 2B 3C</code></li>
+      <li><b>Detect Answer Key</b> → preview (✓ / ⚠ Missing / Extra) → <b>Apply Answer Key</b> → Save.</li>
+      <li>Matching is by <b>question number</b> — 50/100+ keys work at once. Use <b>Upload Answer Key Image</b> for image keys.</li>
+    </ul>
+<pre>1-A
+2-B
+3-C
+4-D
+5-A</pre>
+  </div>
+
+  <div class="card" lang="en">
+    <h2>✅ Checklist (before Save)</h2>
+    <ul>
+      <li>Detected count = pasted count (e.g. 55 → Detected 55).</li>
+      <li>Fix any “Needs review” items.</li>
+      <li>For separate key, ensure no Missing/Extra warning.</li>
+      <li>Then click <b>Save Questions</b>.</li>
     </ul>
   </div>
 
