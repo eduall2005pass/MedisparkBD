@@ -67,10 +67,11 @@ const categoryCards: {
 type LiveCounts = Record<ExamCategory, number>;
 
 function formatLiveText(count: number): string {
-  return `${count} ${count === 1 ? "Exam" : "Exams"} Live Now`;
+  return `${count} ${count === 1 ? "Exam" : "Exams"} Is Live Now`;
 }
 
 function formatPracticeText(count: number): string {
+  if (count === 0) return "No Practice Exams Available";
   return count === 1
     ? "1 Practice Exam Is Available"
     : `${count} Practice Exams Are Available`;
@@ -175,9 +176,9 @@ export default function ExamCategoryCards({
               </h3>
             </div>
 
-            {/* Dynamic live count (left) + practice count (right) — same row */}
-            <div className="relative mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-sm font-semibold">
-              <span className="flex min-w-0 items-center gap-2">
+            {/* Live count (left) + practice count (right) — always one row */}
+            <div className="relative mt-3 flex items-center justify-between gap-2 text-sm font-semibold">
+              <span className="flex min-w-0 flex-1 items-center gap-2">
               {count === null ? (
                 <>
                   <span className="relative flex h-2.5 w-2.5 shrink-0">
@@ -196,16 +197,20 @@ export default function ExamCategoryCards({
               ) : (
                 <>
                   <span className="relative flex h-2.5 w-2.5 shrink-0">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.18)]" />
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500 shadow-[0_0_0_4px_rgba(59,130,246,0.25)]" />
                   </span>
                   <span className="text-emerald-400">{formatLiveText(count)}</span>
                 </>
               )}
               </span>
               {practiceCount !== null && (
-                <span className="shrink-0 text-right text-sky-400">
-                  {formatPracticeText(practiceCount)}
+                <span className="min-w-0 flex-1 text-right">
+                  {practiceCount === 0 ? (
+                    <span className="text-neutral-400">No Practice Exams Available</span>
+                  ) : (
+                    <span className="text-sky-400">{formatPracticeText(practiceCount)}</span>
+                  )}
                 </span>
               )}
             </div>
