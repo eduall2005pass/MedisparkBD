@@ -38,24 +38,64 @@
   .palette button { font-size: 16px; background: #f8fbff; border: 1px solid #dbeafe; border-radius: 8px; padding: 4px 10px; cursor: pointer; color: #0b1e3a; }
   .palette button:active { background: #dbeafe; }
   .pal-label { font-size: 12px; font-weight: 800; color: #64748b; margin: 10px 0 2px; }
+  .lang-switch { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .lang-switch button { border: 0; border-radius: 10px; padding: 8px 18px; font-size: 13px; font-weight: 800; cursor: pointer; background: #e2e8f0; color: #0b1e3a; }
+  .lang-switch button.active-bn { background: #1a3a78; color: #fff; }
+  .lang-switch button.active-en { background: #059669; color: #fff; }
+  body[data-uilang="bn"] [data-lang="en"] { display: none; }
+  body[data-uilang="en"] [data-lang="bn"] { display: none; }
+  textarea.fmt { width: 100%; border: 1px solid #cbd5e1; border-radius: 12px; background: #f8fafc; padding: 12px; font-size: 13.5px; line-height: 1.8; font-family: inherit; color: #0b1e3a; resize: vertical; }
+  textarea.fmt:focus { outline: none; border-color: #234e9f; background: #fff; }
+  .fmt-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .fmt-row select { border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 700; background: #fff; color: #0b1e3a; }
+  button.primary { background: #1a3a78; color: #fff; border: 0; border-radius: 10px; padding: 9px 18px; font-size: 14px; font-weight: 700; cursor: pointer; }
+  button.primary:active { transform: scale(.97); }
+  button.ghost { background: #fff; color: #334155; border: 1px solid #cbd5e1; border-radius: 10px; padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .stat { font-size: 12px; font-weight: 700; color: #475569; background: #f1f5f9; border-radius: 8px; padding: 4px 10px; }
+  .stat.ok { background: #dcfce7; color: #166534; }
+  .stat.warn { background: #fef3c7; color: #92400e; }
   @media (max-width: 560px) { body { padding: 10px; } .card { padding: 14px; } h1 { font-size: 19px; } }
 </style>
 </head>
-<body>
+<body data-uilang="bn">
 <div class="wrap">
 
-  <div class="card">
+  <div class="card" id="topCard">
     <h1>📝 Exam Paste Format Guide</h1>
-    <div class="sub">Admin Panel → Add Exam → Paste Questions → <b>Detect Questions</b> — Biology, Physics, Chemistry, English সব সাবজেক্ট। ১০ / ২০ / ৫০ / ১০০+ প্রশ্ন একসাথে। Reaction, subscript, superscript, equation, symbol — সব Unicode-এ লিখলে detect হবে (verified)। / For English version, see below or click English.</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-      <a href="#bangla-guide" style="background:#1a3a78;color:#fff;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:800;text-decoration:none;">বাংলা ভার্সন</a>
-      <a href="#english-guide" style="background:#059669;color:#fff;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:800;text-decoration:none;">English Version</a>
+    <div class="sub">Admin Panel → Add Exam → Paste Questions → <b>Detect Questions</b> — Biology, Physics, Chemistry, English সব সাবজেক্ট। ১০ / ২০ / ৫০ / ১০০+ প্রশ্ন একসাথে। Reaction, subscript, superscript, equation, symbol — সব Unicode-এ লিখলে detect হবে (verified)। / For English version, switch to English.</div>
+    <div class="lang-switch" role="group" aria-label="Language switcher">
+      <button id="btnBn" onclick="setUILang('bn')">বাংলা</button>
+      <button id="btnEn" onclick="setUILang('en')">English</button>
     </div>
     <div id="bangla-guide"></div>
     <div class="steps">
       <div class="step"><b>ধাপ ১:</b> নিচের ফরম্যাটে প্রশ্ন paste করুন (উত্তর = শুধু লেবেল)।</div>
       <div class="step"><b>ধাপ ২:</b> <b>Detect Questions</b> চাপুন → সব preview-তে আসবে।</div>
       <div class="step"><b>ধাপ ৩:</b> Review করে <b>Save Questions</b> চাপুন।</div>
+    </div>
+  </div>
+
+  <div class="card" id="formatterCard" style="border-left:5px solid #059669;">
+    <span class="tag ok">⚡ Global Paste Formatter — যেকোনোভাবে paste করুন</span>
+    <h2 data-bn="যেমন খুশি paste করুন → ১০০% detectable ফরম্যাটে রেডি" data-en="Paste however you like → get 100% detectable format">যেমন খুশি paste করুন → ১০০% detectable ফরম্যাটে রেডি</h2>
+    <div class="sub" data-bn="Word, PDF, Facebook, কোচিং শিট — নম্বর/অপশন/উত্তর যেভাবেই থাকুক, Formatter সেটাকে canonical ফরম্যাটে সাজিয়ে দেবে। তারপর Copy করে Admin Panel-এ paste করুন। Physics/Math-এর multi-line সমীকরণও সাপোর্ট করে।" data-en="Word, PDF, Facebook, coaching sheets — however numbers/options/answers are arranged, the Formatter rebuilds them into canonical format. Then copy and paste into Admin Panel. Multi-line Physics/Math equations supported.">Word, PDF, Facebook, কোচিং শিট — নম্বর/অপশন/উত্তর যেভাবেই থাকুক, Formatter সেটাকে canonical ফরম্যাটে সাজিয়ে দেবে। তারপর Copy করে Admin Panel-এ paste করুন। Physics/Math-এর multi-line সমীকরণও সাপোর্ট করে।</div>
+    <label class="pal-label" for="rawInput">1. Raw paste (যেকোনো ফরম্যাট)</label>
+    <textarea id="rawInput" class="fmt" rows="7" placeholder="যেকোনোভাবে paste করুন… উদা: Q1 Which is powerhouse? a) Nucleus b) Mitochondria c) Ribosome d) Golgi Ans: b"></textarea>
+    <div class="fmt-row">
+      <select id="outLang" aria-label="Output language">
+        <option value="bangla">আউটপুট: বাংলা (১। + কখগঘ + সঠিক উত্তর)</option>
+        <option value="english">Output: English (1. + ABCD + Answer)</option>
+      </select>
+      <label class="stat"><input type="checkbox" id="keepEq" checked> multi-line equation রাখুন</label>
+      <button class="primary" onclick="runFormatter()">✨ Format করুন</button>
+      <button class="ghost" onclick="loadSample()">Sample</button>
+      <button class="ghost" onclick="clearFormatter()">Clear</button>
+    </div>
+    <label class="pal-label" for="fmtOutput">2. Formatted output (copy-ready ✓)</label>
+    <textarea id="fmtOutput" class="fmt" rows="9" readonly placeholder="Format চাপুন — এখানে ১০০% detectable ফরম্যাট আসবে…"></textarea>
+    <div class="fmt-row">
+      <span id="fmtStats" class="stat">0 detected</span>
+      <button class="copy" onclick="copyText('fmtOutput')">📋 Copy formatted</button>
     </div>
   </div>
 
@@ -193,7 +233,34 @@ Answer: B</pre>
     </ul>
   </div>
 
-  <div class="card bad">
+  <div class="card phy" data-lang="both">
+    <span class="tag phy">✓ Physics / Math multi-line (new)</span>
+    <h2>সমীকরণ আলাদা লাইনে লিখলেও detect হবে</h2>
+    <div class="sub">প্রশ্নের stem-এ একাধিক লাইন + equation থাকলে প্রতিটি লাইন আলাদা করে রাখুন — engine equation-লাইন প্রশ্নের সাথেই রাখে। অপশন ভেঙে পরের লাইনে গেলেও শেষ অপশনের সাথে জোড়া লাগে।</div>
+<pre id="multiFormat">১। বস্তুর বেগ v = 10 m/s, ভর m = 2 kg
+Eₖ = ½mv² = ?
+(ক) 10 J
+(খ) 20 J
+(গ) 100 J
+(ঘ) 200 J
+সঠিক উত্তর: গ
+
+1. Solve:
+x² + 5x + 6 = 0, find x
+A. 1, 2
+B. -2, -3
+C. 2, 3
+D. -1, -6
+Answer: B</pre>
+    <button class="copy" onclick="copyText('multiFormat')">📋 ফরম্যাট কপি করুন</button>
+    <ul>
+      <li>Equation-লাইন <code class="inline">=</code> <code class="inline">→</code> <code class="inline">√</code> <code class="inline">^</code> দিয়ে থাকলে সেটা প্রশ্নের অংশই থাকে।</li>
+      <li>Stem-এর ভেতরে <code class="inline">i.</code> <code class="inline">1.</code> দিয়ে লাইন শুরু করবেন না।</li>
+      <li>Formatter-এ <b>multi-line equation রাখুন</b> টিক থাকলে output-এ লাইন-ব্রেক preserved থাকে।</li>
+    </ul>
+  </div>
+
+  <div class="card bad" data-lang="bn">
     <span class="tag bad">✗ ভুল ফরম্যাট (এড়িয়ে চলুন)</span>
 <pre>সঠিক উত্তর: (ঘ) হাঙ্গর     ← ভুল (উত্তর detect হয় না, বড় সেটে প্রশ্নও ভাঙে)
 সঠিক উত্তর: ঘ              ← সঠিক</pre>
@@ -410,6 +477,7 @@ Answer: D              ← correct</pre>
 
 </div>
 <script>
+/* ── Symbol palette ── */
 var pals = {
   palSub: "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₔₕₖₗₘₙₚₛₜ".split(""),
   palSup: "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ".split(""),
@@ -419,6 +487,7 @@ var pals = {
 };
 Object.keys(pals).forEach(function(id) {
   var box = document.getElementById(id);
+  if (!box) return;
   pals[id].forEach(function(ch) {
     var b = document.createElement("button");
     b.textContent = ch;
@@ -433,9 +502,260 @@ Object.keys(pals).forEach(function(id) {
   });
 });
 function copyText(id) {
-  var t = document.getElementById(id).innerText;
-  if (navigator.clipboard) { navigator.clipboard.writeText(t).then(function(){ alert("ফরম্যাট কপি হয়েছে ✓"); }); }
-  else { var ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); alert("ফরম্যাট কপি হয়েছে ✓"); }
+  var el = document.getElementById(id);
+  var t = (el.tagName === "TEXTAREA" || el.tagName === "INPUT") ? el.value : el.innerText;
+  var done = function(){ alert(document.body.getAttribute("data-uilang") === "en" ? "Copied ✓" : "ফরম্যাট কপি হয়েছে ✓"); };
+  if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(done); }
+  else { var ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); }
+}
+
+/* ── BN / EN version switcher ── */
+function setUILang(lang) {
+  document.body.setAttribute("data-uilang", lang);
+  try { localStorage.setItem("pasteFmtLang", lang); } catch (e) {}
+  var bBn = document.getElementById("btnBn"), bEn = document.getElementById("btnEn");
+  if (bBn) bBn.className = lang === "bn" ? "active-bn" : "";
+  if (bEn) bEn.className = lang === "en" ? "active-en" : "";
+  document.documentElement.lang = lang;
+  // Swap data-bn / data-en inline strings
+  document.querySelectorAll("[data-bn]").forEach(function(el) {
+    el.textContent = lang === "en" ? (el.getAttribute("data-en") || el.getAttribute("data-bn")) : el.getAttribute("data-bn");
+  });
+  // Tag guide cards once: lang=en cards → en, everything else (except tool cards) → bn
+  document.querySelectorAll(".card").forEach(function(card) {
+    if (card.id === "topCard" || card.id === "formatterCard" || card.id === "paletteCard") return;
+    if (card.hasAttribute("data-lang")) return;
+    if (card.getAttribute("lang") === "en") card.setAttribute("data-lang", "en");
+    else card.setAttribute("data-lang", "bn");
+  });
+}
+(function initLang() {
+  var saved = "bn";
+  try { saved = localStorage.getItem("pasteFmtLang") || "bn"; } catch (e) {}
+  var pal = document.querySelector(".card.info");
+  if (pal) pal.id = "paletteCard";
+  setUILang(saved === "en" ? "en" : "bn");
+})();
+
+/* ── Global Paste Formatter engine (mirrors src/lib/paste-mcq-parser.ts) ── */
+var BN_DIGITS = {"০":"0","১":"1","২":"2","৩":"3","৪":"4","৫":"5","৬":"6","৭":"7","৮":"8","৯":"9"};
+var BN_OPT = {"ক":0,"খ":1,"গ":2,"ঘ":3};
+var BN_NUM = ["০","১","২","৩","৪","৫","৬","৭","৮","৯"];
+var BN_LBL = ["ক","খ","গ","ঘ"], EN_LBL = ["A","B","C","D"];
+function bnToAscii(s){ return String(s).replace(/[০-৯]/g, function(c){ return BN_DIGITS[c]; }); }
+function normalizeRaw(s) {
+  var t = String(s || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  t = t.replace(/[​‌‍﻿]/g, "").replace(/ /g, " ");
+  t = t.replace(/[！-～]/g, function(c){ return String.fromCharCode(c.charCodeAt(0) - 0xFEE0); });
+  t = t.replace(/[“”„‟]/g, '"').replace(/[‘’‚‛]/g, "'").replace(/[‐‑‒–—―]/g, "-").replace(/…/g, "...");
+  t = t.replace(/[ \t]+\n/g, "\n").replace(/\n[ \t]+/g, "\n").replace(/[ \t]{2,}/g, " ").replace(/\n{4,}/g, "\n\n\n");
+  return t;
+}
+function isEqLine(line) {
+  var t = String(line).trim();
+  if (!t) return false;
+  if (/^[-•▪·>▸]\s+\S/.test(t)) return true;
+  if (/[=→⇌⇒⇔←↑↓↔≈≠≤≥±×÷√∫∑∏∞∂]/.test(t)) return true;
+  if (/\b(Eₖ|K꜀|sin|cos|tan|log|ln)\b/i.test(t) && /[=+\-*/^_0-9]/.test(t)) return true;
+  if (/[A-Za-z]\s*=\s*[^=]+/.test(t)) return true;
+  if (/H₂|O₂|H2O|NaCl|Ca²|SO₄|kJ\/mol|\bJ\b|Ω|m\/s/.test(t)) return true;
+  if (t.length < 60 && /[0-9]/.test(t) && /[+\-*/^()[\]{}]/.test(t)) return true;
+  return false;
+}
+function stripQHeader(line) {
+  var m;
+  m = line.match(/^\s*(প্রশ্ন\s*(?:নং\.?|No\.?)?\s*(?:\d+|[০-৯]+)\s*[.\)\:\-।\)]?)\s*([\s\S]*)$/);
+  if (m) return { header: m[1].trim(), rest: (m[2]||"").trim() };
+  m = line.match(/^\s*(Question\s*(?:No\.?)?\s*(?:\d+|[০-৯]+)\s*[.\)\:\-]?)\s*([\s\S]*)$/i);
+  if (m && /\d/.test(m[1])) return { header: m[1].trim(), rest: (m[2]||"").trim() };
+  m = line.match(/^\s*(Q\s*[\.\-]?\s*0*\d+\s*[.\)\:\-]?)\s*([\s\S]*)$/i);
+  if (m && /\d/.test(m[1])) return { header: m[1].trim(), rest: (m[2]||"").trim() };
+  m = line.match(/^\s*((?:\d{1,3}|[০-৯]{1,3})\s*[.\)\।\)\-]\-?)\s+([\s\S]*)$/);
+  if (m) return { header: m[1].trim(), rest: (m[2]||"").trim() };
+  return null;
+}
+function parseOpt(line) {
+  var t = String(line).trim(), m;
+  m = t.match(/^\s*\(\s*([A-Da-d])\s*\)\s*[.\)\:\-\—।]?\s*(.+)$/) || t.match(/^\s*\[\s*([A-Da-d])\s*\]\s*[.\)\:\-\—]?\s*(.+)$/) || t.match(/^\s*([A-Da-d])\s*[.\)\:\-\—\)]\s*(.+)$/);
+  if (m) return { idx: m[1].toUpperCase().charCodeAt(0) - 65, text: m[2].trim() };
+  m = t.match(/^\s*\(\s*([কখগঘ])\s*\)\s*[.\)\:\-\—।]?\s*(.+)$/) || t.match(/^\s*\[\s*([কখগঘ])\s*\]\s*[.\)\:\-\—।]?\s*(.+)$/) || t.match(/^\s*([কখগঘ])\s*[.\)\:\-\—।\)]?\s+(.+)$/);
+  if (m && BN_OPT[m[1]] !== undefined) return { idx: BN_OPT[m[1]], text: m[2].trim() };
+  return null;
+}
+function extractAns(line) {
+  var t = String(line).trim(), m;
+  m = t.match(/^\s*সঠিক\s*উত্তর\s*ঃ?\s*[:\-=—ঃ.:]?\s*(.+?)\s*$/i);
+  if (m && m[1].trim()) return m[1].trim();
+  m = t.match(/^\s*উত্তর\s*ঃ?\s*[:\-=—ঃ.:]?\s*(.+?)\s*$/i);
+  if (m && m[1].trim()) return m[1].trim();
+  m = t.match(/^\s*(?:Correct\s+Answer|Correct\s+option|Correct|Ans(?:wer)?\.?)\s*(?:is)?\s*[:\-=—ঃ.:]?\s*(.+?)\s*$/i);
+  if (m && m[1].trim()) return m[1].trim();
+  return null;
+}
+function ansToIdx(payload, opts) {
+  var c = String(payload||"").trim().replace(/^[\(\[]\s*/, "").replace(/\s*[\)\]\.]+$/g, "").trim();
+  if (/^[A-Da-d]$/.test(c)) return c.toUpperCase().charCodeAt(0) - 65;
+  if (/^[কখগঘ]$/.test(c)) return BN_OPT[c];
+  if (/^[1-4]$/.test(bnToAscii(c))) return parseInt(bnToAscii(c),10) - 1;
+  // full-text match
+  var norm = function(s){ return String(s||"").trim().toLowerCase().replace(/\s+/g," "); };
+  for (var i=0;i<4;i++){ if (opts[i] && norm(opts[i]) === norm(c)) return i; }
+  var lead = c.match(/^(?:\(\s*([A-Da-d])\s*[\)\]\.:]|\[\s*([A-Da-d])\s*[\]\)\.:]|([A-Da-d])\s*[\)\.\:\-\—–])\s+(\S[\s\S]*)$/);
+  if (lead) {
+    var L = (lead[1]||lead[2]||lead[3]||"").toUpperCase();
+    for (var j=0;j<4;j++){ if (opts[j] && norm(opts[j]) === norm(lead[4])) return j; }
+    if (/^[A-D]$/.test(L)) return L.charCodeAt(0) - 65;
+  }
+  var bl = c.match(/^(?:\(\s*([কখগঘ])\s*[\)\]\.:।]|\[\s*([কখগঘ])\s*[\]\)\.:।]|([কখগঘ])\s*[\)\.\:\-\—–।])\s+(\S[\s\S]*)$/);
+  if (bl) {
+    var B = bl[1]||bl[2]||bl[3]||"";
+    for (var k=0;k<4;k++){ if (opts[k] && norm(opts[k]) === norm(bl[4])) return k; }
+    if (/^[কখগঘ]$/.test(B)) return BN_OPT[B];
+  }
+  if (c.length <= 5) {
+    var e = c.match(/([A-Da-d])/); if (e) return e[1].toUpperCase().charCodeAt(0) - 65;
+    var b2 = c.match(/[কখগঘ]/); if (b2) return BN_OPT[b2[0]];
+  }
+  return null;
+}
+function splitInline(text) {
+  // split "A. x B. y" / "ক) x খ) y" glued on one line.
+  // Answer prefixes: multi-word first, then single-word with lookbehind so
+  // "সঠিক উত্তর:" / "Correct Answer:" never splits in the middle.
+  return text
+    .replace(/([^\n])\s{2,}(?=[A-Da-d]\s*[.\)\:\-])/g, "$1\n")
+    .replace(/([^\n])\s+(?=\([A-Da-d]\))/g, "$1\n")
+    .replace(/([^\n])\s+(?=[A-Da-d]\s*[\)]\s*\S)/g, "$1\n")
+    .replace(/([^\n])\s{1,}(?=[কখগঘ]\s*[.\)\:\-।])/g, "$1\n")
+    .replace(/([^\n])\s+(?=\([কখগঘ]\))/g, "$1\n")
+    .replace(/([^\n])\s+(?=(?:Correct\s+Answer|Correct\s+option|সঠিক\s+উত্তর)\s*[:\-=—ঃ.:])/gi, "$1\n")
+    .replace(/([^\n])\s+(?<!Correct\s)(?<!সঠিক\s)(?=(?:Ans(?:wer)?\.?|Correct|উত্তর\s*ঃ?)\s*[:\-=—ঃ.:])/gi, "$1\n");
+}
+function hasInlineMarkers(t) {
+  var re = /(?:\(?\s*[A-Da-d]\s*\)?\s*[.\)\:\-\—]\s+|\(?\s*[কখগঘ]\s*\)?\s*[.\)\:\-।]?\s+|\(?\s*[1-4]\s*\)?\s*[.\)\:\-]\s+|\(?\s*[১-৪]\s*\)?\s*[.\)\:\-।]?\s+)/g;
+  var c = 0, m; re.lastIndex = 0;
+  while ((m = re.exec(t)) !== null) { c++; if (c >= 2) return true; if (!m[0].length) re.lastIndex++; }
+  return false;
+}
+function parseInlineBlock(textBeforeAnswer) {
+  // Fallback for fully-glued single line: "Q? a) x b) y c) z d) w"
+  var re = /(?:\(?\s*([A-Da-d])\s*\)?\s*[.\)\:\-\—]\s+|\(?\s*([কখগঘ])\s*\)?\s*[.\)\:\-।]?\s+|\(?\s*([1-4])\s*\)?\s*[.\)\:\-]\s+|\(?\s*([১-৪])\s*\)?\s*[.\)\:\-।]?\s+)/gi;
+  var ms = [], m;
+  while ((m = re.exec(textBeforeAnswer)) !== null) {
+    var style = m[1] ? "en" : m[2] ? "bn" : m[3] ? "num" : "bnNum";
+    ms.push({ start: m.index, end: m.index + m[0].length, label: m[1]||m[2]||m[3]||m[4], style: style });
+    if (!m[0].length) re.lastIndex++;
+  }
+  if (ms.length >= 3 && ms[0].start <= 2 && (ms[0].style === "num" || ms[0].style === "bnNum")) {
+    var lc = ms.slice(1).filter(function(x){ return x.style === "en" || x.style === "bn"; }).length;
+    if (lc >= 2) ms.shift();
+  }
+  if (ms.length < 2) return null;
+  var grp = ms.slice(-4), opts = ["","","",""], ok = false;
+  grp.forEach(function(g, k){
+    var idx = g.style === "en" ? g.label.toUpperCase().charCodeAt(0) - 65
+      : g.style === "bn" ? BN_OPT[g.label]
+      : g.style === "num" ? parseInt(g.label,10) - 1 : parseInt(bnToAscii(g.label),10) - 1;
+    if (idx === null || idx < 0 || idx > 3) return;
+    var next = k + 1 < grp.length ? grp[k+1].start : textBeforeAnswer.length;
+    opts[idx] = textBeforeAnswer.slice(g.end, next).trim();
+    ok = true;
+  });
+  if (!ok || opts.filter(Boolean).length < 2) return null;
+  var q = textBeforeAnswer.slice(0, grp[0].start).trim();
+  var nl = q.indexOf("\n"), fl = nl >= 0 ? q.slice(0, nl) : q, rest = nl >= 0 ? q.slice(nl) : "";
+  var sh = stripQHeader(fl);
+  if (sh) q = ((sh.rest || "") + rest).trim();
+  return { q: [q], opts: opts };
+}
+function formatBlocks(raw, outLang, keepEq) {
+  var bn = outLang === "bangla";
+  var text = splitInline(normalizeRaw(raw));
+  var lines = text.split("\n").map(function(l){ return l.trim(); }).filter(Boolean);
+  var blocks = [], cur = null;
+  function flush(){ if (cur && (cur.q.length || cur.opts.some(Boolean) )) blocks.push(cur); cur = null; }
+  function newBlock(q){ return { q: q ? [q] : [], opts: ["","","",""], ansRaw: null, ans: null, raw: [] }; }
+  lines.forEach(function(line){
+    var ans = extractAns(line);
+    if (ans !== null) { if (cur) { cur.ansRaw = ans; cur.raw.push(line); } return; }
+    var opt = parseOpt(line);
+    var qh = stripQHeader(line);
+    if (qh && (!opt || cur === null || cur.opts.some(Boolean))) {
+      if (cur && (cur.q.length || cur.opts.some(Boolean))) flush();
+      cur = newBlock(qh.rest); cur.raw.push(line);
+      return;
+    }
+    if (opt) {
+      if (!cur) cur = newBlock(null);
+      if (cur.opts[opt.idx]) cur.opts[opt.idx] += " " + opt.text; else cur.opts[opt.idx] = opt.text;
+      cur.raw.push(line);
+      return;
+    }
+    if (!cur) { cur = newBlock(line); cur.raw.push(line); }
+    else if (!cur.opts.some(Boolean)) { cur.q.push(line); cur.raw.push(line); }
+    else {
+      // after options: option continuation or new question?
+      if (isEqLine(line) || line.length < 120) {
+        var last = 3; while (last >= 0 && !cur.opts[last]) last--;
+        if (last >= 0 && !stripQHeader(line)) { cur.opts[last] += " " + line; cur.raw.push(line); return; }
+      }
+      flush(); cur = newBlock(line); cur.raw.push(line);
+    }
+  });
+  flush();
+  // inline fallback for glued single-line blocks (e.g. "Q? a) x b) y c) z d) w")
+  blocks = blocks.map(function(b){
+    if (b.opts.filter(Boolean).length >= 2) return b;
+    var seg = (b.raw || []).join(" ");
+    if (!hasInlineMarkers(seg)) return b;
+    var cut = seg.replace(/\s+(?:Correct\s+Answer|Correct\s+option|সঠিক\s+উত্তর|উত্তর\s*ঃ?|Ans(?:wer)?\.?|Correct|Answer\s*Key|Key|Solution)\s*[:\-=—ঃ.:].*$/i, "");
+    var inl = parseInlineBlock((cut || seg) + " ");
+    if (inl && inl.opts.filter(Boolean).length >= 2) {
+      b.q = inl.q; b.opts = inl.opts;
+    }
+    return b;
+  });
+  var out = blocks.map(function(b, i){
+    var n = i + 1;
+    var ansIdx = b.ansRaw !== null ? ansToIdx(b.ansRaw, b.opts) : null;
+    var q = keepEq ? b.q.join("\n").trim() : b.q.join(" ").replace(/\s+/g, " ").trim();
+    var qNum = bn ? (String(n).split("").map(function(d){ return BN_NUM[+d]; }).join("") + "।") : (n + ".");
+    var ol = [0,1,2,3].map(function(k){
+      var lb = bn ? "(" + BN_LBL[k] + ")" : EN_LBL[k] + ".";
+      return lb + " " + (b.opts[k] || "").trim();
+    });
+    var al = (ansIdx !== null && ansIdx >= 0) ? (bn ? BN_LBL[ansIdx] : EN_LBL[ansIdx]) : "";
+    var ansLine = bn ? ("সঠিক উত্তর: " + al).trim() : ("Answer: " + al).trim();
+    return { text: qNum + " " + q + "\n" + ol.join("\n") + "\n" + ansLine, ok: b.opts.filter(Boolean).length >= 2 && ansIdx !== null };
+  });
+  return out;
+}
+function runFormatter() {
+  var raw = document.getElementById("rawInput").value || "";
+  var lang = document.getElementById("outLang").value || "bangla";
+  var keepEq = document.getElementById("keepEq").checked;
+  var res = formatBlocks(raw, lang, keepEq);
+  var out = document.getElementById("fmtOutput");
+  var st = document.getElementById("fmtStats");
+  if (!raw.trim()) { out.value = ""; st.textContent = "0 detected"; st.className = "stat"; return; }
+  out.value = res.map(function(r){ return r.text; }).join("\n\n");
+  var ok = res.filter(function(r){ return r.ok; }).length;
+  st.textContent = res.length + " detected • " + ok + " ready" + (res.length - ok > 0 ? " • " + (res.length - ok) + " needs review" : "");
+  st.className = "stat " + (ok === res.length && res.length > 0 ? "ok" : "warn");
+  out.focus();
+}
+function clearFormatter() {
+  document.getElementById("rawInput").value = "";
+  document.getElementById("fmtOutput").value = "";
+  var st = document.getElementById("fmtStats");
+  st.textContent = "0 detected"; st.className = "stat";
+}
+function loadSample() {
+  var lang = document.getElementById("outLang").value || "bangla";
+  document.getElementById("rawInput").value = lang === "english"
+    ? "Q1 Which is powerhouse? a) Nucleus b) Mitochondria c) Ribosome d) Golgi Ans: b\n\n2 If v=10 m/s m=2kg, Ek = 1/2 mv^2 = ?\nA) 10 J B) 20 J C) 100 J D) 200 J Answer: C"
+    : "১। পাওয়ার হাউস কোনটি? ক) নিউক্লিয়াস খ) মাইটোকন্ড্রিয়া গ) রাইবোসোম ঘ) গলজি উত্তর: খ\n\n২। বেগ v = 10 m/s, ভর m = 2 kg\nEₖ = ½mv² = ?\nক) 10 J খ) 20 J গ) 100 J ঘ) 200 J সঠিক উত্তর: গ";
+  runFormatter();
 }
 </script>
 </body>

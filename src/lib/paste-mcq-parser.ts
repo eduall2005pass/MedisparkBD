@@ -26,6 +26,53 @@ function bnDigitsToAscii(s: string): string {
   return s.replace(/[০-৯]/g, (ch) => BN_DIGIT_MAP[ch] ?? ch);
 }
 
+/** Normalize raw pasted text before detection: NBSP, smart quotes/dashes,
+ *  full-width chars, zero-width chars, mixed line endings. Preserves real
+ *  newlines so multi-line physics/math stems survive. */
+export function normalizePasteText(s: string): string {
+  let t = String(s ?? "");
+  t = t.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // Zero-width / BOM
+  t = t.replace(/[\u200B-\u200D\uFEFF]/g, "");
+  // NBSP → space
+  t = t.replace(/\u00A0/g, " ");
+  // Full-width ASCII → half-width (Ａ-Ｚ, ０-９, ，．etc.)
+  t = t.replace(/[\uFF01-\uFF5E]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xfee0),
+  );
+  t = t.replace(/\uFF61/g, "｡");
+  // Smart quotes → straight
+  t = t
+    .replace(/[“”„‟]/g, '"')
+    .replace(/[‘’‚‛]/g, "'")
+    // Dashes → hyphen (keep — for answer-prefix regex compat by also allowing -)
+    .replace(/[‐‑‒–—―]/g, "-")
+    .replace(/[…]/g, "...");
+  // Normalize Bengali danda variants spaced weirdly: " । " stays, collapse spaces
+  t = t.replace(/[ \t]+\n/g, "\n").replace(/\n[ \t]+/g, "\n");
+  t = t.replace(/[ \t]{2,}/g, " ");
+  // Collapse 3+ blank lines → 2 (block separation survives, noise removed)
+  t = t.replace(/\n{4,}/g, "\n\n\n");
+  return t;
+}
+
+/** True when a non-option line looks like an equation/formula continuation
+ *  (physics/math multiline): contains =, →, ≈, √, ∫, ^, _, /, or unit-like
+ *  tokens, or starts with -, •, >, or is a short symbol-heavy fragment. */
+export function isEquationContinuation(line: string): boolean {
+  const t = line.trim();
+  if (!t) return false;
+  if (/^[-•▪·>\u25B6]\s+\S/.test(t)) return true;
+  if (/[=→⇌⇒⇔←↑↓↔≈≠≤≥±×÷√∫∑∏∞∂]/.test(t)) return true;
+  if (/\b(Eₖ|K꜀|ΔG|sin|cos|tan|log|ln)\b/i.test(t) && /[=+\-*/^_0-9]/.test(t))
+    return true;
+  if (/[A-Za-z]\s*=\s*[^=]+/.test(t)) return true;
+  if (/H₂|O₂|H2O|NaCl|Ca²|SO₄|kJ\/mol|\bJ\b|\bΩ\b|m\/s/.test(t)) return true;
+  // Short fragment with digits+symbols and no sentence end → likely formula line
+  if (t.length < 60 && /[0-9]/.test(t) && /[+\-*/^()[\]{}]/.test(t)) return true;
+  return false;
+}
+
 function normalizeForCompare(s: string): string {
   return s
     .trim()
@@ -604,7 +651,7 @@ function parseAnswerKeyEntries(keyText: string): Map<number, string> {
   const out = new Map<number, string>();
   if (!keyText.trim()) return out;
   const re =
-    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*|প্রশ্ন\s*(?:নং\.?|No\.?)?\s*)?(\d+|[০-৯]+)\s*[\.\)\]:\-–—=ঃ]+\s*\(?\s*([A-Ea-e]|[কখগঘঙ]|[1-5]|[১-৫]|iv|IV|v|V|i{1,3}|I{1,3})\s*\)?(?![A-Za-z\u0980-\u09FF0-9])/g;
+    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*|প্রশ্ন\s*(?:নং\.?|No\.?)?\s*)?(\d+|[০-৯]+)\s*[\.\)\]:\-–—=ঃ।]+\s*\(?\s*([A-Ea-e]|[কখগঘঙ]|[1-5]|[১-৫]|iv|IV|v|V|i{1,3}|I{1,3})\s*\)?(?![A-Za-z\u0980-\u09FF0-9])/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(keyText)) !== null) {
     const numAscii = bnDigitsToAscii(m[1]);
@@ -692,9 +739,9 @@ export function parseStandaloneAnswerKey(rawText: string): StandaloneAnswerKeyRe
   const keyText = stripStandaloneKeyHeadings(rawText.replace(/\r\n/g, "\n"));
   if (!keyText.trim()) return { entries: out, order, duplicates, totalFound: 0 };
 
-  // 1) Explicit separator: "1. A", "2-B", "3: C", "4) D", "Q5: b", "১. খ"
+  // 1) Explicit separator: "1. A", "2-B", "3: C", "4) D", "Q5: b", "১. খ", "৫। ক"
   const sepRe =
-    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*|প্রশ্ন\s*(?:নং\.?|No\.?)?\s*)?(\d+|[০-৯]+)\s*[\.\)\]:\-–—=ঃ]+\s*\(?\s*([A-Ea-e]|[কখগঘঙ]|[1-5]|[১-৫]|iv|IV|v|V|i{1,3}|I{1,3})\s*\)?(?![A-Za-z\u0980-\u09FF0-9])/g;
+    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*|প্রশ্ন\s*(?:নং\.?|No\.?)?\s*)?(\d+|[০-৯]+)\s*[\.\)\]:\-–—=ঃ।]+\s*\(?\s*([A-Ea-e]|[কখগঘঙ]|[1-5]|[১-৫]|iv|IV|v|V|i{1,3}|I{1,3})\s*\)?(?![A-Za-z\u0980-\u09FF0-9])/g;
   // 2) Space-separated: "1 A", "2 b", "10 E" (letters only — numeric ambiguous)
   const spaceRe =
     /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*)?(\d+|[০-৯]+)\s+([A-Ea-e]|[কখগঘঙ])(?![A-Za-z\u0980-\u09FF0-9])/g;
@@ -1066,7 +1113,8 @@ function parseSingleBlock(blockText: string): ParsedPasteMcq {
       // We'll join with " " but for statements that are numeric, keep newline?
       // Simpler: join with "\n" if any line looks like statement, else " "
       const hasStatement = filtered.some((l) => isStatementLine(l));
-      if (hasStatement) {
+      const hasEquation = filtered.some((l) => isEquationContinuation(l));
+      if (hasStatement || hasEquation) {
         questionLines = filtered;
       } else {
         questionLines = [filtered.join(" ")];
@@ -1123,9 +1171,11 @@ function parseSingleBlock(blockText: string): ParsedPasteMcq {
     // If questionLines contains multiple statement lines, join with newline to preserve structure
     if (questionLines.length === 1) question = questionLines[0].replace(/\s+/g, " ").trim();
     else {
-      // Check if any line is statement-like (starts with number)
+      // Check if any line is statement-like (starts with number) or an
+      // equation continuation (physics/math multiline) → keep newlines.
       const hasStmt = questionLines.some((l) => isStatementLine(l));
-      if (hasStmt) question = questionLines.join("\n").replace(/[ \t]+\n/g, "\n").trim();
+      const hasEq = questionLines.some((l) => isEquationContinuation(l));
+      if (hasStmt || hasEq) question = questionLines.join("\n").replace(/[ \t]+\n/g, "\n").trim();
       else question = questionLines.join(" ").replace(/\s+/g, " ").trim();
     }
   }
@@ -1180,6 +1230,23 @@ function parseSingleBlock(blockText: string): ParsedPasteMcq {
     confidence,
     originalNumber,
   };
+}
+
+// True when a block contains 2+ inline option markers on the same line,
+// e.g. "ক) .. খ) .. গ) .. ঘ)" or "A. .. B. .. C. .. D. .." pasted without
+// newlines. Used to force the inline fallback even when statement-guard fires.
+function hasInlineOptionMarkers(blockText: string): boolean {
+  const re =
+    /(?:\(?\s*[A-Da-d]\s*\)?\s*[\.\)\:\-\—]\s+|\(?\s*[কখগঘ]\s*\)?\s*[\.\)\:\-।]?\s+|\(?\s*[1-4]\s*\)?\s*[\.\)\:\-]\s+|\(?\s*[১-৪]\s*\)?\s*[\.\)\:\-।]?\s+)/g;
+  let count = 0;
+  let m: RegExpExecArray | null;
+  re.lastIndex = 0;
+  while ((m = re.exec(blockText)) !== null) {
+    count++;
+    if (count >= 2) return true;
+    if (m[0].length === 0) re.lastIndex++;
+  }
+  return false;
 }
 
 // Fallback inline extraction for blocks where line-based fails (e.g., no newlines)
@@ -1238,6 +1305,18 @@ function parseSingleBlockInline(blockText: string): ParsedPasteMcq | null {
     matches.push({ start, end, label, style });
     if (m[0].length === 0) unifiedRe.lastIndex++;
   }
+  // Drop a leading question number mis-matched as numeric option ("1. Q? ..."):
+  // if the first marker sits at the very start and is numeric, and 2+ real
+  // letter options follow, it is the question header, not an option.
+  if (
+    matches.length >= 3 &&
+    matches[0].start <= 2 &&
+    (matches[0].style === "num" || matches[0].style === "bnNum")
+  ) {
+    const restStyles = matches.slice(1).map((x) => x.style);
+    const letterCount = restStyles.filter((s) => s === "en" || s === "bn").length;
+    if (letterCount >= 2) matches.shift();
+  }
   if (matches.length < 2) return null;
   // Find last consecutive group of 2-4 matches that are valid options
   // Take last up to 4 matches as candidate option group
@@ -1267,8 +1346,18 @@ function parseSingleBlockInline(blockText: string): ParsedPasteMcq | null {
   // Question text is from after header strip up to first candidateGroup start
   const firstOptStart = candidateGroup[0].start;
   let qTextRaw = textBeforeAnswer.slice(0, firstOptStart).trim();
-  // Strip leading question number or plain QUESTION:
-  const sh = stripQuestionHeader(qTextRaw);
+  // Strip leading question number. qTextRaw may be multi-line (physics/math
+  // stem) — strip the header from the FIRST line only, keep the rest.
+  const firstNl = qTextRaw.indexOf("\n");
+  const firstLine = firstNl >= 0 ? qTextRaw.slice(0, firstNl) : qTextRaw;
+  const restLines = firstNl >= 0 ? qTextRaw.slice(firstNl) : "";
+  const shFirst = stripQuestionHeader(firstLine);
+  const sh = shFirst
+    ? {
+        stripped: ((shFirst.stripped || "") + restLines).trim(),
+        header: shFirst.header,
+      }
+    : null;
   if (sh) {
     if (sh.stripped) qTextRaw = sh.stripped;
     else {
@@ -1280,8 +1369,12 @@ function parseSingleBlockInline(blockText: string): ParsedPasteMcq | null {
     const qm = qTextRaw.match(/^\s*QUESTION\s*[:\-]\s*(.*)$/i);
     if (qm) qTextRaw = (qm[1] ?? "").trim();
   }
-  // Clean question: remove extra spaces, keep statements if present
-  qTextRaw = qTextRaw.replace(/\s+/g, " ").trim();
+  // Clean question: preserve newlines for multi-line physics/math stems.
+  if (isEquationContinuation(qTextRaw) || qTextRaw.includes("\n")) {
+    qTextRaw = qTextRaw.replace(/[ \t]+\n/g, "\n").replace(/\n[ \t]+/g, "\n").trim();
+  } else {
+    qTextRaw = qTextRaw.replace(/\s+/g, " ").trim();
+  }
   // Resolve answer
   let correctIndex: number | null = null;
   let marks: number = 1;
@@ -1538,6 +1631,33 @@ function parseViaLineScan(text: string): ParsedPasteMcq[] {
         current.rawLines.push(line);
       }
     } else {
+      // After options: multi-line option continuation vs new question.
+      // Equation-like lines always continue the current block. Otherwise a
+      // plain line continues the last option when the option set is still
+      // INCOMPLETE (<4 filled) and the line does not look like a new
+      // question (no header, no ?/: /। ending). A complete 4-option set
+      // followed by text starts a new question (old behavior preserved).
+      if (isEquationContinuation(trimmed)) {
+        let last = -1;
+        for (let k = 3; k >= 0; k--) if (current.options[k]) { last = k; break; }
+        if (last >= 0) {
+          current.options[last] = `${current.options[last]} ${cleanOptionText(trimmed)}`.trim();
+          current.rawLines.push(line);
+          continue;
+        }
+      }
+      const filledOpts = current.options.filter((o) => o.trim()).length;
+      const looksLikeQuestion =
+        isQuestionHeaderLine(trimmed) || /[?:।]$/.test(trimmed) || trimmed.length > 150;
+      if (!looksLikeQuestion && filledOpts >= 1 && filledOpts < 4) {
+        let last = -1;
+        for (let k = 3; k >= 0; k--) if (current.options[k]) { last = k; break; }
+        if (last >= 0) {
+          current.options[last] = `${current.options[last]} ${cleanOptionText(trimmed)}`.trim();
+          current.rawLines.push(line);
+          continue;
+        }
+      }
       // After options, plain text likely starts new question
       flushCurrent();
       current = { questionLines: [trimmed], statements: [], options: ["", "", "", ""], correctIndex: null, explanation: "", marks: 1, rawLines: [line], originalNumber: null };
@@ -1557,7 +1677,11 @@ function parseViaLineScan(text: string): ParsedPasteMcq[] {
 
   return blocks.map((b) => {
     const blockText = b.rawLines.join("\n");
-    const baseQuestion = b.questionLines.join(" ").replace(/\s+/g, " ").trim();
+    // Preserve multi-line physics/math stems: equation lines keep newlines.
+    const hasEqLine = b.questionLines.some((l) => isEquationContinuation(l));
+    const baseQuestion = hasEqLine
+      ? b.questionLines.join("\n").replace(/[ \t]+\n/g, "\n").trim()
+      : b.questionLines.join(" ").replace(/\s+/g, " ").trim();
     const statementsText = b.statements.join("\n").trim();
     const question = statementsText ? (baseQuestion ? `${baseQuestion}\n${statementsText}` : statementsText) : baseQuestion;
     const marks = (b as any).marks ?? null;
@@ -1590,7 +1714,7 @@ function parseViaLineScan(text: string): ParsedPasteMcq[] {
 
 export function parsePastedMcqs(pastedText: string): ParsedPasteMcq[] {
   if (!pastedText || !pastedText.trim()) return [];
-  const normalized = pastedText.replace(/\r\n/g, "\n").trim();
+  const normalized = normalizePasteText(pastedText).trim();
   if (!normalized) return [];
 
   // ── Separate trailing Answer Key section (never parsed as questions) ──
@@ -1613,7 +1737,7 @@ export function parsePastedMcqs(pastedText: string): ParsedPasteMcq[] {
           const t = l.trim();
           return /^[A-Da-dকখগঘ(]/.test(t) && parseOptionLine(t, false) !== null;
         });
-        if (hasStatementLines && !hasADOptions) {
+        if (hasStatementLines && !hasADOptions && !hasInlineOptionMarkers(block)) {
           // This block has statements but no real A-D/Bangla options (e.g., "III. Third Q?" with I., II. statements only) — keep as is with missing options warning
           parsed.push(p);
         } else {
@@ -1637,7 +1761,7 @@ export function parsePastedMcqs(pastedText: string): ParsedPasteMcq[] {
         const rawLines = b.rawBlock.split("\n").map((l) => l.trim()).filter(Boolean);
         const hasStatementLines = rawLines.some((l) => isStatementLine(l));
         const hasADOptions = rawLines.some((l) => /^[A-Da-dকখগঘ(]/.test(l.trim()) && parseOptionLine(l, false) !== null);
-        if (hasStatementLines && !hasADOptions) return b;
+        if (hasStatementLines && !hasADOptions && !hasInlineOptionMarkers(b.rawBlock)) return b;
         const inline = parseSingleBlockInline(b.rawBlock);
         if (inline && inline.options.filter((o) => o.trim()).length >= 2) return inline;
       }
@@ -1653,6 +1777,66 @@ export function parsePastedMcqs(pastedText: string): ParsedPasteMcq[] {
   const inlineSingle = parseSingleBlockInline(text);
   if (inlineSingle && inlineSingle.options.filter((o) => o.trim()).length >= 2) return finish([inlineSingle]);
   return finish([single]);
+}
+
+// ── canonical formatter (Global Paste Formatter) ────────────────────────────
+// Takes ANY pasted MCQs and returns 100% detectable canonical text:
+//   Bangla:  ১। question\n(ক) ..\n(খ) ..\n(গ) ..\n(ঘ) ..\nসঠিক উত্তর: ঘ
+//   English: 1. question\nA. ..\nB. ..\nC. ..\nD. ..\nAnswer: B
+// Multi-line physics/math stems keep their equation lines with \n.
+export type CanonicalFormatLang = "bangla" | "english";
+
+const BN_NUMERALS = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+function toBnNumber(n: number): string {
+  return String(n)
+    .split("")
+    .map((d) => BN_NUMERALS[parseInt(d, 10)] ?? d)
+    .join("");
+}
+const BN_OPT_LABELS = ["ক", "খ", "গ", "ঘ"];
+const EN_OPT_LABELS = ["A", "B", "C", "D"];
+
+export function formatParsedToCanonical(
+  list: ParsedPasteMcq[],
+  lang: CanonicalFormatLang = "bangla",
+): string {
+  const bn = lang === "bangla";
+  return list
+    .map((p, i) => {
+      const n = i + 1;
+      const qNum = bn ? `${toBnNumber(n)}।` : `${n}.`;
+      const q = (p.question || "").trim();
+      const opts = [0, 1, 2, 3].map((k) => {
+        const label = bn ? `(${BN_OPT_LABELS[k]})` : `${EN_OPT_LABELS[k]}.`;
+        return `${label} ${(p.options[k] || "").trim()}`;
+      });
+      const ansLabel = p.correctIndex !== null && p.correctIndex >= 0 && p.correctIndex < 4
+        ? bn
+          ? BN_OPT_LABELS[p.correctIndex]
+          : EN_OPT_LABELS[p.correctIndex]
+        : "";
+      const ansLine = bn
+        ? ansLabel
+          ? `সঠিক উত্তর: ${ansLabel}`
+          : `সঠিক উত্তর: `
+        : ansLabel
+          ? `Answer: ${ansLabel}`
+          : `Answer: `;
+      return `${qNum} ${q}\n${opts.join("\n")}\n${ansLine}`;
+    })
+    .join("\n\n");
+}
+
+export function formatPastedToCanonical(
+  pastedText: string,
+  lang: CanonicalFormatLang = "bangla",
+): { formatted: string; detected: number; needsReview: number } {
+  const parsed = parsePastedMcqs(pastedText);
+  return {
+    formatted: formatParsedToCanonical(parsed, lang),
+    detected: parsed.length,
+    needsReview: parsed.filter((p) => p.needsReview).length,
+  };
 }
 
 export function recomputeParsedMcq(mcq: ParsedPasteMcq): ParsedPasteMcq {
