@@ -730,26 +730,44 @@ export default function ExamManager({
     }
   }
 
-  async function move(index: number, direction: -1 | 1) {
-    if (!exams) return;
-    const target = index + direction;
-    if (target < 0 || target >= exams.length) return;
-    const next = [...exams];
-    [next[index], next[target]] = [next[target], next[index]];
+  async function move(visibleIndex: number, direction: -1 | 1) {
+    if (!exams || busy) return;
+    // Reorder the VISIBLE (filtered) list — not the raw `exams` array.
+    // The old code swapped by raw index, so with Live/Practice or phase
+    // filters active it swapped with a hidden exam and the UI looked dead.
+    const visible = filteredByMode ?? exams;
+    const target = visibleIndex + direction;
+    if (target < 0 || target >= visible.length) return;
+    const nextVisible = [...visible];
+    [nextVisible[visibleIndex], nextVisible[target]] = [nextVisible[target]!, nextVisible[visibleIndex]!];
+    // Merge back into the full list: hidden exams stay in place, visible
+    // exams permute among the visible slots. Persist the full order so the
+    // global sort_order stays consistent.
+    const visibleIds = new Set(visible.map((item) => item.id));
+    const queue = [...nextVisible];
+    const nextExams = exams.map((item) =>
+      visibleIds.has(item.id) ? queue.shift()! : item,
+    );
+    const prev = exams;
+    setExams(nextExams);
     setBusy(true);
     setNotice(null);
     try {
       const response = await fetch("/api/admin/exams", {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...gate.headers },
-        body: JSON.stringify({ order: next.map((item) => item.id) }),
+        body: JSON.stringify({ order: nextExams.map((item) => item.id) }),
       });
       if (!response.ok) {
+        setExams(prev);
         setNotice({ kind: "error", text: "Failed to reorder." });
         return;
       }
       await load();
       setNotice({ kind: "success", text: "Exam order updated." });
+    } catch {
+      setExams(prev);
+      setNotice({ kind: "error", text: "Failed to reorder." });
     } finally {
       setBusy(false);
     }
@@ -918,10 +936,7 @@ export default function ExamManager({
                   <button
                     type="button"
                     disabled={busy || fIdx === 0}
-                    onClick={() => {
-                      const real = exams!.findIndex((e) => e.id === exam.id);
-                      if (real !== -1) void move(real, -1);
-                    }}
+                    onClick={() => void move(fIdx, -1)}
                     title="Move Up"
                     aria-label={`Move ${exam.title} up`}
                     className="rounded-xl border border-ink/15 bg-white px-3 py-2 text-xs font-black text-[#0b1e3a] transition hover:border-[#93c5fd] disabled:cursor-not-allowed disabled:opacity-30 admin-dark:border-[#1e3a65] admin-dark:bg-[#112544] admin-dark:text-white"
@@ -931,10 +946,7 @@ export default function ExamManager({
                   <button
                     type="button"
                     disabled={busy || fIdx === filteredByMode!.length - 1}
-                    onClick={() => {
-                      const real = exams!.findIndex((e) => e.id === exam.id);
-                      if (real !== -1) void move(real, 1);
-                    }}
+                    onClick={() => void move(fIdx, 1)}
                     title="Move Down"
                     aria-label={`Move ${exam.title} down`}
                     className="rounded-xl border border-ink/15 bg-white px-3 py-2 text-xs font-black text-[#0b1e3a] transition hover:border-[#93c5fd] disabled:cursor-not-allowed disabled:opacity-30 admin-dark:border-[#1e3a65] admin-dark:bg-[#112544] admin-dark:text-white"
