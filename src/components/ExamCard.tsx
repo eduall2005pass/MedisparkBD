@@ -6,26 +6,40 @@ import {
 } from "@/lib/public-exams";
 
 /**
- * Exam Card — single premium Upcoming design shared by ALL states.
+ * Exam Card — single premium design shared by ALL states.
  * Upcoming, Live and Practice render 100% IDENTICAL visuals (layout, size,
- * spacing, typography, colors, border, radius, shadow, icons, badge style,
- * premium appearance, responsive behavior). The ONLY differences are
- * state-specific text + functionality:
+ * spacing, typography, shape, icon style, border style, radius, shadow,
+ * hover effect, premium appearance, responsive behavior). The ONLY difference
+ * is the state color + state-specific text/functionality:
+ *
+ *   Upcoming → YELLOW + "Upcoming Exam" + "Coming Soon" (disabled, cannot start)
+ *   Live     → GREEN  + "Exam is Live Now" + "Start Exam" (blinking dot, starts live attempt)
+ *   Practice → BLUE   + "Practice Exam" + "Start Exam" (unranked practice attempt)
+ *
+ * The bottom CTA button keeps the EXACT SAME premium structure in every state
+ * (solid gradient, border width, white text, inset highlight, glow shadow,
+ * hover lift, focus ring) — only the hue tokens change (yellow / emerald /
+ * blue). Light + Dark Mode keep the SAME hue per state; theme-aware tweaks
+ * (exam-btn-*, exam-pill-*, exam-accent-*) only tune contrast so each color
+ * stays readable on both themes.
  *
  *   Upcoming → "Upcoming Exam" + "Coming Soon" (disabled, cannot start)
  *   Live     → "Exam is Live Now" + "Start Exam" (blinking dot, starts live attempt)
  *   Practice → "Practice Exam" + "Start Exam" (unranked practice attempt)
  *
- * Visual theme (all states): YELLOW / GOLD on a dark surface.
+ * Visual theme per state (same design, only hue changes):
+ *   Upcoming → YELLOW / GOLD on a dark surface.
+ *   Live     → EMERALD / GREEN (same structure, green tokens).
+ *   Practice → BLUE (same structure, blue tokens).
  * Live keeps a faster dot blink as its state-specific indicator behavior —
- * same yellow color, same size/position, only the pulse speed differs.
- * No green / blue / red chrome appears on Upcoming / Live / Practice cards.
+ * same size/position, only the pulse speed differs.
+ * No red chrome appears on Upcoming / Live / Practice cards.
  *
- * Single Upcoming gold theme (dark surface preserved): the yellow accent
- * extends through the entire card (outer border, ambient glow, gradient
- * wash, icons, CTA button) while the main surface stays dark to blend
- * with the MediSpark background. Closed/expired states keep their own
- * muted theme; Upcoming / Live / Practice are always gold.
+ * Single premium button design for ALL states (dark surface preserved): the
+ * state accent (yellow / green / blue) extends through the entire card
+ * (outer border, ambient glow, gradient wash, icons, CTA button) while the
+ * main surface stays dark to blend with the MediSpark background.
+ * Closed/expired states keep their own muted theme.
  *
  * Schedule visibility: the "পরীক্ষায় অংশগ্রহণের সময়সূচি" section renders
  * for ALL states (Upcoming / Live / Practice) — it is gated ONLY on the
@@ -179,52 +193,52 @@ const phaseMeta: Record<
     action: "Coming Soon",
     accentBar: "from-yellow-500/80 via-yellow-500/20 to-transparent",
     ring: "hover:border-yellow-400/50",
-    icon: "border-yellow-500/30 bg-yellow-600/10 text-yellow-500",
-    accentText: "text-yellow-500",
+    icon: "border-yellow-500/30 bg-yellow-600/10 exam-accent-upcoming",
+    accentText: "exam-accent-upcoming",
     divider: "via-yellow-500/40",
     glow: "bg-yellow-600/10 group-hover:bg-yellow-600/20",
-    btn: "border border-yellow-300/40 bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-600 text-white shadow-[0_12px_32px_-10px_rgba(234,179,8,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] hover:from-yellow-200 hover:via-yellow-500 hover:to-yellow-600 hover:shadow-[0_16px_36px_-10px_rgba(234,179,8,0.7),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+    btn: "exam-btn-upcoming border border-yellow-300/40 bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-600 text-white shadow-[0_12px_32px_-10px_rgba(234,179,8,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] hover:from-yellow-200 hover:via-yellow-500 hover:to-yellow-600 hover:shadow-[0_16px_36px_-10px_rgba(234,179,8,0.7),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
     cardBorder: "border-yellow-400/30",
     cardShadow: "shadow-yellow-950/30",
     wash: "from-yellow-500/[0.07] via-transparent to-transparent",
     panel: "border-yellow-500/20 bg-yellow-500/[0.05]",
     disabledBtn:
-      "border border-yellow-400/30 bg-gradient-to-b from-yellow-500/[0.16] to-yellow-600/[0.08] text-yellow-100/80 shadow-[0_10px_28px_-12px_rgba(234,179,8,0.5),inset_0_1px_0_rgba(255,255,255,0.15)]",
+      "exam-btn-upcoming border border-yellow-300/40 bg-gradient-to-b from-yellow-300 via-yellow-500 to-yellow-600 text-white shadow-[0_12px_32px_-10px_rgba(234,179,8,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] hover:from-yellow-200 hover:via-yellow-500 hover:to-yellow-600 hover:shadow-[0_16px_36px_-10px_rgba(234,179,8,0.7),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent cursor-not-allowed",
   },
   live: {
     badge: "Exam is Live Now",
     dotClass: "exam-dot exam-dot-live",
-    label: "border-yellow-400/50 bg-yellow-500/10 exam-pill-upcoming",
+    label: "border-emerald-400/50 bg-emerald-500/10 exam-pill-live",
     action: "Start Exam",
-    accentBar: "from-yellow-500/80 via-yellow-500/20 to-transparent",
-    ring: "hover:border-yellow-400/50",
-    icon: "border-yellow-500/30 bg-yellow-600/10 text-yellow-500",
-    accentText: "text-yellow-500",
-    divider: "via-yellow-500/40",
-    glow: "bg-yellow-600/10 group-hover:bg-yellow-600/20",
-    btn: "border border-yellow-400/30 bg-gradient-to-b from-yellow-500/[0.16] to-yellow-600/[0.08] text-yellow-100/80 shadow-[0_10px_28px_-12px_rgba(234,179,8,0.5),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-yellow-500/[0.24] hover:to-yellow-600/[0.14] hover:text-yellow-50 hover:shadow-[0_14px_32px_-12px_rgba(234,179,8,0.65),inset_0_1px_0_rgba(255,255,255,0.2)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent cursor-pointer",
-    cardBorder: "border-yellow-400/30",
-    cardShadow: "shadow-yellow-950/30",
-    wash: "from-yellow-500/[0.07] via-transparent to-transparent",
-    panel: "border-yellow-500/20 bg-yellow-500/[0.05]",
+    accentBar: "from-emerald-500/80 via-emerald-500/20 to-transparent",
+    ring: "hover:border-emerald-400/50",
+    icon: "border-emerald-500/30 bg-emerald-600/10 exam-accent-live",
+    accentText: "exam-accent-live",
+    divider: "via-emerald-500/40",
+    glow: "bg-emerald-600/10 group-hover:bg-emerald-600/20",
+    btn: "exam-btn-live border border-emerald-300/40 bg-gradient-to-b from-emerald-300 via-emerald-500 to-emerald-600 text-white shadow-[0_12px_32px_-10px_rgba(16,185,129,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] hover:from-emerald-200 hover:via-emerald-500 hover:to-emerald-600 hover:shadow-[0_16px_36px_-10px_rgba(16,185,129,0.7),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent cursor-pointer",
+    cardBorder: "border-emerald-400/30",
+    cardShadow: "shadow-emerald-950/30",
+    wash: "from-emerald-500/[0.07] via-transparent to-transparent",
+    panel: "border-emerald-500/20 bg-emerald-500/[0.05]",
     disabledBtn: "border-ink/10 bg-dark-850 text-neutral-400",
   },
   practice: {
     badge: "Practice Exam",
     dotClass: "exam-dot exam-dot-practice",
-    label: "border-yellow-400/50 bg-yellow-500/10 exam-pill-upcoming",
+    label: "border-blue-400/50 bg-blue-500/10 exam-pill-practice",
     action: "Start Exam",
-    accentBar: "from-yellow-500/80 via-yellow-500/20 to-transparent",
-    ring: "hover:border-yellow-400/50",
-    icon: "border-yellow-500/30 bg-yellow-600/10 text-yellow-500",
-    accentText: "text-yellow-500",
-    divider: "via-yellow-500/40",
-    glow: "bg-yellow-600/10 group-hover:bg-yellow-600/20",
-    btn: "border border-yellow-400/30 bg-gradient-to-b from-yellow-500/[0.16] to-yellow-600/[0.08] text-yellow-100/80 shadow-[0_10px_28px_-12px_rgba(234,179,8,0.5),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-yellow-500/[0.24] hover:to-yellow-600/[0.14] hover:text-yellow-50 hover:shadow-[0_14px_32px_-12px_rgba(234,179,8,0.65),inset_0_1px_0_rgba(255,255,255,0.2)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-yellow-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent cursor-pointer",
-    cardBorder: "border-yellow-400/30",
-    cardShadow: "shadow-yellow-950/30",
-    wash: "from-yellow-500/[0.07] via-transparent to-transparent",
-    panel: "border-yellow-500/20 bg-yellow-500/[0.05]",
+    accentBar: "from-blue-500/80 via-blue-500/20 to-transparent",
+    ring: "hover:border-blue-400/50",
+    icon: "border-blue-500/30 bg-blue-600/10 exam-accent-practice",
+    accentText: "exam-accent-practice",
+    divider: "via-blue-500/40",
+    glow: "bg-blue-600/10 group-hover:bg-blue-600/20",
+    btn: "exam-btn-practice border border-blue-300/40 bg-gradient-to-b from-blue-300 via-blue-500 to-blue-600 text-white shadow-[0_12px_32px_-10px_rgba(59,130,246,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] hover:from-blue-200 hover:via-blue-500 hover:to-blue-600 hover:shadow-[0_16px_36px_-10px_rgba(59,130,246,0.7),inset_0_1px_0_rgba(255,255,255,0.4)] hover:-translate-y-px active:translate-y-0 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent cursor-pointer",
+    cardBorder: "border-blue-400/30",
+    cardShadow: "shadow-blue-950/30",
+    wash: "from-blue-500/[0.07] via-transparent to-transparent",
+    panel: "border-blue-500/20 bg-blue-500/[0.05]",
     disabledBtn: "border-ink/10 bg-dark-850 text-neutral-400",
   },
   closed: {
@@ -348,9 +362,9 @@ export default function ExamCard({
     phase !== "idle";
   const href = detailsHref ?? `/exam/${exam.id}`;
 
-  // Single Upcoming visual theme for ALL states — only text/functionality
-  // differ. Live keeps its faster dot blink via CSS (same yellow color).
-  const accentText = "text-yellow-500";
+  // State-tinted accent (yellow / green / blue) — same size/position/usage in
+  // every state, only the hue changes. Theme-aware via exam-accent-* classes.
+  const accentText = meta.accentText;
 
   const buttonBase =
     "w-full rounded-2xl px-6 py-3.5 text-[15px] font-extrabold tracking-wide touch-manipulation select-none transform-gpu will-change-transform transition-all duration-200 ease-out active:scale-[0.98]";
@@ -424,7 +438,7 @@ export default function ExamCard({
         <ExamWindow exam={exam} accentText={accentText} />
 
         {isPostLivePractice && (
-          <p className="exam-practice-note mt-3 rounded-lg border border-yellow-400/25 bg-yellow-500/10 px-3 py-2 text-[11px] font-semibold leading-relaxed">
+          <p className="exam-practice-note mt-3 rounded-lg border border-blue-400/25 bg-blue-500/10 px-3 py-2 text-[11px] font-semibold leading-relaxed">
             Live window ended — practice attempts won&apos;t affect the
             leaderboard.
           </p>

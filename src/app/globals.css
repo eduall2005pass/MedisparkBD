@@ -276,9 +276,9 @@ html:not(:has([data-admin-theme]))[data-button-style="square"] button {
 }
 
 /* ============ Exam Card status indicator — smooth premium pulse/glow ============ */
-/* Single Upcoming (yellow/gold) visual theme for Upcoming / Live / Practice.
- * Same size/position/color in every state; only the Live pulse speed differs
- * (Live blinks faster as its state-specific indicator behavior). */
+/* State colors: Upcoming = yellow, Live = green, Practice = blue.
+ * Same size/position in every state; only the hue changes (Live blinks
+ * faster as its state-specific indicator behavior). */
 .exam-dot {
   height: 6px;
   width: 6px;
@@ -295,13 +295,13 @@ html:not(:has([data-admin-theme]))[data-button-style="square"] button {
   animation: exam-dot-pulse 1.8s ease-in-out infinite;
 }
 .exam-dot-live {
-  background: #eab308;
-  box-shadow: 0 0 6px 1px rgb(234 179 8 / 0.7);
+  background: #10b981;
+  box-shadow: 0 0 6px 1px rgb(16 185 129 / 0.7);
   animation: exam-dot-pulse 1.2s ease-in-out infinite;
 }
 .exam-dot-practice {
-  background: #eab308;
-  box-shadow: 0 0 6px 1px rgb(234 179 8 / 0.7);
+  background: #3b82f6;
+  box-shadow: 0 0 6px 1px rgb(59 130 246 / 0.7);
   animation: exam-dot-pulse 1.8s ease-in-out infinite;
 }
 .exam-dot-closed {
@@ -311,13 +311,44 @@ html:not(:has([data-admin-theme]))[data-button-style="square"] button {
 @media (prefers-reduced-motion: reduce) {
   .exam-dot-upcoming, .exam-dot-live, .exam-dot-practice { animation: none; }
 }
-/* Theme-safe pill text — readable in both Dark and Light mode. */
+/* Theme-safe pill text — same hue per state in both themes, only the shade
+ * is tuned so text stays readable on dark AND light card surfaces. */
 .exam-pill-upcoming { color: #a16207; }
 html[data-theme="dark"] .exam-pill-upcoming { color: #fde047; }
-.exam-pill-practice { color: #a16207; }
-html[data-theme="dark"] .exam-pill-practice { color: #fde047; }
-.exam-practice-note { color: #a16207; }
-html[data-theme="dark"] .exam-practice-note { color: rgba(253, 224, 71, 0.9); }
+.exam-pill-live { color: #047857; }
+html[data-theme="dark"] .exam-pill-live { color: #6ee7b7; }
+.exam-pill-practice { color: #1d4ed8; }
+html[data-theme="dark"] .exam-pill-practice { color: #93c5fd; }
+/* Theme-safe state accent text (card icons, schedule arrow) — same hue per
+ * state in both themes, shade tuned for contrast on each surface. */
+.exam-accent-upcoming { color: #a16207; }
+html[data-theme="dark"] .exam-accent-upcoming { color: #facc15; }
+.exam-accent-live { color: #047857; }
+html[data-theme="dark"] .exam-accent-live { color: #34d399; }
+.exam-accent-practice { color: #1d4ed8; }
+html[data-theme="dark"] .exam-accent-practice { color: #60a5fa; }
+.exam-practice-note { color: #1e40af; }
+html[data-theme="dark"] .exam-practice-note { color: rgba(147, 197, 253, 0.9); }
+/* Premium CTA buttons — identical design across states (solid gradient,
+ * white text, inset highlight, glow shadow, hover lift); only the hue
+ * differs. A subtle text-shadow keeps white text readable on the bright
+ * yellow gradient in BOTH themes. Light-mode overrides deepen the edge
+ * border + glow so the button stays defined on light card surfaces. */
+.exam-btn-upcoming, .exam-btn-live, .exam-btn-practice {
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+}
+html[data-theme="light"] .exam-btn-upcoming {
+  border-color: rgb(202 138 4 / 0.6);
+  box-shadow: 0 12px 32px -10px rgb(202 138 4 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+html[data-theme="light"] .exam-btn-live {
+  border-color: rgb(4 120 87 / 0.6);
+  box-shadow: 0 12px 32px -10px rgb(4 120 87 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
+html[data-theme="light"] .exam-btn-practice {
+  border-color: rgb(29 78 216 / 0.6);
+  box-shadow: 0 12px 32px -10px rgb(29 78 216 / 0.5), inset 0 1px 0 rgb(255 255 255 / 0.35);
+}
 .exam-result-btn { color: #047857; }
 html[data-theme="dark"] .exam-result-btn { color: #a7f3d0; }
 
