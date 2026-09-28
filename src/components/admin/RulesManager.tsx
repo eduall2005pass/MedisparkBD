@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { useAdminGate, cardClass, inputClass, labelClass, buttonSecondaryClass } from "@/components/admin/admin-ui";
 import { AccessLoading } from "@/components/auth/AccessGuard";
 import { useAuth } from "@/lib/auth-context";
+import {
+  BD_PHONE_MESSAGE,
+  EMAIL_MESSAGE,
+  URL_MESSAGE,
+  TXN_ID_MESSAGE,
+} from "@/lib/form-validation";
 
 type DocItem = {
   id: string;
@@ -20,6 +26,69 @@ type DocSection = {
   intro: string;
   items: DocItem[];
 };
+
+/**
+ * Whole-website accepted input formats (single source of truth lives in
+ * `@/lib/form-validation` — the same validators every form enforces).
+ * Shown here so admins know exactly what passes validation on any page.
+ */
+const INPUT_FORMATS: Array<{
+  field: string;
+  format: string;
+  accepted: string[];
+  rejected: string[];
+  message: string;
+}> = [
+  {
+    field: "Mobile Number",
+    format: "+8801XXXXXXXXX (operator digit 3–9)",
+    accepted: ["01712345678", "8801712345678", "+8801712345678", "০১৭১২৩৪৫৬৭৮"],
+    rejected: ["01212345678", "0171234567", "02234567890"],
+    message: BD_PHONE_MESSAGE,
+  },
+  {
+    field: "Email",
+    format: "name@example.com",
+    accepted: ["student@gmail.com", "a@b.co"],
+    rejected: ["bad@", "no-at.com"],
+    message: EMAIL_MESSAGE,
+  },
+  {
+    field: "Link / URL",
+    format: "https://… or site path /contact",
+    accepted: ["https://facebook.com/xyz", "/contact", "facebook.com/xyz"],
+    rejected: ["nota url!!", "javascript:alert(1)"],
+    message: URL_MESSAGE,
+  },
+  {
+    field: "Transaction ID (bKash/Nagad)",
+    format: "4–64 chars, letters/digits/-/_",
+    accepted: ["8N7DQK2XLM", "TXN-1234_AB"],
+    rejected: ["ab", "has space"],
+    message: TXN_ID_MESSAGE,
+  },
+  {
+    field: "Coupon Code",
+    format: "2–32 chars, UPPERCASE letters/digits/-/_",
+    accepted: ["HSC28", "MEDI-50"],
+    rejected: ["x", "has space"],
+    message: "Coupon auto-uppercases (hsc28 → HSC28).",
+  },
+  {
+    field: "Full Name",
+    format: "2–100 chars, Bangla/English letters only",
+    accepted: ["রহিম উদ্দিন", "Siam Ahmed"],
+    rejected: ["A", "Name123"],
+    message: "Letters (EN/BN), spaces, dots, apostrophes, dashes.",
+  },
+  {
+    field: "Date & Time",
+    format: "YYYY-MM-DDTHH:mm",
+    accepted: ["2026-09-28T10:30"],
+    rejected: ["28-09-2026", "2026-13-99T99:99"],
+    message: "Use the calendar picker — manual text must match the format.",
+  },
+];
 
 /**
  * Read-only internal reference viewer: "how the whole website functions".
@@ -157,6 +226,29 @@ export default function RulesManager({ standalone = false }: { standalone?: bool
             </select>
           </div>
         </div>
+      </div>
+
+      <div className={`${cardClass} mt-4 p-4`}>
+        <h2 className="text-sm font-extrabold text-[#0b1e3a] admin-dark:text-white">Supported Input Formats</h2>
+        <p className="mt-0.5 text-xs text-slate-500">
+          সারা ওয়েবসাইটে এই format-গুলো লিখলে input validate হবে — ভুল format-এ error দেখাবে।
+        </p>
+        <ul className="mt-3 space-y-2">
+          {INPUT_FORMATS.map((f) => (
+            <li key={f.field} className="rounded-xl border border-neutral-200 p-3 admin-dark:border-zinc-700">
+              <p className="text-xs font-extrabold text-[#0b1e3a] admin-dark:text-zinc-100">
+                {f.field} <span className="ml-1 font-mono font-bold text-primary-600">{f.format}</span>
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-emerald-600 admin-dark:text-emerald-400">
+                ✓ {f.accepted.join(" · ")}
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-red-500">
+                ✕ {f.rejected.join(" · ")}
+              </p>
+              <p className="mt-1 text-[11px] text-slate-500">{f.message}</p>
+            </li>
+          ))}
+        </ul>
       </div>
 
       {loading ? (
