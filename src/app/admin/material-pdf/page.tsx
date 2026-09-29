@@ -14,6 +14,8 @@ import {
   lineSpacingFactor,
 } from "@/components/admin/MaterialPdf/pagination";
 import CqPdfGenerator from "@/components/admin/MaterialPdf/CqPdfGenerator";
+import ExamSourcePicker from "@/components/admin/MaterialPdf/ExamSourcePicker";
+import { useAdminGate } from "@/components/admin/admin-ui";
 
 type Step = "paste" | "preview";
 
@@ -61,6 +63,11 @@ function fileToDataUrl(file: File): Promise<string> {
 
 export default function MaterialPdfGeneratorPage() {
   const { user, authLoading } = useAuth();
+  const gate = useAdminGate();
+  const authHeaders = useMemo(
+    () => (gate.ready ? gate.headers : {}),
+    [gate.ready, gate.headers],
+  );
   const [mode, setMode] = useState<GeneratorMode>("select");
   const [materialName, setMaterialName] = useState("");
   const [subtitle, setSubtitle] = useState("MCQ Practice Material");
@@ -208,6 +215,30 @@ export default function MaterialPdfGeneratorPage() {
     setToast(
       `${sanitized.filter((q) => !q.isStandaloneImage).length} questions detected & formatted (1..${sanitized.filter((q) => !q.isStandaloneImage).length})${topicCount > 1 ? ` • ${topicCount} topics` : ""}`,
     );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  /** Load questions from an uploaded exam (draft/published) into the A4 preview. */
+  const handleExamLoad = (
+    loaded: PdfMaterialQuestion[],
+    examTitle: string,
+    loadMode: "replace" | "append",
+  ) => {
+    if (loaded.length === 0) {
+      setToast("This exam has no usable questions.");
+      return;
+    }
+    if (loadMode === "append" && questions.length > 0) {
+      const merged = sanitizeQuestions([...questions, ...loaded]);
+      setQuestions(merged);
+      setDetection({ total: merged.filter((q) => !q.isStandaloneImage).length });
+      setToast(`${loaded.length} questions appended from "${examTitle}"`);
+    } else {
+      setQuestions(loaded);
+      setDetection({ total: loaded.filter((q) => !q.isStandaloneImage).length });
+      if (!materialName.trim() && examTitle.trim()) setMaterialName(examTitle.trim());
+      setToast(`${loaded.length} questions loaded from "${examTitle}" — edit & Generate PDF`);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -844,6 +875,23 @@ export default function MaterialPdfGeneratorPage() {
           />
         </div>
 
+        {/* 2. From Uploaded Exam (Draft / Published) */}
+        <div className="mt-6 rounded-2xl border border-[#dbeafe] bg-white p-4 sm:p-6 shadow-sm admin-dark:border-[#1e3a65] admin-dark:bg-[#112544]">
+          <label className="text-sm font-extrabold text-[#0b1e3a] admin-dark:text-white">
+            2. From Uploaded Exam <span className="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 admin-dark:bg-emerald-900/30 admin-dark:text-emerald-300">NEW</span>
+          </label>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500 admin-dark:text-[#8da0c0]">
+            Paste না করে uploaded/added exam থেকেও PDF বানানো যাবে — Draft / Published filter করো, search করে dropdown থেকে exam select করে Load দাও। নিচের A4 preview-এ edit করে Generate PDF।
+          </p>
+          <div className="mt-3">
+            {gate.ready ? (
+              <ExamSourcePicker authHeaders={authHeaders} onLoad={handleExamLoad} />
+            ) : (
+              <p className="text-xs text-slate-400">Checking admin access…</p>
+            )}
+          </div>
+        </div>
+
         {/* 4. Watermark Logo */}
         <div className="mt-6 rounded-2xl border border-[#dbeafe] bg-white p-4 sm:p-6 shadow-sm admin-dark:border-[#1e3a65] admin-dark:bg-[#112544]">
           <label className="text-sm font-extrabold text-[#0b1e3a] admin-dark:text-white">4. Watermark Logo</label>
@@ -980,7 +1028,7 @@ export default function MaterialPdfGeneratorPage() {
 
         {/* 2. Paste MCQs + 3. Detect & Format */}
         <div className="mt-6 rounded-2xl border border-[#dbeafe] bg-white p-4 sm:p-6 shadow-sm admin-dark:border-[#1e3a65] admin-dark:bg-[#112544]">
-          <label className="text-sm font-extrabold text-[#0b1e3a] admin-dark:text-white">2. Paste MCQs</label>
+          <label className="text-sm font-extrabold text-[#0b1e3a] admin-dark:text-white">3. Paste MCQs (alternative)</label>
           <p className="mt-1 text-xs leading-relaxed text-slate-500 admin-dark:text-[#8da0c0]">
             Paste 10 / 20 / 50 / 100+ MCQs at once. Any numbering (25, 31, 47…) will be auto-renumbered to 1,2,3… Bangla + English mixed, Unicode fully supported.
           </p>
