@@ -22,7 +22,15 @@ type ExamQuestionRow = {
   options?: unknown;
   correctIndex?: number | null;
   explanation?: string | null;
+  hasVariant?: boolean;
+  order?: number;
 };
+
+type LangVersion = "bangla" | "english";
+type SetLabel = "A" | "B";
+
+const VERSIONS: LangVersion[] = ["bangla", "english"];
+const SETS: SetLabel[] = ["A", "B"];
 
 type StatusFilter = "all" | "draft" | "published";
 
@@ -60,9 +68,29 @@ export default function ExamSourcePicker({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [selectedId, setSelectedId] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [langVersion, setLangVersion] = useState<LangVersion>("bangla");
+  const [setLabel, setSetLabel] = useState<SetLabel>("A");
+  const [coverage, setCoverage] = useState<Record<string, number> | null>(null);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [questionsError, setQuestionsError] = useState<string | null>(null);
+  const [loadedSource, setLoadedSource] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+
+  const mapRows = (rows: ExamQuestionRow[], examId: string): PdfMaterialQuestion[] =>
+    rows.map((row, idx) => ({
+      id: uid(`exam-${examId}`),
+      qNumber: idx + 1,
+      question: row.question ?? "",
+      options: toOptions(row.options),
+      answer: answerLetter(row.correctIndex),
+      needsReview: false,
+      issues: [],
+      image: row.questionImage
+        ? { dataUrl: row.questionImage, name: `exam-image-${idx + 1}`, widthPercent: 100 }
+        : null,
+      isStandaloneImage: false,
+      topic: row.subject?.trim() ? row.subject.trim() : undefined,
+    }));
 
   // Close dropdown on outside click.
   useEffect(() => {
@@ -121,38 +149,89 @@ export default function ExamSourcePicker({
     };
   }, [exams]);
 
+  // Variant coverage for the selected exam (which version/set actually has content).
+  useEffect(() => {
+    if (!selectedId) {
+      setCoverage(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/admin/exams/variants?examId=${encodeURIComponent(selectedId)}`, {
+      cache: "no-store",
+      headers: authHeaders,
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { coverage?: Record<string, number> } | null) => {
+        if (!cancelled && data?.coverage) setCoverage(data.coverage);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  const fetchUsable = async (
+    examId: string,
+    version: LangVersion,
+    set: SetLabel,
+  ): Promise<ExamQuestionRow[]> => {
+    const res = await fetch(
+      `/api/admin/exams/questions?examId=${encodeURIComponent(examId)}&version=${version}&set=${set}`,
+      { cache: "no-store", headers: authHeaders },
+    );
+    if (!res.ok) throw new Error("Failed to load exam questions.");
+    const data = (await res.json()) as { questions?: ExamQuestionRow[] };
+    const rows = data.questions ?? [];
+    // Skip empty placeholder slots (no text and no image).
+    return rows.filter(
+      (row) => (row.question ?? "").trim().length > 0 || row.questionImage,
+    );
+  };
+
   const handleLoad = async (mode: "replace" | "append") => {
     if (!selected || loadingQuestions) return;
     setLoadingQuestions(true);
     setQuestionsError(null);
+    setLoadedSource(null);
     try {
-      const res = await fetch(
-        `/api/admin/exams/questions?examId=${encodeURIComponent(selected.id)}`,
-        { cache: "no-store", headers: authHeaders },
-      );
-      if (!res.ok) throw new Error("Failed to load exam questions.");
-      const data = (await res.json()) as { questions?: ExamQuestionRow[] };
-      const rows = data.questions ?? [];
-      // Skip empty placeholder slots (no text and no image).
-      const usable = rows.filter(
-        (row) => (row.question ?? "").trim().length > 0 || row.questionImage,
-      );
+      // Base slots are often empty placeholders — content lives in the
+      // version/set variants. Try the chosen combo first, then auto-fallback
+      // to whichever combo actually holds the most usable questions.
+      let usable = await fetchUsable(selected.id, langVersion, setLabel);
+      let usedVersion = langVersion;
+      let usedSet = setLabel;
+      if (usable.length === 0) {
+        let best: ExamQuestionRow[] = [];
+        let bestKey = "";
+        for (const v of VERSIONS) {
+          for (const s of SETS) {
+            if (v === langVersion && s === setLabel) continue;
+            try {
+              // eslint-disable-next-line no-await-in-loop
+              const rows = await fetchUsable(selected.id, v, s);
+              if (rows.length > best.length) {
+                best = rows;
+                bestKey = `${v}/${s}`;
+              }
+            } catch {
+              // Try next combo.
+            }
+          }
+        }
+        if (best.length > 0) {
+          usable = best;
+          const [bv, bs] = bestKey.split("/");
+          if (bv === "bangla" || bv === "english") setLangVersion(bv);
+          if (bs === "A" || bs === "B") setSetLabel(bs);
+          usedVersion = (bv as LangVersion) ?? langVersion;
+          usedSet = (bs as SetLabel) ?? setLabel;
+        }
+      }
       if (usable.length === 0) throw new Error("This exam has no questions yet.");
-      const mapped: PdfMaterialQuestion[] = usable.map((row, idx) => ({
-        id: uid(`exam-${selected.id}`),
-        qNumber: idx + 1,
-        question: row.question ?? "",
-        options: toOptions(row.options),
-        answer: answerLetter(row.correctIndex),
-        needsReview: false,
-        issues: [],
-        image: row.questionImage
-          ? { dataUrl: row.questionImage, name: `exam-image-${idx + 1}`, widthPercent: 100 }
-          : null,
-        isStandaloneImage: false,
-        topic: row.subject?.trim() ? row.subject.trim() : undefined,
-      }));
+      const mapped = mapRows(usable, selected.id);
       onLoad(sanitizeQuestions(mapped), selected.title, mode);
+      setLoadedSource(`${usedVersion}/${usedSet} • ${usable.length} Q`);
       setDropdownOpen(false);
     } catch (e) {
       setQuestionsError(e instanceof Error ? e.message : "Failed to load exam questions.");
@@ -279,32 +358,68 @@ export default function ExamSourcePicker({
         )}
       </div>
 
-      {/* Selected exam + load actions */}
+      {/* Selected exam + version/set + load actions */}
       {selected && (
-        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-[#dbeafe] bg-[#f8fafc] p-3 admin-dark:border-[#1e3a65] admin-dark:bg-[#0a162e]">
-          <span className="min-w-0 flex-1 text-xs font-bold text-slate-700 admin-dark:text-white">
-            <span className="bangla">{selected.title}</span>
-            <span className="ml-2 font-normal text-slate-500">
-              {typeof selected.questionCount === "number" ? `${selected.questionCount} questions` : ""}
-              {selected.subject ? ` • ${selected.subject}` : ""}
+        <div className="mt-3 rounded-xl border border-[#dbeafe] bg-[#f8fafc] p-3 admin-dark:border-[#1e3a65] admin-dark:bg-[#0a162e]">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-0 flex-1 text-xs font-bold text-slate-700 admin-dark:text-white">
+              <span className="bangla">{selected.title}</span>
+              <span className="ml-2 font-normal text-slate-500">
+                {typeof selected.questionCount === "number" ? `${selected.questionCount} slots` : ""}
+                {selected.subject ? ` • ${selected.subject}` : ""}
+              </span>
             </span>
-          </span>
-          <button
-            type="button"
-            onClick={() => void handleLoad("replace")}
-            disabled={loadingQuestions}
-            className="rounded-xl bg-[#0b1e3a] px-4 py-2 text-xs font-extrabold text-white shadow hover:bg-[#123060] disabled:opacity-40 admin-dark:bg-[#234e9f]"
-          >
-            {loadingQuestions ? "Loading…" : "Load → Replace"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleLoad("append")}
-            disabled={loadingQuestions}
-            className="rounded-xl border border-[#cbd5e1] bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
-          >
-            + Append
-          </button>
+            <label className="flex items-center gap-1 text-[11px] font-bold text-slate-600 admin-dark:text-slate-300">
+              Version
+              <select
+                value={langVersion}
+                onChange={(e) => setLangVersion(e.target.value as LangVersion)}
+                className="rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-bold text-[#0b1e3a] outline-none admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
+              >
+                <option value="bangla">Bangla</option>
+                <option value="english">English</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-1 text-[11px] font-bold text-slate-600 admin-dark:text-slate-300">
+              Set
+              <select
+                value={setLabel}
+                onChange={(e) => setSetLabel(e.target.value as SetLabel)}
+                className="rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-bold text-[#0b1e3a] outline-none admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
+              >
+                <option value="A">A</option>
+                <option value="B">B</option>
+              </select>
+            </label>
+          </div>
+          {coverage && (
+            <p className="mt-1.5 text-[11px] text-slate-500 admin-dark:text-slate-400">
+              Content: Bangla/A {coverage["bangla:A"] ?? 0} • Bangla/B {coverage["bangla:B"] ?? 0} • English/A {coverage["english:A"] ?? 0} • English/B {coverage["english:B"] ?? 0}
+            </p>
+          )}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleLoad("replace")}
+              disabled={loadingQuestions}
+              className="rounded-xl bg-[#0b1e3a] px-4 py-2 text-xs font-extrabold text-white shadow hover:bg-[#123060] disabled:opacity-40 admin-dark:bg-[#234e9f]"
+            >
+              {loadingQuestions ? "Loading…" : "Load → Replace"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleLoad("append")}
+              disabled={loadingQuestions}
+              className="rounded-xl border border-[#cbd5e1] bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
+            >
+              + Append
+            </button>
+            {loadedSource && (
+              <span className="text-[11px] font-bold text-emerald-700 admin-dark:text-emerald-300">
+                Loaded {loadedSource}
+              </span>
+            )}
+          </div>
         </div>
       )}
       {questionsError && (
