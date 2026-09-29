@@ -34,16 +34,30 @@ const SETS: SetLabel[] = ["A", "B"];
 
 type StatusFilter = "all" | "draft" | "published";
 
-function answerLetter(idx: number | null | undefined): string {
-  if (idx === 0) return "A";
-  if (idx === 1) return "B";
-  if (idx === 2) return "C";
-  if (idx === 3) return "D";
+function answerLetter(idx: number | string | null | undefined): string {
+  if (idx === null || idx === undefined) return "";
+  // Base rows may carry the index as a numeric string; normalize before compare.
+  const n = typeof idx === "string" ? Number(idx.trim()) : Number(idx);
+  if (n === 0) return "A";
+  if (n === 1) return "B";
+  if (n === 2) return "C";
+  if (n === 3) return "D";
   return "";
 }
 
 function toOptions(raw: unknown): [string, string, string, string] {
-  const arr = Array.isArray(raw) ? raw.map(String) : [];
+  let arr: string[] = [];
+  if (Array.isArray(raw)) {
+    arr = raw.map(String);
+  } else if (typeof raw === "string" && raw.trim()) {
+    // Defensive: options sometimes arrive as a JSON string (legacy callers).
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) arr = parsed.map(String);
+    } catch {
+      arr = [];
+    }
+  }
   return [arr[0] ?? "", arr[1] ?? "", arr[2] ?? "", arr[3] ?? ""];
 }
 
@@ -150,9 +164,12 @@ export default function ExamSourcePicker({
   }, [exams]);
 
   // Variant coverage for the selected exam (which version/set actually has content).
+  // Reset per-exam state on every switch so stale coverage never leaks across exams.
   useEffect(() => {
+    setCoverage(null);
+    setLoadedSource(null);
+    setQuestionsError(null);
     if (!selectedId) {
-      setCoverage(null);
       return;
     }
     let cancelled = false;
@@ -196,42 +213,41 @@ export default function ExamSourcePicker({
     setLoadedSource(null);
     try {
       // Base slots are often empty placeholders — content lives in the
-      // version/set variants. Try the chosen combo first, then auto-fallback
-      // to whichever combo actually holds the most usable questions.
-      let usable = await fetchUsable(selected.id, langVersion, setLabel);
-      let usedVersion = langVersion;
-      let usedSet = setLabel;
-      if (usable.length === 0) {
-        let best: ExamQuestionRow[] = [];
-        let bestKey = "";
-        for (const v of VERSIONS) {
-          for (const s of SETS) {
-            if (v === langVersion && s === setLabel) continue;
-            try {
-              // eslint-disable-next-line no-await-in-loop
-              const rows = await fetchUsable(selected.id, v, s);
-              if (rows.length > best.length) {
-                best = rows;
-                bestKey = `${v}/${s}`;
-              }
-            } catch {
-              // Try next combo.
-            }
-          }
-        }
-        if (best.length > 0) {
-          usable = best;
-          const [bv, bs] = bestKey.split("/");
-          if (bv === "bangla" || bv === "english") setLangVersion(bv);
-          if (bs === "A" || bs === "B") setSetLabel(bs);
-          usedVersion = (bv as LangVersion) ?? langVersion;
-          usedSet = (bs as SetLabel) ?? setLabel;
+      // version/set variants, and coverage can be partial (e.g. Bangla/A 30/100
+      // while English/B holds 100/100). Always scan all 4 combos and load the
+      // fullest one so every exam type yields a complete PDF.
+      const combos: { v: LangVersion; s: SetLabel }[] = [
+        { v: langVersion, s: setLabel },
+        ...VERSIONS.flatMap((v) =>
+          SETS.filter((s) => !(v === langVersion && s === setLabel)).map((s) => ({ v, s })),
+        ),
+      ];
+      const settled = await Promise.allSettled(
+        combos.map(async ({ v, s }) => ({ key: `${v}/${s}`, rows: await fetchUsable(selected.id, v, s) })),
+      );
+      let bestRows: ExamQuestionRow[] = [];
+      let bestKey = `${langVersion}/${setLabel}`;
+      for (const r of settled) {
+        if (r.status === "fulfilled" && r.value.rows.length > bestRows.length) {
+          bestRows = r.value.rows;
+          bestKey = r.value.key;
         }
       }
-      if (usable.length === 0) throw new Error("This exam has no questions yet.");
+      if (bestRows.length === 0) throw new Error("This exam has no questions yet.");
+      const usable = bestRows;
+      const [bv, bs] = bestKey.split("/");
+      const usedVersion = (bv === "bangla" || bv === "english" ? bv : langVersion) as LangVersion;
+      const usedSet = (bs === "A" || bs === "B" ? bs : setLabel) as SetLabel;
+      setLangVersion(usedVersion);
+      setSetLabel(usedSet);
       const mapped = mapRows(usable, selected.id);
       onLoad(sanitizeQuestions(mapped), selected.title, mode);
-      setLoadedSource(`${usedVersion}/${usedSet} • ${usable.length} Q`);
+      const autoSwitched = bestKey !== `${langVersion}/${setLabel}`;
+      setLoadedSource(
+        autoSwitched
+          ? `auto-picked ${bestKey} (${usable.length} Q, most complete)`
+          : `${bestKey} • ${usable.length} Q`,
+      );
       setDropdownOpen(false);
     } catch (e) {
       setQuestionsError(e instanceof Error ? e.message : "Failed to load exam questions.");
