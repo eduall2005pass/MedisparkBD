@@ -26,6 +26,11 @@ function uid() {
   return `q-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
+/** A4 preview width in px (210mm @96dpi) — must match the .a4-page inline width. */
+const A4_PREVIEW_W = 794;
+/** A4 preview height in px (297mm @96dpi) — fallback until measured. */
+const A4_PREVIEW_H = 1123;
+
 function mapParserToQuestions(parsed: ReturnType<typeof parsePastedMcqs>, topic = ""): PdfMaterialQuestion[] {
   return parsed.map((p, idx) => {
     let ans = "";
@@ -101,6 +106,25 @@ export default function MaterialPdfGeneratorPage() {
   const [watermarkOpacity, setWatermarkOpacity] = useState(7); // percent
   const [watermarkSize, setWatermarkSize] = useState(280); // px width
   const [watermarkPosition, setWatermarkPosition] = useState<"top" | "center" | "bottom">("center");
+  // Mobile scale-to-fit for the fixed-width A4 preview. The .a4-page stays a
+  // true 794px for html2canvas capture; only the display wrapper scales.
+  const [previewScale, setPreviewScale] = useState(1);
+  // True while html2canvas captures — scaling is suspended so the PDF stays full-res.
+  const [captureClean, setCaptureClean] = useState(false);
+  const pageHeightRefs = useRef<Map<number, number>>(new Map());
+  const [, setPageHeightsTick] = useState(0);
+
+  const recordPageHeight = (pageNumber: number, el: HTMLElement | null) => {
+    if (!el) {
+      if (pageHeightRefs.current.delete(pageNumber)) setPageHeightsTick((t) => t + 1);
+      return;
+    }
+    const h = el.offsetHeight;
+    if (h > 0 && pageHeightRefs.current.get(pageNumber) !== h) {
+      pageHeightRefs.current.set(pageNumber, h);
+      setPageHeightsTick((t) => t + 1);
+    }
+  };
 
   function sanitizeFileName(name: string): string {
     const raw = (name || "MediSpark-Material").trim();
@@ -191,6 +215,23 @@ export default function MaterialPdfGeneratorPage() {
   useEffect(() => {
     if (paginateDebugOn && questions.length > 0) logPaginateDebug(debug);
   }, [paginateDebugOn, debug, questions.length]);
+
+  // Track the gray preview box width → shrink the A4 display wrapper to fit
+  // phones (360px) instead of clipping it. Re-attaches when the preview mounts.
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+    const compute = () => {
+      const avail = el.clientWidth - 32; // p-4 padding on both sides
+      setPreviewScale(avail >= A4_PREVIEW_W ? 1 : Math.max(0.2, avail / A4_PREVIEW_W));
+    };
+    compute();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(compute);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+  }, [questions.length]);
 
   const handleDetect = () => {
     if (!pasteText.trim()) {
@@ -541,6 +582,10 @@ export default function MaterialPdfGeneratorPage() {
   const buildPdfBlob = async (): Promise<Blob> => {
     if (questions.length === 0) throw new Error("No questions to generate.");
     if (!previewRef.current) throw new Error("Preview not ready — please try again.");
+    // Suspend mobile display scaling so html2canvas captures the full 794px page.
+    setCaptureClean(true);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    try {
     const [{ default: jsPDF }, { default: html2canvas }] = await Promise.all([
       import("jspdf"),
       import("html2canvas"),
@@ -628,6 +673,9 @@ export default function MaterialPdfGeneratorPage() {
     const blob: Blob = pdf.output("blob");
     if (!blob || blob.size === 0) throw new Error("Generated PDF is empty — please try again.");
     return blob;
+    } finally {
+      setCaptureClean(false);
+    }
   };
 
   const triggerClientDownload = (blob: Blob, fileName: string) => {
@@ -1154,14 +1202,17 @@ D. 150 দিন
           </div>
         )}
 
-        {/* A4 Pages Preview */}
+        {/* A4 Pages Preview — scale-to-fit on phones, full 794px for PDF capture */}
         {questions.length > 0 ? (
           <div
             ref={previewRef}
-            className="mt-6 flex flex-col items-center gap-8 bg-[#525659] p-4 py-6 sm:rounded-2xl sm:p-8"
+            className="mt-6 flex flex-col items-center gap-8 overflow-x-auto bg-[#525659] p-4 py-6 sm:rounded-2xl sm:p-8"
             style={{ background: "#525659" }}
           >
-            {pages.map((page) => (
+            {pages.map((page) => {
+              const effScale = captureClean ? 1 : previewScale;
+              const measuredH = pageHeightRefs.current.get(page.pageNumber) ?? A4_PREVIEW_H;
+              return (
               <Fragment key={page.pageNumber}>
                 {paginateDebugOn && (() => {
                   const info = debug.pages.find((d) => d.page === page.pageNumber);
@@ -1179,8 +1230,18 @@ D. 150 দিন
                     </div>
                   );
                 })()}
+              {/* Display wrapper: shrinks layout box on phones so the full page
+                  stays visible. The .a4-page inside keeps true 794px width for capture. */}
+              <div
+                style={
+                  effScale < 1
+                    ? { width: A4_PREVIEW_W * effScale, height: measuredH * effScale, flexShrink: 0 }
+                    : { flexShrink: 0 }
+                }
+              >
               <div
                 key={page.pageNumber}
+                ref={(el) => recordPageHeight(page.pageNumber, el)}
                 className="a4-page relative flex w-full max-w-[794px] flex-col bg-white shadow-[0_8px_40px_rgba(0,0,0,.35)]"
                 style={{
                   width: "210mm",
@@ -1188,6 +1249,9 @@ D. 150 দিন
                   padding: "10mm 12mm 10mm 12mm",
                   fontFamily: "'Hind Siliguri','Noto Sans Bengali',sans-serif",
                   zIndex: 0,
+                  ...(effScale < 1
+                    ? { transform: `scale(${effScale})`, transformOrigin: "top left" }
+                    : undefined),
                 }}
               >
                 {watermarkEnabled && watermarkLogo && (
@@ -1403,7 +1467,7 @@ D. 150 দিন
                         <div className="flex gap-1.5">
                           <span className="shrink-0 text-[11px] font-bold text-[#0f172a]">{q.qNumber}.</span>
                           <span
-                            className="bangla flex-1 cursor-text text-[11px] font-bold leading-[1.7] text-[#0f172a] outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-0.5"
+                            className="bangla min-w-0 flex-1 cursor-text text-[11px] font-bold leading-[1.7] text-[#0f172a] outline-none [overflow-wrap:anywhere] focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-0.5"
                             contentEditable
                             suppressContentEditableWarning
                             onBlur={(e) => {
@@ -1415,7 +1479,7 @@ D. 150 দিন
                           >
                             {q.question || <span className="text-red-400 font-normal">[Empty — click to edit]</span>}
                           </span>
-                          <div className="flex shrink-0 gap-1 pdf-hide" data-html2canvas-ignore="true">
+                          <div className="flex max-w-full shrink-0 flex-wrap justify-end gap-1 pdf-hide" data-html2canvas-ignore="true">
                             <button
                               type="button"
                               onClick={() => {
@@ -1507,7 +1571,7 @@ D. 150 দিন
                             <div key={ltr} className="flex gap-1.5">
                               <span className="shrink-0 font-semibold">{ltr}.</span>
                               <span
-                                className="flex-1 cursor-text font-normal outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-0.5"
+                                className="min-w-0 flex-1 cursor-text font-normal outline-none [overflow-wrap:anywhere] focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-0.5"
                                 contentEditable
                                 suppressContentEditableWarning
                                 onBlur={(e) => {
@@ -1605,9 +1669,11 @@ D. 150 দিন
                     <div className="flex-1 border-b border-dotted border-slate-400 opacity-70" style={{ borderBottomStyle: "dotted", height: 1 }} />
                   </div>
                 </div>
+                </div>
               </div>
               </Fragment>
-            ))}
+              );
+              })}
           </div>
         ) : (
           <div className="mt-6 rounded-2xl border border-dashed border-[#cbd5e1] bg-white p-10 text-center admin-dark:border-[#1e3a65] admin-dark:bg-[#112544]">
