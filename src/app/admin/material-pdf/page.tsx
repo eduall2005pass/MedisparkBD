@@ -126,6 +126,21 @@ export default function MaterialPdfGeneratorPage() {
     }
   };
 
+  // Stable per-page callback refs. An inline `ref={(el) => ...}` creates a NEW
+  // function every render, so React detaches (null) + re-attaches on EVERY
+  // render — each path calls setPageHeightsTick → rerender → new ref →
+  // infinite loop (React error #185, triggered on Exam Load when the preview
+  // mounts). Cached callbacks keep ref identity stable across renders.
+  const pageRefCallbacks = useRef(new Map<number, (el: HTMLElement | null) => void>());
+  const getPageRef = (pageNumber: number) => {
+    let cb = pageRefCallbacks.current.get(pageNumber);
+    if (!cb) {
+      cb = (el: HTMLElement | null) => recordPageHeight(pageNumber, el);
+      pageRefCallbacks.current.set(pageNumber, cb);
+    }
+    return cb;
+  };
+
   function sanitizeFileName(name: string): string {
     const raw = (name || "MediSpark-Material").trim();
     // Remove invalid filename chars: < > : " / \ | ? * and control chars, also leading dots
@@ -275,9 +290,13 @@ export default function MaterialPdfGeneratorPage() {
       setDetection({ total: merged.filter((q) => !q.isStandaloneImage).length });
       setToast(`${loaded.length} questions appended from "${examTitle}"`);
     } else {
+      // Replace: exam becomes the source of truth — drop stale paste text so
+      // Detect & Format can't resurrect old content, and always adopt the
+      // exam title (user can still rename it afterwards).
       setQuestions(loaded);
       setDetection({ total: loaded.filter((q) => !q.isStandaloneImage).length });
-      if (!materialName.trim() && examTitle.trim()) setMaterialName(examTitle.trim());
+      setPasteText("");
+      if (examTitle.trim()) setMaterialName(examTitle.trim());
       setToast(`${loaded.length} questions loaded from "${examTitle}" — edit & Generate PDF`);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1241,7 +1260,7 @@ D. 150 দিন
               >
               <div
                 key={page.pageNumber}
-                ref={(el) => recordPageHeight(page.pageNumber, el)}
+                ref={getPageRef(page.pageNumber)}
                 className="a4-page relative flex w-full max-w-[794px] flex-col bg-white shadow-[0_8px_40px_rgba(0,0,0,.35)]"
                 style={{
                   width: "210mm",

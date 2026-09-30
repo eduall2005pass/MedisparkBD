@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PdfMaterialQuestion } from "@/lib/pdf-materials";
 import { sanitizeQuestions } from "@/lib/material-pdf-utils";
 
@@ -32,7 +32,7 @@ type SetLabel = "A" | "B";
 const VERSIONS: LangVersion[] = ["bangla", "english"];
 const SETS: SetLabel[] = ["A", "B"];
 
-type StatusFilter = "all" | "draft" | "published";
+type StatusFilter = "all" | "draft" | "published" | "closed";
 
 function answerLetter(idx: number | string | null | undefined): string {
   if (idx === null || idx === undefined) return "";
@@ -85,10 +85,21 @@ export default function ExamSourcePicker({
   const [langVersion, setLangVersion] = useState<LangVersion>("bangla");
   const [setLabel, setSetLabel] = useState<SetLabel>("A");
   const [coverage, setCoverage] = useState<Record<string, number> | null>(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [questionsError, setQuestionsError] = useState<string | null>(null);
   const [loadedSource, setLoadedSource] = useState<string | null>(null);
+  const [partialWarning, setPartialWarning] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Guards handleLoad against stale wins when user switches exam mid-flight.
+  // NOTE: never assign ref during render (React 19 strict warns/loops) — sync in effect.
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+  // Stable key for auth headers so token rotation triggers a refetch.
+  // Memoize so JSON.stringify doesn't produce a new dep identity every render.
+  const authKey = useMemo(() => JSON.stringify(authHeaders), [authHeaders]);
 
   const mapRows = (rows: ExamQuestionRow[], examId: string): PdfMaterialQuestion[] =>
     rows.map((row, idx) => ({
@@ -117,26 +128,26 @@ export default function ExamSourcePicker({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  // Load the full uploaded-exam list once (draft + published).
-  useEffect(() => {
-    let cancelled = false;
+  // Load the full uploaded-exam list (draft + published + closed).
+  // Refetches when auth headers rotate; exposes Retry on failure.
+  // useCallback so the mount effect below doesn't get a new fn identity each render.
+  const loadExams = useCallback(() => {
     setLoadError(false);
     fetch("/api/admin/exams", { cache: "no-store", headers: authHeaders })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
       .then((data: { exams?: ExamListItem[] }) => {
-        if (!cancelled) setExams(data.exams ?? []);
+        setExams(data.exams ?? []);
       })
       .catch(() => {
-        if (!cancelled) {
-          setExams([]);
-          setLoadError(true);
-        }
+        setExams([]);
+        setLoadError(true);
       });
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authKey]);
+
+  useEffect(() => {
+    loadExams();
+  }, [loadExams]);
 
   const filtered = useMemo(() => {
     const list = exams ?? [];
@@ -160,6 +171,7 @@ export default function ExamSourcePicker({
       all: list.length,
       draft: list.filter((e) => e.status === "draft").length,
       published: list.filter((e) => e.status === "published").length,
+      closed: list.filter((e) => e.status === "closed").length,
     };
   }, [exams]);
 
@@ -167,12 +179,15 @@ export default function ExamSourcePicker({
   // Reset per-exam state on every switch so stale coverage never leaks across exams.
   useEffect(() => {
     setCoverage(null);
+    setCoverageLoading(false);
     setLoadedSource(null);
+    setPartialWarning(null);
     setQuestionsError(null);
     if (!selectedId) {
       return;
     }
     let cancelled = false;
+    setCoverageLoading(true);
     fetch(`/api/admin/exams/variants?examId=${encodeURIComponent(selectedId)}`, {
       cache: "no-store",
       headers: authHeaders,
@@ -181,12 +196,15 @@ export default function ExamSourcePicker({
       .then((data: { coverage?: Record<string, number> } | null) => {
         if (!cancelled && data?.coverage) setCoverage(data.coverage);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setCoverageLoading(false);
+      });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [selectedId, authKey]);
 
   const fetchUsable = async (
     examId: string,
@@ -208,48 +226,70 @@ export default function ExamSourcePicker({
 
   const handleLoad = async (mode: "replace" | "append") => {
     if (!selected || loadingQuestions) return;
+    const requestedId = selected.id;
+    const requestedTitle = selected.title;
+    const requestedVersion = langVersion;
+    const requestedSet = setLabel;
     setLoadingQuestions(true);
     setQuestionsError(null);
+    setPartialWarning(null);
     setLoadedSource(null);
     try {
-      // Base slots are often empty placeholders — content lives in the
-      // version/set variants, and coverage can be partial (e.g. Bangla/A 30/100
-      // while English/B holds 100/100). Always scan all 4 combos and load the
-      // fullest one so every exam type yields a complete PDF.
+      // Prefer coverage order: requested combo first, then fullest coverage,
+      // so we usually fetch 1 combo. Fall back to scanning all 4 on miss.
+      const coverageOrder = [...VERSIONS.flatMap((v) => SETS.map((s) => ({ v, s })))]
+        .sort((a, b) => (coverage?.[`${b.v}/${b.s}`] ?? 0) - (coverage?.[`${a.v}/${a.s}`] ?? 0));
       const combos: { v: LangVersion; s: SetLabel }[] = [
-        { v: langVersion, s: setLabel },
-        ...VERSIONS.flatMap((v) =>
-          SETS.filter((s) => !(v === langVersion && s === setLabel)).map((s) => ({ v, s })),
-        ),
+        { v: requestedVersion, s: requestedSet },
+        ...coverageOrder.filter((c) => !(c.v === requestedVersion && c.s === requestedSet)),
       ];
-      const settled = await Promise.allSettled(
-        combos.map(async ({ v, s }) => ({ key: `${v}/${s}`, rows: await fetchUsable(selected.id, v, s) })),
-      );
+      // Fast path: try requested combo first.
       let bestRows: ExamQuestionRow[] = [];
-      let bestKey = `${langVersion}/${setLabel}`;
-      for (const r of settled) {
-        if (r.status === "fulfilled" && r.value.rows.length > bestRows.length) {
-          bestRows = r.value.rows;
-          bestKey = r.value.key;
+      let bestKey = `${requestedVersion}/${requestedSet}`;
+      let failed = 0;
+      try {
+        bestRows = await fetchUsable(requestedId, requestedVersion, requestedSet);
+      } catch {
+        failed += 1;
+      }
+      // If requested combo is empty/failed, scan the rest for the fullest one.
+      if (bestRows.length === 0) {
+        const rest = combos.slice(1);
+        const settled = await Promise.allSettled(
+          rest.map(async ({ v, s }) => ({ key: `${v}/${s}`, rows: await fetchUsable(requestedId, v, s) })),
+        );
+        for (const r of settled) {
+          if (r.status === "fulfilled" && r.value.rows.length > bestRows.length) {
+            bestRows = r.value.rows;
+            bestKey = r.value.key;
+          } else if (r.status === "rejected") {
+            failed += 1;
+          }
         }
       }
       if (bestRows.length === 0) throw new Error("This exam has no questions yet.");
+      // Stale guard: user switched exam mid-flight — drop this result.
+      if (selectedIdRef.current !== requestedId) return;
       const usable = bestRows;
       const [bv, bs] = bestKey.split("/");
       const usedVersion = (bv === "bangla" || bv === "english" ? bv : langVersion) as LangVersion;
       const usedSet = (bs === "A" || bs === "B" ? bs : setLabel) as SetLabel;
       setLangVersion(usedVersion);
       setSetLabel(usedSet);
-      const mapped = mapRows(usable, selected.id);
-      onLoad(sanitizeQuestions(mapped), selected.title, mode);
-      const autoSwitched = bestKey !== `${langVersion}/${setLabel}`;
+      const mapped = mapRows(usable, requestedId);
+      onLoad(sanitizeQuestions(mapped), requestedTitle, mode);
+      const autoSwitched = bestKey !== `${requestedVersion}/${requestedSet}`;
       setLoadedSource(
         autoSwitched
           ? `auto-picked ${bestKey} (${usable.length} Q, most complete)`
           : `${bestKey} • ${usable.length} Q`,
       );
+      if (failed > 0 && bestRows.length > 0) {
+        setPartialWarning(`${failed} version/set failed to load — showing most complete (${bestKey}).`);
+      }
       setDropdownOpen(false);
     } catch (e) {
+      if (selectedIdRef.current !== requestedId) return;
       setQuestionsError(e instanceof Error ? e.message : "Failed to load exam questions.");
     } finally {
       setLoadingQuestions(false);
@@ -265,6 +305,7 @@ export default function ExamSourcePicker({
             { key: "all", label: `All (${counts.all})` },
             { key: "draft", label: `Draft (${counts.draft})` },
             { key: "published", label: `Published (${counts.published})` },
+            { key: "closed", label: `Closed (${counts.closed})` },
           ] as { key: StatusFilter; label: string }[]
         ).map((f) => (
           <button
@@ -287,21 +328,34 @@ export default function ExamSourcePicker({
           {exams === null ? "Loading exams…" : `${filtered.length} exam${filtered.length !== 1 ? "s" : ""}`}
         </span>
       </div>
+      {loadError && (
+        <div className="mt-2 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 admin-dark:border-red-900/40 admin-dark:bg-red-900/20 admin-dark:text-red-300">
+          <span className="flex-1">Failed to load exams. Check connection / admin access.</span>
+          <button
+            type="button"
+            onClick={loadExams}
+            className="rounded-lg bg-red-600 px-3 py-1 text-[11px] font-extrabold text-white hover:bg-red-700"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
-      {/* Searchable dropdown */}
+      {/* Searchable dropdown — search field is separate from the selected chip below */}
       <div className="relative mt-3">
         <input
-          value={selected ? `${selected.title} (${selected.id})` : search}
+          value={search}
           onChange={(e) => {
             setSearch(e.target.value);
-            if (selectedId) setSelectedId("");
             setDropdownOpen(true);
           }}
           onFocus={() => setDropdownOpen(true)}
-          placeholder="Search exam — type title / id / subject…"
+          placeholder={
+            selected ? `${selected.title} (${selected.id}) — selected, search to change…` : "Search exam — type title / id / subject…"
+          }
           className="bangla w-full rounded-xl border border-[#cbd5e1] bg-[#f8fafc] px-4 py-3 text-sm font-semibold text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#234e9f] focus:bg-white admin-dark:border-[#1e3a65] admin-dark:bg-[#0a162e] admin-dark:text-white"
         />
-        {selectedId && (
+        {(selectedId || search) && (
           <button
             type="button"
             onClick={() => {
@@ -320,9 +374,18 @@ export default function ExamSourcePicker({
             {exams === null ? (
               <p className="px-4 py-3 text-xs text-slate-500">Loading exams…</p>
             ) : loadError ? (
-              <p className="px-4 py-3 text-xs font-semibold text-red-600">
-                Failed to load exams. Please retry.
-              </p>
+              <div className="flex items-center gap-2 px-4 py-3">
+                <p className="flex-1 text-xs font-semibold text-red-600">
+                  Failed to load exams. Please retry.
+                </p>
+                <button
+                  type="button"
+                  onClick={loadExams}
+                  className="rounded-lg bg-red-600 px-3 py-1 text-[11px] font-extrabold text-white hover:bg-red-700"
+                >
+                  Retry
+                </button>
+              </div>
             ) : filtered.length === 0 ? (
               <p className="px-4 py-3 text-xs text-slate-500">
                 No exams found — try another keyword or filter.
@@ -348,7 +411,7 @@ export default function ExamSourcePicker({
                     <span className="block truncate text-[11px] text-slate-500 admin-dark:text-slate-400">
                       {exam.id}
                       {exam.subject ? ` • ${exam.subject}` : ""}
-                      {typeof exam.questionCount === "number" ? ` • ${exam.questionCount} Q` : ""}
+                      {typeof exam.questionCount === "number" ? ` • ${exam.questionCount} slots` : ""}
                     </span>
                   </span>
                   <span
@@ -389,8 +452,9 @@ export default function ExamSourcePicker({
               Version
               <select
                 value={langVersion}
+                disabled={loadingQuestions}
                 onChange={(e) => setLangVersion(e.target.value as LangVersion)}
-                className="rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-bold text-[#0b1e3a] outline-none admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
+                className="rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-bold text-[#0b1e3a] outline-none disabled:opacity-50 admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
               >
                 <option value="bangla">Bangla</option>
                 <option value="english">English</option>
@@ -400,14 +464,18 @@ export default function ExamSourcePicker({
               Set
               <select
                 value={setLabel}
+                disabled={loadingQuestions}
                 onChange={(e) => setSetLabel(e.target.value as SetLabel)}
-                className="rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-bold text-[#0b1e3a] outline-none admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
+                className="rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-bold text-[#0b1e3a] outline-none disabled:opacity-50 admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
               >
                 <option value="A">A</option>
                 <option value="B">B</option>
               </select>
             </label>
           </div>
+          {coverageLoading && (
+            <p className="mt-1.5 text-[11px] text-slate-400">Checking version/set content…</p>
+          )}
           {coverage && (
             <p className="mt-1.5 text-[11px] text-slate-500 admin-dark:text-slate-400">
               Content: Bangla/A {coverage["bangla:A"] ?? 0} • Bangla/B {coverage["bangla:B"] ?? 0} • English/A {coverage["english:A"] ?? 0} • English/B {coverage["english:B"] ?? 0}
@@ -433,6 +501,11 @@ export default function ExamSourcePicker({
             {loadedSource && (
               <span className="text-[11px] font-bold text-emerald-700 admin-dark:text-emerald-300">
                 Loaded {loadedSource}
+              </span>
+            )}
+            {partialWarning && (
+              <span className="text-[11px] font-semibold text-amber-600 admin-dark:text-amber-300">
+                {partialWarning}
               </span>
             )}
           </div>
