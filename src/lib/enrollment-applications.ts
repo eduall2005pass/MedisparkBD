@@ -8,6 +8,15 @@ import { query, exec, isMysqlConfigured } from "@/lib/mysql";
  * application_status = 'pending_validation'. The record stays pending until
  * an admin takes action (accept/reject UI comes later). Nothing in this
  * flow ever auto-approves a paid course.
+ *
+ * Uniqueness (two keys, both enforced):
+ * - `enrollment_applications_txn_unique (transaction_id)` — the same
+ *   transaction cannot be reused for two applications.
+ * - `uniq_student_course (student_uid, course_id)` — one pending
+ *   application per student+course; concurrent POSTs with different TxIDs
+ *   collapse to the existing pending row instead of double-inserting.
+ * Use {@link findExistingApplication} for the explicit uniq_student_course
+ * pending-row lookup.
  */
 
 export const APPLICATION_PENDING = "pending_validation";
@@ -101,6 +110,28 @@ async function ensureTable(): Promise<void> {
   } catch {
     // Column may already exist or migration applied out-of-band.
   }
+  // Best-effort migration: unique (student_uid, course_id) so concurrent
+  // POSTs with different TxIDs can't double-insert a pending application.
+  try {
+    const existing = await query<{ n: number }[]>(
+      `SELECT COUNT(*) AS n FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'enrollment_applications'
+         AND INDEX_NAME = 'uniq_student_course'`,
+    );
+    if ((existing[0]?.n ?? 0) === 0) {
+      await exec(
+        "ALTER TABLE enrollment_applications ADD UNIQUE KEY uniq_student_course (student_uid, course_id)",
+      );
+    }
+  } catch (err) {
+    // Index exists already, or legacy duplicate rows block it; the insert
+    // guard in createEnrollmentApplication still applies. Log so a missing
+    // uniq_student_course index is visible instead of silently skipped.
+    console.warn(
+      "[enrollment-applications] uniq_student_course migration skipped:",
+      err instanceof Error ? err.message : err,
+    );
+  }
 }
 
 export async function findApplicationByTransaction(
@@ -128,6 +159,19 @@ export async function findPendingApplication(
   return rows[0] ? mapApplication(rows[0]) : null;
 }
 
+/**
+ * Explicit uniq_student_course handler: returns the pending application for
+ * this student+course, if one exists. Used before insert (fast-path) and
+ * after a duplicate-key error (concurrent POSTs with different TxIDs
+ * collapse to this row instead of double-inserting).
+ */
+export async function findExistingApplication(
+  studentUid: string,
+  courseId: string,
+): Promise<EnrollmentApplication | null> {
+  return findPendingApplication(studentUid, courseId);
+}
+
 /** Create the pending-validation application record for a paid course. */
 export async function createEnrollmentApplication(input: {
   studentUid: string;
@@ -142,32 +186,54 @@ export async function createEnrollmentApplication(input: {
   couponCode?: string | null;
 }): Promise<EnrollmentApplication> {
   await ensureTable();
-  const result = await exec(
-    `INSERT INTO enrollment_applications
-      (student_uid, student_id, student_email, course_id, course_name,
-       transaction_id, paid_amount, sender_mobile, payment_method, application_status, coupon_code)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      input.studentUid,
-      input.studentId,
-      input.studentEmail,
-      input.courseId,
-      input.courseName,
-      input.transactionId,
-      input.paidAmount,
-      input.senderMobile,
-      input.paymentMethod ?? null,
-      APPLICATION_PENDING,
-      input.couponCode ?? null,
-    ],
-  );
-  const id = Number(result.insertId);
-  const rows = await query<ApplicationRow[]>(
-    "SELECT * FROM enrollment_applications WHERE id = ? LIMIT 1",
-    [id],
-  );
-  if (!rows[0]) {
-    throw new Error("Failed to create the enrollment application.");
+  try {
+    const result = await exec(
+      `INSERT INTO enrollment_applications
+        (student_uid, student_id, student_email, course_id, course_name,
+         transaction_id, paid_amount, sender_mobile, payment_method, application_status, coupon_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.studentUid,
+        input.studentId,
+        input.studentEmail,
+        input.courseId,
+        input.courseName,
+        input.transactionId,
+        input.paidAmount,
+        input.senderMobile,
+        input.paymentMethod ?? null,
+        APPLICATION_PENDING,
+        input.couponCode ?? null,
+      ],
+    );
+    const id = Number(result.insertId);
+    const rows = await query<ApplicationRow[]>(
+      "SELECT * FROM enrollment_applications WHERE id = ? LIMIT 1",
+      [id],
+    );
+    if (!rows[0]) {
+      throw new Error("Failed to create the enrollment application.");
+    }
+    return mapApplication(rows[0]);
+  } catch (err: unknown) {
+    const code = (err as { code?: string; errno?: number })?.code;
+    const errno = (err as { errno?: number })?.errno;
+    if (code !== "ER_DUP_ENTRY" && errno !== 1062) throw err;
+    // Concurrent POSTs with different TxIDs hit uniq_student_course (or txn
+    // unique): return the existing pending row instead of double-inserting.
+    const pending = await findExistingApplication(input.studentUid, input.courseId);
+    if (pending) return pending;
+    const byTxn = await query<ApplicationRow[]>(
+      "SELECT * FROM enrollment_applications WHERE transaction_id = ? LIMIT 1",
+      [input.transactionId],
+    );
+    if (byTxn[0]) return mapApplication(byTxn[0]);
+    const anyRow = await query<ApplicationRow[]>(
+      `SELECT * FROM enrollment_applications
+       WHERE student_uid = ? AND course_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [input.studentUid, input.courseId],
+    );
+    if (anyRow[0]) return mapApplication(anyRow[0]);
+    throw err;
   }
-  return mapApplication(rows[0]);
 }

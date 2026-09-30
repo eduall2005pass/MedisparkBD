@@ -1,4 +1,4 @@
-import { exec, query, ensureColumn } from "@/lib/mysql";
+import { exec, query, ensureColumn, withTransaction } from "@/lib/mysql";
 import { removeFile, isLocalUpload } from "@/lib/storage";
 import { nextUnifiedPosition } from "@/lib/chapter-content-order";
 import { revalidatePath, revalidateTag } from "next/cache";
@@ -995,22 +995,26 @@ export async function savePricingUpdates(
   adminUid: string,
 ): Promise<number> {
   await ensureTables();
-  let count = 0;
-  for (const raw of updates) {
-    const slug = asString(raw.slug);
-    if (!slug) continue;
-    const fee = Math.max(0, Number(raw.fee));
-    const discountRaw = raw.discountFee;
-    const discountFee =
-      discountRaw === null || discountRaw === undefined || discountRaw === ""
-        ? null
-        : Math.max(0, Number(discountRaw) || 0);
-    const result = await exec(
-      `UPDATE catalog_courses SET fee = ?, discount_fee = ?, updated_by = ? WHERE slug = ?`,
-      [fee, discountFee, adminUid, slug],
-    );
-    count += result.affectedRows ?? 0;
-  }
+  const valid = updates.filter((raw) => asString(raw.slug));
+  if (valid.length === 0) return 0;
+  const count = await withTransaction(async (conn) => {
+    let total = 0;
+    for (const raw of valid) {
+      const slug = asString(raw.slug);
+      const fee = Math.max(0, Number(raw.fee));
+      const discountRaw = raw.discountFee;
+      const discountFee =
+        discountRaw === null || discountRaw === undefined || discountRaw === ""
+          ? null
+          : Math.max(0, Number(discountRaw) || 0);
+      const [result] = await conn.query(
+        `UPDATE catalog_courses SET fee = ?, discount_fee = ?, updated_by = ? WHERE slug = ?`,
+        [fee, discountFee, adminUid, slug],
+      );
+      total += (result as unknown as { affectedRows?: number }).affectedRows ?? 0;
+    }
+    return total;
+  });
   if (count > 0) bustCourseLiveCaches();
   return count;
 }
@@ -1145,16 +1149,18 @@ export async function setSubjectAssignments(
   courseSlugs: string[],
 ): Promise<void> {
   await ensureAssignmentTable();
-  await exec(`DELETE FROM course_subject_assignments WHERE subject_id = ?`, [
-    subjectId,
-  ]);
   const unique = [...new Set(courseSlugs.filter((slug) => slug.length > 0))];
-  for (const slug of unique) {
-    await exec(
-      `INSERT IGNORE INTO course_subject_assignments (subject_id, course_slug) VALUES (?, ?)`,
-      [subjectId, slug],
-    );
-  }
+  await withTransaction(async (conn) => {
+    await conn.query(`DELETE FROM course_subject_assignments WHERE subject_id = ?`, [
+      subjectId,
+    ]);
+    for (const slug of unique) {
+      await conn.query(
+        `INSERT IGNORE INTO course_subject_assignments (subject_id, course_slug) VALUES (?, ?)`,
+        [subjectId, slug],
+      );
+    }
+  });
   bustCourseLiveCaches();
 }
 
@@ -1349,22 +1355,58 @@ export async function updateChapter(
   return fetchChapters();
 }
 
-/** Change display order of chapters from an ordered id list. */
-export async function reorderChapters(orderedIds: string[]): Promise<Chapter[]> {
+/** Change display order of chapters from an ordered id list (scoped to one subject). */
+export async function reorderChapters(orderedIds: string[], subjectId?: string): Promise<Chapter[]> {
   await ensureChapterTables();
-  for (let index = 0; index < orderedIds.length; index += 1) {
-    await exec(`UPDATE course_chapters SET sort_order = ? WHERE id = ?`, [
-      index + 1,
-      orderedIds[index],
-    ]);
+  const scope = (subjectId ?? "").trim();
+  if (scope) {
+    await withTransaction(async (conn) => {
+      for (let index = 0; index < orderedIds.length; index += 1) {
+        await conn.query(
+          `UPDATE course_chapters SET sort_order = ? WHERE id = ? AND subject_id = ?`,
+          [index + 1, orderedIds[index], scope],
+        );
+      }
+    });
+  } else if (orderedIds.length > 0) {
+    // No scope supplied — resolve the subject from the listed chapters and
+    // require a single subject so one reorder can never clobber another
+    // subject's sequence.
+    const placeholders = orderedIds.map(() => "?").join(",");
+    const owners = await query<{ id: string; subject_id: string }[]>(
+      `SELECT id, subject_id FROM course_chapters WHERE id IN (${placeholders})`,
+      orderedIds,
+    );
+    const subjects = new Set(owners.map((row) => row.subject_id));
+    if (subjects.size > 1) {
+      throw new Error("Reorder list spans multiple subjects — pass subjectId.");
+    }
+    const resolved = owners[0]?.subject_id ?? "";
+    await withTransaction(async (conn) => {
+      for (let index = 0; index < orderedIds.length; index += 1) {
+        await conn.query(
+          `UPDATE course_chapters SET sort_order = ? WHERE id = ? AND subject_id = ?`,
+          [index + 1, orderedIds[index], resolved],
+        );
+      }
+    });
   }
   return fetchChapters();
 }
 
 export async function deleteChapter(id: string): Promise<Chapter[]> {
   await ensureChapterTables();
-  await exec(`DELETE FROM course_classes WHERE chapter_id = ?`, [id]);
-  await exec(`DELETE FROM course_chapters WHERE id = ?`, [id]);
+  await withTransaction(async (conn) => {
+    await conn.query(`DELETE FROM course_materials WHERE chapter_id = ?`, [id]);
+    try {
+      await conn.query(`DELETE FROM chapter_contents WHERE chapter_id = ?`, [id]);
+    } catch {
+      // Legacy DB without the flow-4 table — classes/exams cleanup continues.
+    }
+    await conn.query(`DELETE FROM exams WHERE chapter_id = ?`, [id]);
+    await conn.query(`DELETE FROM course_classes WHERE chapter_id = ?`, [id]);
+    await conn.query(`DELETE FROM course_chapters WHERE id = ?`, [id]);
+  });
   return fetchChapters();
 }
 
@@ -1406,10 +1448,16 @@ export async function saveClass(
   const durationMinutes = Math.max(0, Number(input.durationMinutes) || 0);
   const isFree = input.isFree ? 1 : 0;
   const isActive = input.isActive === false ? 0 : 1;
-  const existing = await query<{ id: string }[]>(
-    `SELECT id FROM course_classes WHERE id = ? LIMIT 1`,
+  const existing = await query<{ id: string; chapter_id: string }[]>(
+    `SELECT id, chapter_id FROM course_classes WHERE id = ? LIMIT 1`,
     [id],
   );
+  // Validate the target chapter exists before insert or move.
+  const target = await query<{ id: string; subject_id: string }[]>(
+    `SELECT id, subject_id FROM course_chapters WHERE id = ? LIMIT 1`,
+    [chapterId],
+  );
+  if (target.length === 0) throw new Error("Target chapter not found.");
   if (existing.length === 0) {
     // New classes append at the END of the chapter's unified
     // Class · Exam · Materials sequence so the admin-arranged manual order
@@ -1430,6 +1478,17 @@ export async function saveClass(
       );
     }
   } else {
+    // Chapter move must stay within the same subject — otherwise the class
+    // silently leaves its subject/category scope.
+    if (existing[0].chapter_id !== chapterId) {
+      const current = await query<{ id: string; subject_id: string }[]>(
+        `SELECT id, subject_id FROM course_chapters WHERE id = ? LIMIT 1`,
+        [existing[0].chapter_id],
+      );
+      if (current.length > 0 && current[0].subject_id !== target[0].subject_id) {
+        throw new Error("Cannot move a class to a chapter in another subject.");
+      }
+    }
     // Edits never disturb the manually arranged display order.
     await exec(
       `UPDATE course_classes SET chapter_id = ?, title = ?, video_url = ?, note_url = ?,
@@ -1456,14 +1515,39 @@ export async function deleteClass(id: string): Promise<CourseClass[]> {
   return fetchClasses();
 }
 
-/** Change display order of classes from an ordered id list. */
-export async function reorderClasses(orderedIds: string[]): Promise<CourseClass[]> {
+/** Change display order of classes from an ordered id list (scoped to one chapter). */
+export async function reorderClasses(orderedIds: string[], chapterId?: string): Promise<CourseClass[]> {
   await ensureChapterTables();
-  for (let index = 0; index < orderedIds.length; index += 1) {
-    await exec(`UPDATE course_classes SET sort_order = ? WHERE id = ?`, [
-      index + 1,
-      orderedIds[index],
-    ]);
+  const scope = (chapterId ?? "").trim();
+  const apply = async (
+    conn: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+    resolved: string,
+  ) => {
+    for (let index = 0; index < orderedIds.length; index += 1) {
+      await conn.query(
+        `UPDATE course_classes SET sort_order = ? WHERE id = ? AND chapter_id = ?`,
+        [index + 1, orderedIds[index], resolved],
+      );
+    }
+  };
+  if (scope) {
+    await withTransaction(async (conn) => {
+      await apply(conn, scope);
+    });
+  } else if (orderedIds.length > 0) {
+    const placeholders = orderedIds.map(() => "?").join(",");
+    const owners = await query<{ id: string; chapter_id: string }[]>(
+      `SELECT id, chapter_id FROM course_classes WHERE id IN (${placeholders})`,
+      orderedIds,
+    );
+    const chapters = new Set(owners.map((row) => row.chapter_id));
+    if (chapters.size > 1) {
+      throw new Error("Reorder list spans multiple chapters — pass chapterId.");
+    }
+    const resolved = owners[0]?.chapter_id ?? "";
+    await withTransaction(async (conn) => {
+      await apply(conn, resolved);
+    });
   }
   return fetchClasses();
 }

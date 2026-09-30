@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/admin-authorization.test.ts"
+    "test": "node --experimental-strip-types --test tests/admin-authorization.test.ts"
   },
   "dependencies": {
     "firebase": "^12.17.1",

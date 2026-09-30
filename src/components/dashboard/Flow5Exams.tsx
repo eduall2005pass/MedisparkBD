@@ -270,7 +270,7 @@ function courseItemToPublicExam(item: Flow5ExamItem): PublicExam {
     endsAt: item.endsAt,
     examDate: toDhakaDateKey(scheduledIso),
     examTime: "",
-    status: item.phase === "upcoming" ? "Upcoming" : item.phase === "live" ? "Live" : item.phase === "practice" ? "Archived" : "Live",
+    status: item.phase === "upcoming" ? "Upcoming" : item.phase === "live" ? "Live" : item.phase === "practice" ? "Archived" : "Expired",
     published: true,
     secondTimerEnabled: item.secondTimerEnabled,
     secondTimerDeduction: item.secondTimerDeduction,

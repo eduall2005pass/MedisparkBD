@@ -257,6 +257,8 @@ export async function fetchQaQuestions(options: {
   subjectId?: string;
   /** Backend-enforced tab filter on the existing `status` column. */
   status?: "unanswered" | "answered";
+  limit?: number;
+  offset?: number;
 } = {}): Promise<QaQuestion[]> {
   if (!isMysqlConfigured) return [];
   try {
@@ -276,6 +278,9 @@ export async function fetchQaQuestions(options: {
     }
     const where =
       clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const limit = Math.min(Math.max(Math.floor(options.limit ?? 500), 1), 500);
+    const offset = Math.max(Math.floor(options.offset ?? 0), 0);
+    params.push(limit, offset);
     const rows = await query<QuestionRow[]>(
       `SELECT q.question_id, q.subject_id, q.category_id, q.course_id,
               q.image_url, q.student_uid, q.student_name, q.text,
@@ -287,7 +292,7 @@ export async function fetchQaQuestions(options: {
          LEFT JOIN catalog_courses c ON c.slug = q.course_id
          LEFT JOIN course_subjects cs ON cs.id = q.subject_id
          LEFT JOIN qa_subjects qs ON qs.subject_id = q.subject_id
-         ${where} ORDER BY q.created_at DESC LIMIT 500`,
+         ${where} ORDER BY q.created_at DESC LIMIT ? OFFSET ?`,
       params,
     );
     return rows.map(mapQuestion);
@@ -328,6 +333,41 @@ export async function insertQaQuestion(input: {
     return rows.find((question) => question.id === id) ?? null;
   } catch {
     return null;
+  }
+}
+
+export const QA_MAX_QUESTIONS_PER_HOUR = 10;
+
+/** Count of this student's questions in the last hour — per-user rate limit. */
+export async function countRecentQaQuestions(studentUid: string): Promise<number> {
+  await ensureTables();
+  try {
+    const rows = await query<{ total: number }[]>(
+      "SELECT COUNT(*) AS total FROM qa_questions WHERE student_uid = ? AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)",
+      [studentUid],
+      { cache: false },
+    );
+    return Number(rows[0]?.total ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
+/** Duplicate/flood check: identical text from the same student in last 10 min. */
+export async function hasDuplicateQaQuestion(
+  studentUid: string,
+  text: string,
+): Promise<boolean> {
+  await ensureTables();
+  try {
+    const rows = await query<{ found: number }[]>(
+      "SELECT 1 AS found FROM qa_questions WHERE student_uid = ? AND text = ? AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE) LIMIT 1",
+      [studentUid, text],
+      { cache: false },
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
   }
 }
 

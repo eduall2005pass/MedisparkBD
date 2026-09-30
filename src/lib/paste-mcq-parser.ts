@@ -185,7 +185,7 @@ export function normalizeStoredAnswerIndex(value: unknown): number | null {
     return null;
   }
   if (typeof value === "number") {
-    return Number.isInteger(value) && value >= 0 ? value : null;
+    return Number.isInteger(value) && value >= 0 && value <= 3 ? value : null;
   }
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -194,7 +194,7 @@ export function normalizeStoredAnswerIndex(value: unknown): number | null {
     const asLetter = answerLetterToIndex(trimmed);
     if (asLetter !== null) return asLetter;
     const n = Number(trimmed);
-    return Number.isInteger(n) && n >= 0 ? n : null;
+    return Number.isInteger(n) && n >= 0 && n <= 3 ? n : null;
   }
   return null;
 }
@@ -619,13 +619,13 @@ function answerKeyHeadingRemainder(line: string): string | null {
 }
 
 // True when a string is just a single answer label (per-question "Answer: B"),
-// which must NOT be treated as an answer-key heading.
+// which must NOT be treated as an answer-key heading. 4-option only (A–D).
 function isSingleAnswerLabel(s: string): boolean {
   const c = s.trim().replace(/^[\(\[]\s*/, "").replace(/\s*[\)\]\.]+$/g, "").trim();
-  if (/^[A-Ea-e]$/.test(c)) return true;
-  if (/^[কখগঘঙ]$/.test(c)) return true;
-  if (/^[1-5]$/.test(c) || /^[১-৫]$/.test(c)) return true;
-  if (/^(i{1,3}|iv|v|I{1,3}|IV|V)$/.test(c)) return true;
+  if (/^[A-Da-d]$/.test(c)) return true;
+  if (/^[কখগঘ]$/.test(c)) return true;
+  if (/^[1-4]$/.test(c) || /^[১-৪]$/.test(c)) return true;
+  if (/^(i{1,3}|iv|I{1,3}|IV)$/.test(c)) return true;
   // "Option B" style single answer
   if (/^(?:option|অপশন)\s*[A-Da-d]$/.test(c.trim())) return true;
   return false;
@@ -633,11 +633,10 @@ function isSingleAnswerLabel(s: string): boolean {
 
 export function answerKeyLabelToIndex(label: string): number | null {
   const c = label.trim().replace(/^[\(\[]\s*/, "").replace(/\s*[\)\]]$/g, "").trim();
-  if (/^[A-Ea-e]$/.test(c)) return c.toUpperCase().charCodeAt(0) - 65;
-  if (/^[কখগঘঙ]$/.test(c)) return BN_OPT_MAP[c] ?? ({ "ঙ": 4 } as Record<string, number>)[c] ?? null;
-  if (/^[1-5]$/.test(c)) return parseInt(c, 10) - 1;
-  if (/^[১-৫]$/.test(c)) return parseInt(bnDigitsToAscii(c), 10) - 1;
-  if (/^[vV]$/.test(c)) return 4;
+  if (/^[A-Da-d]$/.test(c)) return c.toUpperCase().charCodeAt(0) - 65;
+  if (/^[কখগঘ]$/.test(c)) return BN_OPT_MAP[c] ?? null;
+  if (/^[1-4]$/.test(c)) return parseInt(c, 10) - 1;
+  if (/^[১-৪]$/.test(c)) return parseInt(bnDigitsToAscii(c), 10) - 1;
   const r = romanToIndex(c);
   if (r !== null) return r;
   return null;
@@ -645,13 +644,12 @@ export function answerKeyLabelToIndex(label: string): number | null {
 
 // Parse "1. B", "2-C", "3: A", "4) D", "Q5: b", "১. খ" etc. from key block text.
 // Multiple entries per line ("1. B 2. C", "1-B, 2-C") are all captured.
-// Supports A–E (5-option questions); E maps to index 4 and is validated
-// against the question's actual option count at apply time.
+// 4-option only: indices are always 0..3, matching the inline answer path.
 function parseAnswerKeyEntries(keyText: string): Map<number, string> {
   const out = new Map<number, string>();
   if (!keyText.trim()) return out;
   const re =
-    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*|প্রশ্ন\s*(?:নং\.?|No\.?)?\s*)?(\d+|[০-৯]+)\s*[\.\)\]:\-–—=ঃ।]+\s*\(?\s*([A-Ea-e]|[কখগঘঙ]|[1-5]|[১-৫]|iv|IV|v|V|i{1,3}|I{1,3})\s*\)?(?![A-Za-z\u0980-\u09FF0-9])/g;
+    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*|প্রশ্ন\s*(?:নং\.?|No\.?)?\s*)?(\d+|[০-৯]+)\s*[\.\)\]:\-–—=ঃ।]+\s*\(?\s*([A-Da-d]|[কখগঘ]|[1-4]|[১-৪]|iv|IV|i{1,3}|I{1,3})\s*\)?(?![A-Za-z\u0980-\u09FF0-9])/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(keyText)) !== null) {
     const numAscii = bnDigitsToAscii(m[1]);
@@ -741,13 +739,13 @@ export function parseStandaloneAnswerKey(rawText: string): StandaloneAnswerKeyRe
 
   // 1) Explicit separator: "1. A", "2-B", "3: C", "4) D", "Q5: b", "১. খ", "৫। ক"
   const sepRe =
-    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*|প্রশ্ন\s*(?:নং\.?|No\.?)?\s*)?(\d+|[০-৯]+)\s*[\.\)\]:\-–—=ঃ।]+\s*\(?\s*([A-Ea-e]|[কখগঘঙ]|[1-5]|[১-৫]|iv|IV|v|V|i{1,3}|I{1,3})\s*\)?(?![A-Za-z\u0980-\u09FF0-9])/g;
+    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*|প্রশ্ন\s*(?:নং\.?|No\.?)?\s*)?(\d+|[০-৯]+)\s*[\.\)\]:\-–—=ঃ।]+\s*\(?\s*([A-Da-d]|[কখগঘ]|[1-4]|[১-৪]|iv|IV|i{1,3}|I{1,3})\s*\)?(?![A-Za-z\u0980-\u09FF0-9])/g;
   // 2) Space-separated: "1 A", "2 b", "10 E" (letters only — numeric ambiguous)
   const spaceRe =
-    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*)?(\d+|[০-৯]+)\s+([A-Ea-e]|[কখগঘঙ])(?![A-Za-z\u0980-\u09FF0-9])/g;
+    /(?:^|[\s,;|।]+)(?:Q(?:uestion)?\s*)?(\d+|[০-৯]+)\s+([A-Da-d]|[কখগঘ])(?![A-Za-z\u0980-\u09FF0-9])/g;
   // 3) Concatenated: "1A 2B 3C" (digits immediately followed by letter)
   const concatRe =
-    /(?:^|[\s,;|।\(\[]+)(?:Q\s*)?(\d{1,4}|[০-৯]{1,4})([A-Ea-e]|[কখগঘঙ])(?![A-Za-z\u0980-\u09FF0-9])/g;
+    /(?:^|[\s,;|।\(\[]+)(?:Q\s*)?(\d{1,4}|[০-৯]{1,4})([A-Da-d]|[কখগঘ])(?![A-Za-z\u0980-\u09FF0-9])/g;
 
   let totalFound = 0;
   totalFound += collectKeyMatches(keyText, sepRe, out, duplicates, seenCount);
@@ -838,7 +836,7 @@ function applyAnswerKey(
     const targetIdx = numToIdx.get(qNum);
     if (targetIdx === undefined) return; // no matching question — ignore, never guess
     const optIdx = answerKeyLabelToIndex(label);
-    if (optIdx === null || optIdx < 0 || optIdx > 4) return;
+    if (optIdx === null || optIdx < 0 || optIdx > 3) return;
     parsed[targetIdx].correctIndex = optIdx;
     assigned.add(targetIdx);
   });
@@ -907,6 +905,7 @@ function injectNewlinesForInline(text: string): string {
   // This helps split "Q? A. opt B. opt" into separate lines
   // We do replacements for each option style
   let s = text;
+  try {
   // We need to handle option markers inline: detect patterns preceded by whitespace and not at start of line
   // Use a function to insert \n before each match that is not at line start
   const optionInlineRe = /[ \t]{1,}(?=((?:\(?\s*[A-Da-d]\s*\)?\s*[\.\)\:\-]\s+)|(?:\(?\s*[কখগঘ]\s*\)?\s*[\.\)\:\-।]?\s+)|(?:\(?\s*[1-4]\s*\)?\s*[\.\)\:\-]\s+)|(?:\(?\s*[১-৪]\s*\)?\s*[\.\)\:\-।]?\s+)|(?:\(?\s*(?:i{1,3}|iv)\s*\)?\s*[\.\)\:\-]\s+)|(?:\(?\s*(?:I{1,3}|IV)\s*\)?\s*[\.\)\:\-]\s+)))/g;
@@ -932,6 +931,9 @@ function injectNewlinesForInline(text: string): string {
   s = s.replace(/([^\n])\s+(?=(?:Q\s*0*\d+\s*[\.\)\:\-]|Question\s*(?:No\.?)?\s*\d+\s*[\.\)\:\-]|প্রশ্ন\s*(?:নং\.?)?\s*(?:\d+|[০-৯]+)\s*[\.\)\:\-।]|(?:\d{1,3}|[০-৯]{1,3})\s*[\.\)\।\)]\s+[^\n]{3,}))/g, (m, p1) => p1 + "\n");
   // Roman question inline: " I. " or " II. "
   s = s.replace(/([^\n])\s+(?=(?:[IVXLCDM]{1,5})\s*[\.\)]\s+[A-Za-z\u0980-\u09FF])/g, "$1\n");
+  } catch {
+    return text;
+  }
 
   return s;
 }
@@ -947,7 +949,7 @@ function parseSingleBlock(blockText: string): ParsedPasteMcq {
   const options: [string, string, string, string] = ["", "", "", ""];
   let correctIndex: number | null = null;
   let answerPayloadRaw: string | null = null;
-  let markValue: number | null = null;
+  const markValue: number | null = null;
   let originalNumber: string | null = null;
   let seenOptions = false;
   let optionMarkerCorrectIdx: number | null = null;
@@ -1320,7 +1322,7 @@ function parseSingleBlockInline(blockText: string): ParsedPasteMcq | null {
   if (matches.length < 2) return null;
   // Find last consecutive group of 2-4 matches that are valid options
   // Take last up to 4 matches as candidate option group
-  let candidateGroup = matches.slice(-4);
+  const candidateGroup = matches.slice(-4);
   // Need to ensure they are distinct indices 0-3
   const tmpOptions: [string, string, string, string] = ["", "", "", ""];
   let hasValid = false;
@@ -1684,7 +1686,7 @@ function parseViaLineScan(text: string): ParsedPasteMcq[] {
       : b.questionLines.join(" ").replace(/\s+/g, " ").trim();
     const statementsText = b.statements.join("\n").trim();
     const question = statementsText ? (baseQuestion ? `${baseQuestion}\n${statementsText}` : statementsText) : baseQuestion;
-    const marks = (b as any).marks ?? null;
+    const marks = b.marks;
     const issues: string[] = [];
     if (!question || question.length < 3) issues.push("Question text missing or too short");
     const filled = b.options.filter((o) => o.trim()).length;
@@ -1702,7 +1704,7 @@ function parseViaLineScan(text: string): ParsedPasteMcq[] {
       options: b.options,
       correctIndex: b.correctIndex,
       explanation: b.explanation ?? "",
-      marks: (b as any).marks ?? null,
+      marks: marks,
       rawBlock: blockText,
       issues,
       needsReview,
@@ -1728,7 +1730,7 @@ export function parsePastedMcqs(pastedText: string): ParsedPasteMcq[] {
   if (numberedBlocks && numberedBlocks.length > 0) {
     const parsed: ParsedPasteMcq[] = [];
     for (const block of numberedBlocks) {
-      let p = parseSingleBlock(block);
+      const p = parseSingleBlock(block);
       if (p.options.filter((o) => o.trim()).length < 2) {
         // Avoid converting statement lines (e.g., Roman I., II. statements) into options via inline fallback
         const rawLines = block.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -1845,7 +1847,7 @@ export function recomputeParsedMcq(mcq: ParsedPasteMcq): ParsedPasteMcq {
     const markMatch = mcq.rawBlock.match(/(?:^|\n)\s*(?:MARK|MARKS)\s*[:\-=—.]?\s*(\d+(?:\.\d+)?)\s*$/im);
     if (markMatch) {
       const v = parseFloat(markMatch[1]);
-      if (Number.isFinite(v) && v >= 0) (mcq as any).marks = v;
+      if (Number.isFinite(v) && v >= 0) mcq.marks = v;
     }
   }
   const issues: string[] = [];

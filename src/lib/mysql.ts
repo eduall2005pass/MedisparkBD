@@ -2,7 +2,9 @@ import mysql from "mysql2/promise";
 
 export const mysqlHost =
   process.env.MYSQL_HOST ?? process.env.NEXT_PUBLIC_MYSQL_HOST ?? "localhost";
-export const mysqlPort = Number(process.env.MYSQL_PORT ?? 3306);
+const parsedPort = Number(process.env.MYSQL_PORT ?? 3306);
+export const mysqlPort =
+  Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 3306;
 export const mysqlDatabase =
   process.env.MYSQL_DATABASE ?? process.env.NEXT_PUBLIC_MYSQL_DATABASE ?? "";
 export const mysqlUser =
@@ -47,8 +49,24 @@ export function getMysqlPool(): mysql.Pool | null {
             : undefined,
       flags: ["FOUND_ROWS"],
     });
+    // Prevent unhandled 'error' events on idle connections from crashing Node.
+    (pool as unknown as { on?: (e: string, l: () => void) => void }).on?.(
+      "error",
+      () => {},
+    );
   }
   return pool;
+}
+
+// Retry once on transient connection failures (serverless idle kills, failover).
+function isTransientDbError(code?: string): boolean {
+  return (
+    code === "ER_CON_COUNT_ERROR" ||
+    code === "PROTOCOL_CONNECTION_LOST" ||
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT" ||
+    code === "EPIPE"
+  );
 }
 
 // Simple in-memory query cache for GET requests (invalidated on mutations).
@@ -88,9 +106,17 @@ export async function query<T>(
     !upper.includes("FOR UPDATE") &&
     !upper.includes("INFORMATION_SCHEMA");
   const ttl = typeof options?.cache === "number" ? options.cache : CACHE_TTL;
-  const key = cacheKey(sql, params);
+  // Build key defensively: BigInt/circular params throw in JSON.stringify —
+  // bypass cache instead of crashing outside the retry loop.
+  let key = "";
+  let cacheable = useCache;
+  try {
+    key = cacheKey(sql, params);
+  } catch {
+    cacheable = false;
+  }
 
-  if (useCache) {
+  if (cacheable) {
     const cached = queryCache.get(key);
     if (cached && cached.expires > Date.now()) {
       // Refresh LRU position on hit.
@@ -107,13 +133,13 @@ export async function query<T>(
       // an extra PREPARE round-trip over WAN latency — query() halves the
       // round-trips per statement. Placeholders are still safely escaped.
       const [rows] = await client.query(sql, params as never);
-      if (useCache) {
+      if (cacheable) {
         cacheSet(key, rows, Date.now() + ttl);
       }
       return rows as T;
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
-      if (code === "ER_CON_COUNT_ERROR" && attempt === 0) {
+      if (isTransientDbError(code) && attempt === 0) {
         await new Promise((r) => setTimeout(r, 300 + Math.random() * 400));
         continue;
       }
@@ -149,7 +175,7 @@ export async function exec(
       return result;
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
-      if (code === "ER_CON_COUNT_ERROR" && attempt === 0) {
+      if (isTransientDbError(code) && attempt === 0) {
         await new Promise((r) => setTimeout(r, 300 + Math.random() * 400));
         continue;
       }
@@ -175,7 +201,14 @@ export async function ensureColumn(
     [table, column],
   );
   if ((rows[0]?.n ?? 0) > 0) return;
-  await exec(`ALTER TABLE \`${table}\` ADD COLUMN ${definition}`);
+  // DDL is inherently unescaped — reject anything containing statement
+  // separators/quotes-backticks outside a controlled charset so a future
+  // caller can't smuggle a second statement or identifier into `definition`.
+  if (!/^[A-Za-z0-9_()\s,.'"`:+\-]*$/.test(definition)) {
+    throw new Error("Unsafe column definition.");
+  }
+  const safeTable = "`" + table.replace(/`/g, "``") + "`";
+  await exec(`ALTER TABLE ${safeTable} ADD COLUMN ${definition}`);
 }
 
 /**
@@ -195,6 +228,7 @@ export async function withTransaction<T>(
     await connection.beginTransaction();
     const result = await work(connection);
     await connection.commit();
+    invalidateQueryCache();
     return result;
   } catch (error) {
     try {
@@ -214,7 +248,7 @@ export function parseDate(raw: unknown): string {
     const parsed = Date.parse(raw);
     return Number.isNaN(parsed) ? raw : new Date(parsed).toISOString();
   }
-  return String(raw ?? "");
+  return "";
 }
 
 /**

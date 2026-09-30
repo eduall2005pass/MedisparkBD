@@ -16,7 +16,7 @@
 // so deleting an item can never leave broken serials.
 // New items are appended at the end via nextUnifiedPosition().
 
-import { ensureColumn, exec, query } from "@/lib/mysql";
+import { ensureColumn, query, withTransaction } from "@/lib/mysql";
 
 export type UnifiedItemKind = "class" | "material" | "exam";
 
@@ -235,29 +235,32 @@ export async function saveChapterUnifiedOrder(
   }
 
   // Only sort_order is ever written; content data stays untouched.
-  let position = 1;
-  for (const entry of clean) {
-    if (entry.kind === "class") {
-      await exec(`UPDATE course_classes SET sort_order = ? WHERE id = ? AND chapter_id = ?`, [
-        position,
-        entry.id,
-        id,
-      ]);
-    } else if (entry.kind === "material") {
-      await exec(`UPDATE course_materials SET sort_order = ? WHERE id = ? AND chapter_id = ?`, [
-        position,
-        Number(entry.id),
-        id,
-      ]);
-    } else {
-      await exec(`UPDATE exams SET sort_order = ? WHERE id = ? AND chapter_id = ?`, [
-        position,
-        entry.id,
-        id,
-      ]);
+  // One transaction: N sequential UPDATEs succeed or roll back together.
+  await withTransaction(async (conn) => {
+    let position = 1;
+    for (const entry of clean) {
+      if (entry.kind === "class") {
+        await conn.query(`UPDATE course_classes SET sort_order = ? WHERE id = ? AND chapter_id = ?`, [
+          position,
+          entry.id,
+          id,
+        ]);
+      } else if (entry.kind === "material") {
+        await conn.query(`UPDATE course_materials SET sort_order = ? WHERE id = ? AND chapter_id = ?`, [
+          position,
+          Number(entry.id),
+          id,
+        ]);
+      } else {
+        await conn.query(`UPDATE exams SET sort_order = ? WHERE id = ? AND chapter_id = ?`, [
+          position,
+          entry.id,
+          id,
+        ]);
+      }
+      position += 1;
     }
-    position += 1;
-  }
+  });
 
   return getChapterUnifiedItems(id);
 }

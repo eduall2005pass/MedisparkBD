@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAnyPermission } from "@/lib/admin";
-import { saveFile, isLocalUpload, removeFile } from "@/lib/storage";
+import { saveFile, isLocalUpload, removeFile, ALLOWED_UPLOAD_DIRS } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,67 @@ const ALLOWED_EXTENSIONS = [
 ];
 
 const MAX_FILE_BYTES = 512 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".avif", ".ico"]);
+
+function safeUploadName(name: string): string {
+  let base = (name || "").replace(/\\/g, "/");
+  base = base.slice(base.lastIndexOf("/") + 1).replace(/\0/g, "").trim().replace(/[. ]+$/g, "");
+  base = base.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128).replace(/[. ]+$/g, "");
+  return base || "file";
+}
+
+/** Canonicalize a previous-file URL and allow it only when it points at our
+ * own local upload prefix. Resolves dot segments, strips leading slashes for
+ * normalization, and rejects anything whose normalized form contains `..`. */
+function canonicalPreviousUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  let s = raw.trim();
+  if (!s || s.length > 2048) return null;
+  s = s.split(/[?#]/)[0].replace(/\\/g, "/").trim();
+  if (!s || /[<>]/.test(s) || s.includes("\0")) return null;
+  if (/^https?:\/\//i.test(s)) {
+    const pathStart = s.indexOf("/", s.indexOf("//") + 2);
+    const origin = pathStart === -1 ? s : s.slice(0, pathStart);
+    const path = pathStart === -1 ? "/" : s.slice(pathStart);
+    const out: string[] = [];
+    for (const seg of path.split("/")) {
+      if (!seg || seg === ".") continue;
+      if (seg === "..") return null;
+      let decoded = seg;
+      try {
+        decoded = decodeURIComponent(seg);
+      } catch {
+        return null;
+      }
+      if (decoded === ".." || decoded.includes("/") || decoded.includes("\\")) return null;
+      out.push(seg);
+    }
+    const canonical = `${origin}/${out.join("/")}`;
+    if (canonical.includes("..")) return null;
+    return isLocalUpload(canonical) ? canonical : null;
+  }
+  const hadLeadingSlash = s.startsWith("/");
+  const stripped = s.replace(/^\/+/, "");
+  if (!stripped) return null;
+  const out: string[] = [];
+  for (const seg of stripped.split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") return null;
+    let decoded = seg;
+    try {
+      decoded = decodeURIComponent(seg);
+    } catch {
+      return null;
+    }
+    if (decoded === ".." || decoded.includes("/") || decoded.includes("\\")) return null;
+    out.push(seg);
+  }
+  const normalized = out.join("/");
+  if (!normalized || normalized.includes("..")) return null;
+  const candidate = hadLeadingSlash ? `/${normalized}` : normalized;
+  return isLocalUpload(candidate) ? candidate : null;
+}
 
 /** Generic admin media upload: multipart { file, dir?, previousUrl? }.
  * Any content manager may upload: course managers (course covers, class
@@ -50,12 +111,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const dot = file.name.lastIndexOf(".");
-  const extension = dot === -1 ? "" : file.name.slice(dot).toLowerCase();
+  const safeName = safeUploadName(file.name);
+  const dot = safeName.lastIndexOf(".");
+  const extension = dot === -1 ? "" : safeName.slice(dot).toLowerCase();
   if (!ALLOWED_EXTENSIONS.includes(extension)) {
     return NextResponse.json(
       { error: `Unsupported file type "${extension || "unknown"}".` },
       { status: 400 },
+    );
+  }
+  // Tighter cap for image kinds (512MB blanket only for audio/pdf).
+  // safeName normalizes "evil.svg.png" (real ext .png) and trailing dots.
+  const cap = IMAGE_EXTS.has(extension) ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
+  if (file.size > cap) {
+    return NextResponse.json(
+      { error: `File exceeds the ${cap === MAX_IMAGE_BYTES ? "10 MB" : "512 MB"} limit.` },
+      { status: 413 },
     );
   }
 
@@ -64,23 +135,25 @@ export async function POST(request: NextRequest) {
     typeof rawDir === "string" && rawDir.trim().length > 0
       ? rawDir.trim().replace(/[^A-Za-z0-9/_-]/g, "")
       : "misc";
+  if (!ALLOWED_UPLOAD_DIRS.has(dir)) {
+    return NextResponse.json({ error: "Invalid upload directory." }, { status: 400 });
+  }
 
   try {
-    const url = await saveFile(dir, file.name, await file.arrayBuffer());
+    const url = await saveFile(dir, safeName, await file.arrayBuffer());
 
     // Best-effort cleanup of the previously managed file being replaced.
-    const previousUrl = formData.get("previousUrl");
-    if (typeof previousUrl === "string" && previousUrl && previousUrl !== url) {
-      if (isLocalUpload(previousUrl)) {
-        await removeFile(previousUrl).catch(() => undefined);
-      }
+    // Only delete files under our own local upload prefix.
+    const safePrevious = canonicalPreviousUrl(formData.get("previousUrl"));
+    if (safePrevious && safePrevious !== url) {
+      await removeFile(safePrevious).catch(() => undefined);
     }
 
     return NextResponse.json({ url });
   } catch (error) {
     console.error("Media upload failed:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Upload failed. Please try again." },
+      { error: "Upload failed. Please try again." },
       { status: 500 },
     );
   }

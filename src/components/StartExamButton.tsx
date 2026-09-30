@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import type { ExamRulesData } from "@/components/ExamRules";
 
@@ -26,9 +27,17 @@ export default function StartExamButton({
 }) {
   const router = useRouter();
   const { user, profile, authLoading } = useAuth();
+  const inFlightRef = useRef(false);
 
   const handleStart = () => {
-    if (disabled || authLoading) return;
+    if (disabled || authLoading || inFlightRef.current) return;
+    inFlightRef.current = true;
+    // Release after navigation has had time to start — blocks rapid
+    // double-clicks without permanently deadening the button if the
+    // navigation no-ops (same route, blocked push, back-forward cache).
+    setTimeout(() => {
+      inFlightRef.current = false;
+    }, 1500);
 
     if (!user) {
       router.push(
@@ -52,7 +61,7 @@ export default function StartExamButton({
     <button
       type="button"
       onClick={handleStart}
-      disabled={disabled}
+      disabled={disabled || authLoading}
       className={`touch-manipulation select-none transform-gpu will-change-transform transition-all duration-200 ease-out active:scale-[0.98] disabled:cursor-not-allowed ${className}`}
     >
       {children ?? (disabled ? "Not Available" : "Start Exam")}

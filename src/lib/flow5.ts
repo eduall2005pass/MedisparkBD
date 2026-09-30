@@ -30,7 +30,9 @@ export {
   FLOW5_SUBJECTS,
   flow5SubjectTitle,
   isFlow5Format,
+  isFlow5PracticePhase,
   isFlow5SubjectKey,
+  normalizeFlow5Phase,
   type Flow5ExamItem,
   type Flow5ExamPhase,
   type Flow5Format,
@@ -84,7 +86,7 @@ type Flow5Row = {
   question_count: number | null;
 };
 
-/** Upcoming → Live → Practice lifecycle — same rule as the enrolled engine. */
+/** Upcoming → Live → Archived lifecycle — canonical course rule (see getCourseState). "practice" is a legacy alias of "archived". */
 function phaseForRow(scheduledAt: string | null, endsAt: string | null): Flow5ExamItem["phase"] {
   const now = Date.now();
   const start = scheduledAt ? new Date(scheduledAt).getTime() : NaN;
@@ -93,7 +95,7 @@ function phaseForRow(scheduledAt: string | null, endsAt: string | null): Flow5Ex
   const hasEnd = Number.isFinite(end);
   if (!hasStart && !hasEnd) return "no-window";
   if (hasStart && now < start) return "upcoming";
-  if (hasEnd && now > end) return "practice";
+  if (hasEnd && now > end) return "archived";
   return "live";
 }
 

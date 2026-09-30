@@ -54,7 +54,8 @@ export async function POST(request: NextRequest) {
 
     if (extension === ".svg") {
       processedBytes = Buffer.from(rawBytes);
-      processedFileName = file.name;
+      const svgBase = file.name.replace(/\\/g, "/").split("/").pop()?.replace(/\0/g, "").trim().replace(/[. ]+$/g, "").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128).replace(/[. ]+$/g, "") || "logo.svg";
+      processedFileName = svgBase.toLowerCase().endsWith(".svg") ? svgBase : `${svgBase}.svg`;
       processedMime = "image/svg+xml";
       try {
         const { parseImageDimensions } = await import("@/lib/image-dimensions");
@@ -90,9 +91,10 @@ export async function POST(request: NextRequest) {
           // keep fallback 512
         }
       }
-      const base = file.name.includes(".")
+      const rawBase = file.name.includes(".")
         ? file.name.slice(0, file.name.lastIndexOf("."))
         : file.name;
+      const base = rawBase.replace(/\\/g, "/").split("/").pop()?.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64) || "logo";
       processedFileName = `${base}.png`;
       processedMime = "image/png";
     }

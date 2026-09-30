@@ -72,14 +72,44 @@ const COMPRESSIBLE_IMAGE_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".avi
 function minifySvg(buffer: Buffer): Buffer {
   try {
     let text = buffer.toString("utf8");
-    const originalLen = Buffer.byteLength(text);
-    // Remove XML/HTML comments, keep conditional comments out
+    if (!text.slice(0, 4096).toLowerCase().includes("<svg")) return buffer;
+    // NOTE: even sanitized, SVGs must be served downstream with
+    // `Content-Disposition: attachment` (or `Content-Security-Policy: sandbox`)
+    // so any residual inline vector cannot execute in the site origin.
+    // Strip executable / external-content vectors before storing
     text = text.replace(/<!--[\s\S]*?-->/g, "");
+    text = text.replace(/<\?[\s\S]*?\?>/g, "");
+    text = text.replace(/<!DOCTYPE[^>]*>/gi, "");
+    text = text.replace(/<script[\s\S]*?<\/script\s*>/gi, "");
+    text = text.replace(/<(iframe|object|embed|foreignobject|handler|listener)[\s\S]*?(<\/\1\s*>|$)/gi, "");
+    // Drop <image> tags pointing at external resources (keep #fragment refs).
+    text = text.replace(/<image\b[^>]*?(?:\/>|>(?:<\/image\s*>)?)/gi, (tag) => {
+      const m = tag.match(/(?:href|xlink:href|src)\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      const val = ((m?.[2] ?? m?.[3] ?? m?.[4]) ?? "").trim();
+      if (!val) return tag;
+      const norm = val.toLowerCase().replace(/[\s\0-\x1f]+/g, "");
+      if (norm.startsWith("//") || /^[a-z][a-z0-9+.-]*:/.test(norm)) return "";
+      return tag;
+    });
+    // Event handlers, incl. the `<svg/onload=` slash variant (no whitespace).
+    text = text.replace(/[\s\/]on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    // Dangerous URL schemes in hyperlink/resource attributes.
+    text = text.replace(/\s(href|xlink:href|src|action|formaction)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, (attr) => {
+      const vm = attr.match(/=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/);
+      const val = ((vm?.[2] ?? vm?.[3] ?? vm?.[4]) ?? "").trim().toLowerCase().replace(/[\s\0-\x1f]+/g, "");
+      if (/^(javascript|vbscript|data):/.test(val)) return "";
+      return attr;
+    });
+    // CSS vectors: @import and remote url() references.
+    text = text.replace(/@import[^;]+;/gi, "");
+    text = text.replace(/url\(\s*["']?(?:https?:[^)"']+|data:[^)"']+|\/\/[^)"']+)["']?\s*\)/gi, "");
+    // CSS expression()/binding vectors inside style attributes.
+    text = text.replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, (m, q: string) =>
+      /expression\s*\(|behaviou?r\s*:|binding\s*:/i.test(q) ? "" : m,
+    );
     // Collapse whitespace between tags, trim
     text = text.replace(/>\s+</g, "><").replace(/\s{2,}/g, " ").trim();
-    // Remove empty attributes like fill="none" keeping? keep lossless so only whitespace
-    const out = Buffer.from(text, "utf8");
-    return out.length < originalLen ? out : buffer;
+    return Buffer.from(text, "utf8");
   } catch {
     return buffer;
   }
@@ -91,11 +121,9 @@ async function compressFileIfNeeded(
 ): Promise<Buffer> {
   const dot = fileName.lastIndexOf(".");
   const ext = dot === -1 ? "" : fileName.slice(dot).toLowerCase();
-  // SVG: lossless minify (no visual change)
+  // SVG: sanitize (strip script/on*/foreignObject) + lossless minify
   if (ext === ".svg") {
-    if (buffer.length < 1 * 1024) return buffer;
-    const min = minifySvg(buffer);
-    return min.length < buffer.length ? min : buffer;
+    return minifySvg(buffer);
   }
   // PDF/Audio (mp3/m4a/aac/ogg/opus/wav/pdf): already compressed containers.
   // Lossless re-encode would need ffmpeg/ghostscript which aren't on Vercel/VM and risks quality loss,
@@ -135,6 +163,134 @@ async function compressFileIfNeeded(
   }
 }
 
+export const MAX_SAVE_BYTES = 512 * 1024 * 1024;
+
+// Allowlist of upload directories. Every server-side saveFile() caller and
+// every `dir` accepted by /api/uploads must be listed here; anything else is
+// rejected. Built from current callers (grep saveFile/dir usage).
+export const ALLOWED_UPLOAD_DIRS = new Set([
+  "qa",
+  "course-images",
+  "course-categories",
+  "course-materials",
+  "courses",
+  "routines",
+  "exams",
+  "media-library",
+  "misc",
+  "jerseys",
+  "seo",
+  "backups",
+  "student-profiles",
+  "admin/profile",
+  "mentor-photos",
+  "review-photos",
+  "homepage-courses",
+  "website/logo",
+  "website/favicon",
+  "website/hero",
+  "website/watermark",
+  "website-banners",
+]);
+
+export function sanitizeDir(directory: string): string {
+  const raw = (directory || "").split(/[?#]/)[0].replace(/\\/g, "/").trim();
+  if (raw.includes("..")) throw new Error("Invalid upload directory.");
+  const clean = raw
+    .split("/")
+    .filter((p) => p && p !== ".")
+    .map((p) => p.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64))
+    .filter(Boolean)
+    .join("/");
+  if (!clean) throw new Error("Invalid upload directory.");
+  if (!ALLOWED_UPLOAD_DIRS.has(clean)) throw new Error("Invalid upload directory.");
+  return clean.slice(0, 128);
+}
+
+export function sanitizeFileName(fileName: string): string {
+  let base = (fileName || "").split(/[?#]/)[0].replace(/\\/g, "/");
+  base = base.slice(base.lastIndexOf("/") + 1).replace(/\0/g, "").trim().replace(/[. ]+$/g, "");
+  if (!base || base === "." || base === "..") base = `file-${randomUUID()}`;
+  base = base.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128).replace(/[. ]+$/g, "");
+  return base || `file-${randomUUID()}`;
+}
+
+function extOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot === -1 ? "" : name.slice(dot).toLowerCase();
+}
+
+/** Magic-byte check (not just extension) — strict per type; unknown extensions are denied. */
+function validateMagic(buffer: Buffer, ext: string): void {
+  if (buffer.length < 4) throw new Error("Empty or truncated file.");
+  const head = buffer.subarray(0, 16);
+  const textHead = buffer.subarray(0, Math.min(buffer.length, 2048)).toString("utf8").toLowerCase();
+  const is = (...sigs: number[][]) => sigs.some((s) => s.every((b, i) => head[i] === b));
+  const isFtyp = (h: Buffer) =>
+    h.length >= 8 && h[4] === 0x66 && h[5] === 0x74 && h[6] === 0x79 && h[7] === 0x70;
+  switch (ext) {
+    case ".png":
+      if (!is([0x89, 0x50, 0x4e, 0x47])) throw new Error("File content does not match .png type.");
+      return;
+    case ".jpg":
+    case ".jpeg":
+      if (!is([0xff, 0xd8, 0xff])) throw new Error("File content does not match JPEG type.");
+      return;
+    case ".gif":
+      if (!textHead.startsWith("gif87a") && !textHead.startsWith("gif89a")) throw new Error("File content does not match .gif type.");
+      return;
+    case ".webp":
+      if (!(head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46 && textHead.slice(8, 12) === "webp")) throw new Error("File content does not match .webp type.");
+      return;
+    case ".avif": {
+      if (buffer.length < 12 || !isFtyp(head)) throw new Error("File content does not match .avif type.");
+      const brands = buffer.subarray(0, Math.min(buffer.length, 64)).toString("ascii").toLowerCase();
+      if (!brands.includes("avif")) throw new Error("File content does not match .avif type.");
+      return;
+    }
+    case ".pdf":
+      if (!textHead.startsWith("%pdf")) throw new Error("File content does not match .pdf type.");
+      return;
+    case ".ico":
+      if (!is([0x00, 0x00, 0x01, 0x00])) throw new Error("File content does not match .ico type.");
+      return;
+    case ".svg":
+      if (!textHead.includes("<svg")) throw new Error("File content does not match .svg type.");
+      return;
+    case ".wav":
+      if (!(head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46)) throw new Error("File content does not match .wav type.");
+      return;
+    case ".mp3": {
+      const id3 = head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33;
+      const frameSync = head[0] === 0xff && (head[1] & 0xe0) === 0xe0;
+      if (!id3 && !frameSync) throw new Error("File content does not match .mp3 type.");
+      return;
+    }
+    case ".m4a": {
+      if (!isFtyp(head)) throw new Error("File content does not match .m4a type.");
+      const brands = buffer.subarray(0, Math.min(buffer.length, 64)).toString("ascii").toLowerCase();
+      if (!/(m4a|mp4|isom|mp42)/.test(brands)) throw new Error("File content does not match .m4a type.");
+      return;
+    }
+    case ".aac": {
+      const adts = head[0] === 0xff && (head[1] & 0xf0) === 0xf0;
+      if (!adts && !textHead.startsWith("adif")) throw new Error("File content does not match .aac type.");
+      return;
+    }
+    case ".ogg":
+    case ".opus":
+      if (!(head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53)) throw new Error(`File content does not match ${ext} type.`);
+      return;
+    case ".json": {
+      const stripped = buffer.subarray(0, Math.min(buffer.length, 2048)).toString("utf8").replace(/^\uFEFF/, "").trimStart();
+      if (!stripped.startsWith("{") && !stripped.startsWith("[")) throw new Error("File content does not match .json type.");
+      return;
+    }
+    default:
+      throw new Error("Unsupported file type.");
+  }
+}
+
 export async function saveFile(
   directory: string,
   fileName: string,
@@ -142,16 +298,21 @@ export async function saveFile(
 ): Promise<string> {
   const rawBytes =
     data instanceof ArrayBuffer ? Buffer.from(new Uint8Array(data)) : data;
-  const bytes = await compressFileIfNeeded(rawBytes, fileName);
+  if (rawBytes.length === 0) throw new Error("Empty file.");
+  if (rawBytes.length > MAX_SAVE_BYTES) throw new Error("File exceeds the size limit.");
+  const safeDir = sanitizeDir(directory);
+  const safeName = sanitizeFileName(fileName);
+  validateMagic(rawBytes, extOf(safeName));
+  const bytes = await compressFileIfNeeded(rawBytes, safeName);
 
   const endpoint = new URL(MEDIA_UPLOAD_URL);
-  endpoint.searchParams.set("dir", directory);
-  endpoint.searchParams.set("name", fileName || `file-${randomUUID()}`);
+  endpoint.searchParams.set("dir", safeDir);
+  endpoint.searchParams.set("name", safeName);
 
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
-      "Content-Type": detectMimeType(fileName),
+      "Content-Type": detectMimeType(safeName),
       "X-Medifiles-Token": mediaToken(),
     },
     body: new Uint8Array(bytes),
@@ -159,13 +320,12 @@ export async function saveFile(
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(
-      `Media upload failed (${response.status}): ${detail.slice(0, 200)}`,
-    );
+    console.error(`Media upload failed (${response.status}):`, detail.slice(0, 200));
+    throw new Error("Media upload failed. Please try again.");
   }
 
   const result = (await response.json()) as { url?: string };
-  if (!result.url) throw new Error("Media upload returned no URL");
+  if (!result.url) throw new Error("Media upload failed. Please try again.");
 
   return `${MEDIA_FILES_BASE_URL}/${result.url.replace(/^\/medifiles\//, "")}`;
 }

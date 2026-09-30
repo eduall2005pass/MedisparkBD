@@ -282,12 +282,19 @@ export async function fetchRolePermissions(): Promise<Record<string, string[]>> 
   // Read moderator and teacher permissions from database.
   for (const role of AVAILABLE_ROLES) {
     if (role === "admin") continue;
+    let rows: { permissions: string }[];
     try {
-      const rows = await query<{ permissions: string }[]>(
+      rows = await query<{ permissions: string }[]>(
         `SELECT permissions FROM role_permissions WHERE role = ? LIMIT 1`,
         [role],
       );
-      if (rows[0]?.permissions) {
+    } catch (err) {
+      // Unexpected DB error — don't silently fall back to defaults.
+      console.error(`[fetchRolePermissions] query failed for role "${role}":`, err);
+      throw err;
+    }
+    if (rows[0]?.permissions) {
+      try {
         const parsed = JSON.parse(rows[0].permissions) as unknown;
         if (Array.isArray(parsed)) {
           result[role] = sanitizePermissions(parsed).filter(
@@ -297,9 +304,9 @@ export async function fetchRolePermissions(): Promise<Record<string, string[]>> 
           );
           continue;
         }
+      } catch {
+        // Corrupt JSON — fall through to defaults.
       }
-    } catch {
-      // Fall through to defaults.
     }
     // Default permissions when no DB row exists (canonical matrix).
     result[role] = [...DEFAULT_PERMISSIONS_BY_ROLE[role as AdminRole]];

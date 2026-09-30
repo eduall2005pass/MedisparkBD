@@ -167,6 +167,9 @@ function detectTemplateForCategory(cat: FixedCategory | null | undefined): strin
 type CourseOption = { slug: string; name: string };
 type ChapterOption = { id: string; name: string };
 
+// Render cap — full filtered lists can be large; show first N + refine hint.
+const EXAM_LIST_LIMIT = 100;
+
 export default function ExamManager({
   title,
   description,
@@ -241,6 +244,12 @@ export default function ExamManager({
   // Monotonic request id — a slow earlier response can never overwrite the
   // result of a newer load (filter change / retry / save).
   const requestRef = useRef(0);
+  // eslint-safe parent callback: unmemoized onExamsChange must not retrigger.
+  const onExamsChangeRef = useRef(onExamsChange);
+  useEffect(() => {
+    onExamsChangeRef.current = onExamsChange;
+  }, [onExamsChange]);
+  const lastEmittedExamsRef = useRef<Exam[] | null>(null);
 
   const load = useCallback(async () => {
     const requestId = ++requestRef.current;
@@ -295,10 +304,14 @@ export default function ExamManager({
   }, [gate.ready, load]);
 
   // Let the Public Exam Control parent build subject cards/counts from the
-  // same loaded exams (no duplicate fetching).
+  // same loaded exams (no duplicate fetching). Guarded by identity so an
+  // unmemoized parent callback can never cause a loop.
   useEffect(() => {
-    if (exams) onExamsChange?.(exams);
-  }, [exams, onExamsChange]);
+    if (exams && lastEmittedExamsRef.current !== exams) {
+      lastEmittedExamsRef.current = exams;
+      onExamsChangeRef.current?.(exams);
+    }
+  }, [exams]);
 
   // Course Control categories — required for public exams created outside a
   // category page so they never end up invisible in Public Exam Control.
@@ -943,7 +956,7 @@ export default function ExamManager({
         </p>
       ) : (
         <ul className="mt-5 space-y-3">
-          {filteredByMode!.map((exam, fIdx) => {
+          {filteredByMode!.slice(0, EXAM_LIST_LIMIT).map((exam, fIdx) => {
             const phase = hasEnrolledExams ? flow4Phase(exam) : null;
             const phaseBadge = phase ? flow4PhaseBadge(phase) : null;
             const publicExam = examToPublic(exam);
@@ -967,7 +980,7 @@ export default function ExamManager({
                   </button>
                   <button
                     type="button"
-                    disabled={busy || fIdx === filteredByMode!.length - 1}
+                    disabled={busy || fIdx === Math.min(filteredByMode!.length, EXAM_LIST_LIMIT) - 1}
                     onClick={() => void move(fIdx, 1)}
                     title="Move Down"
                     aria-label={`Move ${exam.title} down`}
@@ -1001,6 +1014,11 @@ export default function ExamManager({
             );
           })}
           </ul>
+      )}
+      {filteredByMode && filteredByMode.length > EXAM_LIST_LIMIT && (
+        <p className="mt-3 text-center text-xs font-semibold text-slate-500">
+          Showing first {EXAM_LIST_LIMIT} of {filteredByMode.length} — refine search to narrow results.
+        </p>
       )}
 
       {/* Public Exam Category: bottom [+ Add Exam] removed — only top + New Exam remains (spec). Keep bottom button for Course Content Control chapter exams only. */}

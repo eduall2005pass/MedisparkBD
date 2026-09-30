@@ -32,7 +32,12 @@ const Q_LINE_FACTOR = 1.1;
 const OPT_FONT_PX = 11;
 const OPT_GAP_PX = 2;
 const OPT_TOP_MARGIN_PX = 6;
-// Question block: mb-3 (12) + p-1 vertical padding (8)
+// Question block: mb-3 (12) + p-1 vertical padding (8).
+// NOTE: on-screen edit chrome (.pdf-hide buttons, Ans editor, image controls,
+// ~22-30px/block) is intentionally EXCLUDED here — every chrome node carries
+// data-html2canvas-ignore AND .pdf-hide{display:none} in the capture clone, so
+// estimates match the captured PDF exactly. Do not add chrome height without
+// updating the fill-regression tests.
 const BLOCK_EXTRAS_PX = 20;
 // Usable text width per column (~342px) minus the number gutter (~40px) for
 // the stem and minus pl-5 (20px) for options; Hind Siliguri 11px averages

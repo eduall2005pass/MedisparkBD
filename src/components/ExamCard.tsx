@@ -409,7 +409,7 @@ export default function ExamCard({
               <MarksIcon />
             </span>
             <p className="truncate text-sm font-extrabold text-heading">
-              {exam.totalMarks || "—"}
+              {exam.totalMarks ?? "—"}
               <span className="ml-1.5 text-xs font-bold text-neutral-400">
                 Marks
               </span>
@@ -420,7 +420,7 @@ export default function ExamCard({
               <ClockIcon className="h-[18px] w-[18px]" />
             </span>
             <p className="truncate text-sm font-extrabold text-heading">
-              {exam.durationMinutes}
+              {exam.durationMinutes ?? "—"}
               <span className="ml-1.5 text-xs font-bold text-neutral-400">
                 Min
               </span>

@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseUser } from "@/lib/auth-api";
 import { isMysqlConfigured, query } from "@/lib/mysql";
 import {
+  QA_MAX_QUESTIONS_PER_HOUR,
+  countRecentQaQuestions,
   fetchQaBrowseSubjects,
   fetchQaQuestions,
+  hasDuplicateQaQuestion,
   insertQaQuestion,
   matchCategoryId,
 } from "@/lib/qa-store";
@@ -15,9 +18,17 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const subjectId =
     request.nextUrl.searchParams.get("subject")?.trim() ?? "";
+  const limit = Math.min(
+    Math.max(Number(request.nextUrl.searchParams.get("limit")) || 500, 1),
+    500,
+  );
+  const offset = Math.max(
+    Number(request.nextUrl.searchParams.get("offset")) || 0,
+    0,
+  );
   const [subjects, questions] = await Promise.all([
     fetchQaBrowseSubjects(),
-    fetchQaQuestions(subjectId ? { subjectId } : {}),
+    fetchQaQuestions(subjectId ? { subjectId, limit, offset } : { limit, offset }),
   ]);
   return cachedJson({ subjects, questions }, "API_SHORT");
 }
@@ -113,6 +124,25 @@ export async function POST(request: NextRequest) {
       { error: "Picture attachment URL is too long." },
       { status: 400 },
     );
+  }
+
+  // Per-user spam guard: max N questions/hour + duplicate/flood check.
+  try {
+    const recent = await countRecentQaQuestions(user.uid);
+    if (recent >= QA_MAX_QUESTIONS_PER_HOUR) {
+      return NextResponse.json(
+        { error: "You are asking too fast — please wait a while (max 10 questions/hour)." },
+        { status: 429 },
+      );
+    }
+    if (await hasDuplicateQaQuestion(user.uid, text)) {
+      return NextResponse.json(
+        { error: "You just asked the same question — please wait before reposting." },
+        { status: 429 },
+      );
+    }
+  } catch {
+    // Best-effort guard — continue to enrollment checks.
   }
 
   try {

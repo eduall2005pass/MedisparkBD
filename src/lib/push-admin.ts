@@ -80,7 +80,10 @@ async function ensureTable(): Promise<void> {
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
 }
 
-/** Save/refresh a browser registration token for a signed-in student. */
+/** Save/refresh a browser registration token for a signed-in student.
+ * Replaces stale same-device rows: a device that re-registers (new FCM
+ * token, same uid + user agent) leaves the old token orphaned, so drop any
+ * other token for that device. */
 export async function savePushToken(
   token: string,
   uid: string,
@@ -88,18 +91,31 @@ export async function savePushToken(
   userAgent: string | null,
 ): Promise<void> {
   await ensureTable();
+  const clean = token.slice(0, 512);
+  const ua = userAgent?.slice(0, 512) ?? null;
   await exec(
     `INSERT INTO push_tokens (token, uid, email, user_agent)
      VALUES (?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE uid = VALUES(uid), email = VALUES(email), user_agent = VALUES(user_agent)`,
-    [token.slice(0, 512), uid, email, userAgent?.slice(0, 512) ?? null],
+    [clean, uid, email, ua],
   );
+  if (ua) {
+    await exec(
+      `DELETE FROM push_tokens WHERE uid = ? AND user_agent = ? AND token <> ?`,
+      [uid, ua, clean],
+    ).catch(() => undefined);
+  }
 }
 
-/** Remove a token (unsubscribe / expired). */
-export async function deletePushToken(token: string): Promise<void> {
+/** Remove a token (unsubscribe / expired). When uid is given, only deletes
+ * a token that belongs to that user (ownership check). */
+export async function deletePushToken(token: string, uid?: string): Promise<void> {
   await ensureTable();
-  await exec(`DELETE FROM push_tokens WHERE token = ?`, [token]);
+  if (uid) {
+    await exec(`DELETE FROM push_tokens WHERE token = ? AND uid = ?`, [token, uid]);
+  } else {
+    await exec(`DELETE FROM push_tokens WHERE token = ?`, [token]);
+  }
 }
 
 /** All stored subscriptions, optionally filtered to one user (admin view). */
@@ -139,7 +155,20 @@ export type PushSendResult = {
   sent: number;
   failed: number;
   total: number;
+  /** Number of 500-token batches that threw (provider failure). */
+  batchErrors?: number;
 };
+
+/** FCM error codes that mean the stored token will never work again. */
+function isStaleTokenCode(code: string): boolean {
+  return (
+    code === "messaging/registration-token-not-registered" ||
+    code === "messaging/invalid-registration-token" ||
+    code === "messaging/mismatched-credential" ||
+    code === "messaging/sender-id-mismatch" ||
+    code === "messaging/unregistered"
+  );
+}
 
 /**
  * Send a notification — to every registered token when no targetUid is
@@ -193,27 +222,34 @@ async function deliverToTokens(
   if (tokens.length === 0) return result;
   const staleTokens: string[] = [];
 
-  // FCM v1 accepts batches of up to 500.
+  // FCM v1 accepts batches of up to 500. Each batch is isolated: one
+  // batch failure (network/provider error) counts that batch as failed and
+  // the loop continues with the remaining batches.
   for (let i = 0; i < tokens.length; i += 500) {
     const batch = tokens.slice(i, i + 500);
-    const response = await messaging.sendEachForMulticast({
-      tokens: batch,
-      notification: { title: input.title, body: input.body },
-      webpush: {
-        fcmOptions: { link: input.url || "/dashboard/notifications" },
-      },
-      data: { url: input.url || "/dashboard/notifications" },
-    });
+    let response;
+    try {
+      response = await messaging.sendEachForMulticast({
+        tokens: batch,
+        notification: { title: input.title, body: input.body },
+        webpush: {
+          fcmOptions: { link: input.url || "/dashboard/notifications" },
+        },
+        data: { url: input.url || "/dashboard/notifications" },
+      });
+    } catch {
+      // Whole-batch provider failure — every token in this batch failed.
+      result.failed += batch.length;
+      result.batchErrors = (result.batchErrors ?? 0) + 1;
+      continue;
+    }
     response.responses.forEach((item, index) => {
       if (item.success) {
         result.sent += 1;
       } else {
         result.failed += 1;
         const code = item.error?.code ?? "";
-        if (
-          code === "messaging/registration-token-not-registered" ||
-          code === "messaging/invalid-registration-token"
-        ) {
+        if (isStaleTokenCode(code)) {
           staleTokens.push(batch[index]);
         }
       }

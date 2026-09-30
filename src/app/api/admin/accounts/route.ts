@@ -75,7 +75,7 @@ export async function PUT(request: NextRequest) {
   ) {
     return NextResponse.json({ error: "A valid email is required." }, { status: 400 });
   }
-  let uid: string | null =
+  const uid: string | null =
     typeof body.uid === "string" && /^[A-Za-z0-9_-]{10,191}$/.test(body.uid)
       ? body.uid
       : await resolveUidFromEmail(body.email.trim().toLowerCase());

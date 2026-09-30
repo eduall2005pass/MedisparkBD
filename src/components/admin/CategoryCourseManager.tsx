@@ -28,6 +28,9 @@ export type CategoryCourse = CatalogCourse & {
 type MentorOption = { id: string; name: string };
 type BatchOption = { id: string; label?: string };
 
+// Render cap — full filtered lists can be large; show first N + refine hint.
+const CATEGORY_COURSE_LIST_LIMIT = 100;
+
 const EMPTY_FORM = {
   slug: "",
   name: "",
@@ -129,10 +132,11 @@ export default function CategoryCourseManager({
       // never a false empty state.
       setLoadError(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- openEdit/startCreate are stable setters
-  }, [category.id, gate.headers, requestedEditSlug, autoAdd]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openEdit/startCreate are stable setters; gate.token is the stable auth key (gate.headers identity changes)
+  }, [category.id, gate.token, requestedEditSlug, autoAdd]);
 
   // Batch options come from the existing filter editor (scope by category).
+  // Depends on the stable token (not gate.headers object identity) to avoid a refetch loop.
   useEffect(() => {
     if (!gate.ready) return;
     fetch("/api/admin/course-filters", { cache: "no-store", headers: gate.headers })
@@ -144,7 +148,8 @@ export default function CategoryCourseManager({
         setBatchOptions(scoped.length > 0 ? scoped : [{ id: "all", label: "All Batches" }]);
       })
       .catch(() => setBatchOptions([{ id: "all", label: "All Batches" }]));
-  }, [gate.ready, gate.headers, category.slug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- gate.headers derived from gate.token
+  }, [gate.ready, gate.token, category.slug]);
 
   // Mentor options for the course↔mentor assignment picker.
   useEffect(() => {
@@ -454,6 +459,7 @@ export default function CategoryCourseManager({
     if (featuredFilter === "normal" && course.featured) return false;
     return true;
   });
+  const visibleCourses = filtered.slice(0, CATEGORY_COURSE_LIST_LIMIT);
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
@@ -543,7 +549,7 @@ export default function CategoryCourseManager({
       ) : (
         <>
           <ul className="mt-5 space-y-3">
-            {filtered.map((course) => (
+            {visibleCourses.map((course) => (
               <li key={course.slug} className={`${cardClass} p-4 sm:p-5`}>
                 <div className="flex flex-wrap items-start gap-3">
                   {course.image ? (
@@ -675,6 +681,11 @@ export default function CategoryCourseManager({
               </li>
             ))}
           </ul>
+          {filtered.length > CATEGORY_COURSE_LIST_LIMIT && (
+            <p className="mt-3 text-center text-xs font-semibold text-slate-500">
+              Showing first {CATEGORY_COURSE_LIST_LIMIT} of {filtered.length} — refine search to narrow results.
+            </p>
+          )}
 
           <button type="button" onClick={startCreate} className={`${buttonPrimaryClass} mt-5 w-full py-3`}>
             + Add Course

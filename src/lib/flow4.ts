@@ -159,9 +159,9 @@ export async function deleteFlow4Subject(courseSlug: string, subjectId: string):
   try { await exec(`UPDATE subject_contents SET is_active = 0 WHERE course_slug = ? AND subject_id = ?`, [courseSlug, subjectId]); } catch {}
   const remaining = await query<Array<{ cnt: number }>>(`SELECT COUNT(*) AS cnt FROM course_subject_assignments WHERE subject_id = ?`, [subjectId]);
   if (Number(remaining[0]?.cnt ?? 0) === 0) {
-    // Soft-delete subject and its chapters + any remaining direct contents
+    // Soft-delete subject only; chapters are course-scoped so only this course's rows
     await exec(`UPDATE course_subjects SET is_active = 0 WHERE id = ?`, [subjectId]);
-    await exec(`UPDATE course_chapters SET is_active = 0 WHERE subject_id = ?`, [subjectId]);
+    await exec(`UPDATE course_chapters SET is_active = 0 WHERE subject_id = ? AND course_slug = ?`, [subjectId, courseSlug]);
     try { await exec(`UPDATE subject_contents SET is_active = 0 WHERE subject_id = ?`, [subjectId]); } catch {}
   }
 }
@@ -294,23 +294,18 @@ export async function getFlow4DirectCourseData(courseSlug: string): Promise<{
   return { subjects: result };
 }
 
-// ── Chapters (per subject + course) ──
+// ── Chapters (per subject + course, strictly scoped by course_slug — no cross-course leak) ──
 export async function getFlow4Chapters(courseSlug: string, subjectId: string): Promise<Flow4Chapter[]> {
   await ensureSchema();
+  const slug = toStr(courseSlug);
+  if (!slug) return [];
   const rows = await query<Array<{ id: string; subject_id: string; name: string; sort_order: number }>>(
     `SELECT id, subject_id, name, sort_order FROM course_chapters
-      WHERE subject_id = ? AND is_active = 1 AND (COALESCE(course_slug,'') = ? OR COALESCE(course_slug,'') = '')
+      WHERE subject_id = ? AND is_active = 1 AND course_slug = ?
       ORDER BY sort_order ASC, name ASC`,
-    [subjectId, courseSlug],
+    [subjectId, slug],
   );
-  // Filter to only this course's chapters when course_slug is set
-  // Keep legacy empty course_slug but ensure subject matches
-  return rows
-    .filter((r) => {
-      // If we stored course_slug, already filtered; legacy rows included
-      return true;
-    })
-    .map((r) => ({ id: r.id, subjectId: r.subject_id, name: r.name, sortOrder: Number(r.sort_order ?? 0) }));
+  return rows.map((r) => ({ id: r.id, subjectId: r.subject_id, name: r.name, sortOrder: Number(r.sort_order ?? 0) }));
 }
 
 export async function addFlow4Chapter(courseSlug: string, subjectId: string, name: string): Promise<Flow4Chapter> {
@@ -318,8 +313,8 @@ export async function addFlow4Chapter(courseSlug: string, subjectId: string, nam
   const clean = toStr(name);
   if (clean.length < 1) throw new Error("Chapter name is required.");
   const rows = await query<Array<{ nxt: number }>>(
-    `SELECT COALESCE(MAX(sort_order),0)+1 AS nxt FROM course_chapters WHERE subject_id = ?`,
-    [subjectId],
+    `SELECT COALESCE(MAX(sort_order),0)+1 AS nxt FROM course_chapters WHERE subject_id = ? AND course_slug = ?`,
+    [subjectId, courseSlug],
   );
   const id = `ch-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   await exec(
@@ -375,7 +370,7 @@ export async function getFlow4Contents(chapterId: string): Promise<Flow4Content[
     }));
   }
   // Fallback: legacy course_classes + course_materials merged as content
-  let legacy: Flow4Content[] = [];
+  const legacy: Flow4Content[] = [];
   try {
     const classes = await query<Array<{ id: string; chapter_id: string; title: string; video_url: string | null; note_url: string | null; duration_minutes: number; sort_order: number }>>(
       `SELECT id, chapter_id, title, video_url, note_url, duration_minutes, sort_order FROM course_classes WHERE chapter_id = ? AND is_active = 1 ORDER BY sort_order ASC`,

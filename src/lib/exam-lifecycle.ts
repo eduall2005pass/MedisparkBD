@@ -21,7 +21,16 @@ export const PUBLIC_LIVE_CLOSED_VISIBLE_MS = 12 * 60 * 60 * 1000;
 export const COURSE_CLOSED_VISIBLE_MS = 24 * 60 * 60 * 1000;
 
 export type PublicLiveState = "draft" | "upcoming" | "live" | "closed" | "hidden" | "practice";
-export type CourseState = "draft" | "upcoming" | "live" | "archived";
+export type CourseState = "draft" | "upcoming" | "live" | "archived" | "no-window";
+
+/** Canonical course/enrolled phase set. "practice" is a legacy alias of "archived". */
+export type CanonicalCoursePhase = CourseState | "practice";
+
+export function normalizeCoursePhase(phase: string | null | undefined): CourseState | null {
+  if (phase === "practice") return "archived";
+  if (phase === "draft" || phase === "upcoming" || phase === "live" || phase === "archived" || phase === "no-window") return phase;
+  return null;
+}
 
 type ExamTime = Pick<Exam, "kind" | "examMode" | "status" | "scheduledAt" | "endsAt">;
 
@@ -90,6 +99,7 @@ export function getCourseState(exam: ExamTime, nowMs: number = Date.now()): Cour
   if (exam.status === "draft") return "draft";
   const startMs = toMs(exam.scheduledAt);
   const endMs = toMs(exam.endsAt);
+  if (startMs === null && endMs === null) return "no-window";
   if (startMs !== null && nowMs < startMs) return "upcoming";
   if (endMs !== null && nowMs >= endMs) return "archived";
   return "live";

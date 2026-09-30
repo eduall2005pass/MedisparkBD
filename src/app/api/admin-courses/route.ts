@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/admin";
+import { getFirebaseUser } from "@/lib/auth-api";
 import {
   fetchAllAdminCourses,
   createAdminCourse,
@@ -11,7 +12,15 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const user = await getFirebaseUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  const admin = await requirePermission(request, "manageCourses");
+  if (!admin) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
   const courses = await fetchAllAdminCourses();
   return NextResponse.json(
     { courses },

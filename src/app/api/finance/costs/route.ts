@@ -1,25 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin";
+import { requireAnyPermission } from "@/lib/admin";
+import { getFirebaseUser } from "@/lib/auth-api";
 import { logAdminAction } from "@/lib/administration";
 import {
   createManualCost,
   fetchManualCosts,
   normalizeRange,
-  toPublicCost,
   validateCostInput,
 } from "@/lib/finance";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/finance/costs — dual mode:
- *   Public (no token): paid, non-deleted records, sanitized
- *     (no ids, emails, notes, receipts, auth data).
- *   Admin (valid Bearer token of an authorized admin): full records +
- *     search/filter/sort/pagination, incl. pending/cancelled.
+ * GET /api/finance/costs — permission-gated. Full records +
+ *   search/filter/sort/pagination, incl. pending/cancelled.
  */
 export async function GET(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireAnyPermission(request, [
+    "manageSystem",
+    "manageCourses",
+  ]);
+  if (!admin) {
+    const user = await getFirebaseUser(request);
+    return NextResponse.json(
+      { error: user ? "Forbidden." : "Unauthorized." },
+      { status: user ? 403 : 401 },
+    );
+  }
   const url = new URL(request.url);
   const { from, to } = normalizeRange(
     url.searchParams.get("from"),
@@ -34,27 +41,7 @@ export async function GET(request: NextRequest) {
   const category = url.searchParams.get("category");
   const paidBy = url.searchParams.get("paidBy");
 
-  if (!admin) {
-    // ── Public: paid costs only, sanitized ──
-    const { costs, total } = await fetchManualCosts({
-      from,
-      to,
-      category,
-      status: "paid",
-      paidBy,
-      search,
-      limit: pageSize,
-      offset: (page - 1) * pageSize,
-    });
-    return NextResponse.json({
-      costs: costs.map(toPublicCost),
-      total,
-      page,
-      pageSize,
-    });
-  }
-
-  // ── Admin: full records ──
+  // ── Permission-gated: full records ──
   const status = url.searchParams.get("status");
   const includeDeleted = url.searchParams.get("includeDeleted") === "1";
   const { costs, total } = await fetchManualCosts({
@@ -72,14 +59,21 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/finance/costs — admin only.
+ * POST /api/finance/costs — permission-gated.
  * Body is strictly whitelisted; created_by comes from the verified token,
  * never from the client (mass-assignment safe).
  */
 export async function POST(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireAnyPermission(request, [
+    "manageSystem",
+    "manageCourses",
+  ]);
   if (!admin) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    const user = await getFirebaseUser(request);
+    return NextResponse.json(
+      { error: user ? "Forbidden." : "Unauthorized." },
+      { status: user ? 403 : 401 },
+    );
   }
   const body = await request.json().catch(() => null);
   const parsed = validateCostInput(body);

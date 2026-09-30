@@ -179,13 +179,21 @@ export async function GET(
       // For public exams with strict one-attempt, return 403 with existing result hint
       // Frontend will show View Result instead of Start Exam
       try {
-        const { hasPriorExamAttempt } = await import("@/lib/exam-taking");
         const { query } = await import("@/lib/mysql");
-        // Try to fetch existing result for View Result link
-        const rows = await query<{ id: number }[]>(
-          `SELECT id FROM exam_results WHERE exam_id = ? AND student_uid = ? LIMIT 1`,
-          [id, user.uid],
-        );
+        // Try to fetch existing result for View Result link.
+        // Scheduled scope only — practice attempts don't count as appeared.
+        let rows: { id: number }[];
+        try {
+          rows = await query<{ id: number }[]>(
+            `SELECT id FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL) LIMIT 1`,
+            [id, user.uid],
+          );
+        } catch {
+          rows = await query<{ id: number }[]>(
+            `SELECT id FROM exam_results WHERE exam_id = ? AND student_uid = ? LIMIT 1`,
+            [id, user.uid],
+          );
+        }
         if (rows[0]) {
           return NextResponse.json(
             { error: message, alreadyAttempted: true, examId: id },
@@ -221,6 +229,52 @@ export async function GET(
       { error: "Exam not found or not available." },
       { status: 404 },
     );
+  }
+
+  // Preview gate: without ?start=1 (rules acceptance / timer start),
+  // question content is served only to a gated student — active attempt
+  // (resume) or prior scheduled submission. Otherwise return meta only so
+  // the full previewResolved set never leaks pre-start.
+  if (!startAttempt && payload && payload.questions.length > 0) {
+    let gated = false;
+    try {
+      const { query } = await import("@/lib/mysql");
+      try {
+        const activeRows = await query<{ n: string | number }[]>(
+          `SELECT COUNT(*) AS n FROM exam_attempts WHERE exam_id = ? AND student_uid = ? AND status = 'active'`,
+          [id, user.uid],
+        );
+        gated = Number(activeRows[0]?.n ?? 0) > 0;
+      } catch {
+        gated = false;
+      }
+      if (!gated) {
+        try {
+          const priorRows = await query<{ n: string | number }[]>(
+            `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+            [id, user.uid],
+          );
+          gated = Number(priorRows[0]?.n ?? 0) > 0;
+        } catch {
+          try {
+            const priorRows = await query<{ n: string | number }[]>(
+              `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND student_uid = ?`,
+              [id, user.uid],
+            );
+            gated = Number(priorRows[0]?.n ?? 0) > 0;
+          } catch {
+            gated = false;
+          }
+        }
+      }
+    } catch {
+      gated = false;
+    }
+    if (!gated) {
+      payload.questions = [];
+      payload.storedAnswers = {};
+      payload.questionVersion = null;
+    }
   }
 
   return NextResponse.json(payload, {

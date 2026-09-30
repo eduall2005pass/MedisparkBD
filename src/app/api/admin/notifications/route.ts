@@ -42,6 +42,20 @@ export async function POST(request: NextRequest) {
     payload.targetCourseId = body.targetCourseId.trim();
   }
   try {
+    const rawId = typeof body.id === "string" ? body.id.trim() : "";
+    // Idempotency: check BEFORE save — a retry carrying an id that already
+    // exists must not duplicate the row (saveNotification upserts by id)
+    // nor re-push. (Checked pre-save so a first-time create with an
+    // explicit id still pushes.)
+    let isRetry = false;
+    if (rawId) {
+      try {
+        const existing = await fetchNotifications(true);
+        isRetry = existing.some((n) => n.id === rawId);
+      } catch {
+        isRetry = false;
+      }
+    }
     const notifications = await saveNotification(payload, admin.uid);
     await logAdminAction(admin, "notification.save", String(body.title ?? ""), request);
     // Push to devices on fresh publishes (not on edits): best-effort, never
@@ -49,9 +63,11 @@ export async function POST(request: NextRequest) {
     // Scope matches the inbox audience — "enrolled" pushes ONLY to that
     // course's students (never a leaky broadcast); "student" is pushed
     // explicitly by the Specific Student page, so it's skipped here.
-    let push: { sent: number; failed: number } | null = null;
-    const isNew = typeof body.id !== "string" || !body.id.trim();
-    if (isNew && payload.isActive !== false) {
+    let push: { sent: number; failed: number; error?: string; deduped?: boolean } | null = null;
+    const isNew = !rawId;
+    if (isRetry) {
+      push = { sent: 0, failed: 0, deduped: true };
+    } else if (isNew && payload.isActive !== false) {
       try {
         const { sendPush, sendPushToUids } = await import("@/lib/push-admin");
         const { sanitizeNotificationLink } = await import("@/lib/content-admin");
@@ -80,9 +96,12 @@ export async function POST(request: NextRequest) {
         if (push) {
           await logAdminAction(admin, "notification.push", `audience=${String(payload.audience)} sent=${push.sent} failed=${push.failed}`, request);
         }
-      } catch {
-        // Push infra (Firebase) missing or failing — in-app notice still saved.
-        push = { sent: 0, failed: 0 };
+      } catch (error) {
+        // Push infra (Firebase) missing or failing — surface the failure so
+        // callers never mistake it for a clean {sent:0,failed:0} success.
+        // The in-app notice is still saved.
+        const detail = error instanceof Error ? error.message : "Push delivery failed.";
+        push = { sent: 0, failed: 0, error: detail };
       }
     }
     return NextResponse.json({ notifications, push });

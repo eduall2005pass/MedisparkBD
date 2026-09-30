@@ -35,7 +35,11 @@ function parseOtherLinks(
 
 export async function GET() {
   const settings = await getWebsiteSettingsWithFallback();
-  return NextResponse.json({ settings });
+  // Public by design (footer/brand info incl. business contact). Strip
+  // admin PII (updatedBy UID/display name) before responding.
+  const { updatedBy, ...publicSettings } = settings;
+  void updatedBy;
+  return NextResponse.json({ settings: publicSettings });
 }
 
 export async function POST(request: NextRequest) {

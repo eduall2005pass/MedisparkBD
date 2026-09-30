@@ -1,4 +1,5 @@
 import { query, ensureColumn } from "@/lib/mysql";
+import { stripHtml } from "@/lib/faq-sanitize";
 import { saveFile, removeFile } from "@/lib/storage";
 
 export const MENTOR_PHOTO_DIR = "mentor-photos";
@@ -252,7 +253,7 @@ export function normalizeMentorInput(
       raw.isDeveloper === true ||
       raw.isDeveloper === "true" ||
       raw.isDeveloper === "1",
-    note: str(raw.note, 1000),
+    note: stripHtml(str(raw.note, 1000)).slice(0, 1000),
     initials:
       str(raw.initials, 8) ||
       name
@@ -262,7 +263,7 @@ export function normalizeMentorInput(
         .slice(0, 2)
         .toUpperCase(),
     isActive: raw.isActive === true || raw.isActive === "true" || raw.isActive === "1",
-    bio: typeof raw.bio === "string" ? raw.bio.slice(0, 2000) : undefined,
+    bio: typeof raw.bio === "string" ? stripHtml(raw.bio).slice(0, 2000) : undefined,
     socialFacebook: typeof raw.socialFacebook === "string" ? raw.socialFacebook.slice(0, 1024) : undefined,
     socialInstagram: typeof raw.socialInstagram === "string" ? raw.socialInstagram.slice(0, 1024) : undefined,
     socialLinkedin: typeof raw.socialLinkedin === "string" ? raw.socialLinkedin.slice(0, 1024) : undefined,

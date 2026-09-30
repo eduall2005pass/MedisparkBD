@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
     let height = 512;
 
     if (extension === ".svg") {
-      // SVG: keep original, dimensions from SVG parser, preserve as SVG
       processedBytes = Buffer.from(rawBytes);
-      processedFileName = file.name;
+      const svgBase = file.name.replace(/\\/g, "/").split("/").pop()?.replace(/\0/g, "").trim().replace(/[. ]+$/g, "").replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128).replace(/[. ]+$/g, "") || "logo.svg";
+      processedFileName = svgBase.toLowerCase().endsWith(".svg") ? svgBase : `${svgBase}.svg`;
       processedMime = "image/svg+xml";
       try {
         const dims = parseImageDimensions(rawBytes, extension);
@@ -113,7 +113,8 @@ export async function POST(request: NextRequest) {
         }
       }
       // Force PNG output regardless of input (JPG/WEBP→PNG) to preserve transparency
-      const base = file.name.includes(".") ? file.name.slice(0, file.name.lastIndexOf(".")) : file.name;
+      const rawBase = file.name.includes(".") ? file.name.slice(0, file.name.lastIndexOf(".")) : file.name;
+      const base = rawBase.replace(/\\/g, "/").split("/").pop()?.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 64) || "logo";
       processedFileName = `${base}.png`;
       processedMime = "image/png";
     }

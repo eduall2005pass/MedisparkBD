@@ -107,6 +107,6 @@ export function sanitizeQuestions(questions: PdfMaterialQuestion[]): PdfMaterial
   return questions.map((q) => {
     if (q.isStandaloneImage) return q;
     counter += 1;
-    return { ...q, qNumber: counter };
+    return { ...q, qNumber: counter, originalNumber: q.originalNumber ?? null };
   });
 }

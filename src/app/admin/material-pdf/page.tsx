@@ -141,6 +141,23 @@ export default function MaterialPdfGeneratorPage() {
     return cb;
   };
 
+  // Stable per-question file-input callbacks — same pattern as getPageRef.
+  // The previous inline `ref={(el) => ...}` recreated the closure every render,
+  // forcing React to detach/re-attach every question's hidden input on each
+  // keystroke (edit lag that grows with question count).
+  const questionFileRefCallbacks = useRef(new Map<string, (el: HTMLInputElement | null) => void>());
+  const getQuestionFileRef = (id: string) => {
+    let cb = questionFileRefCallbacks.current.get(id);
+    if (!cb) {
+      cb = (el: HTMLInputElement | null) => {
+        if (el) questionFileRefs.current.set(id, el);
+        else questionFileRefs.current.delete(id);
+      };
+      questionFileRefCallbacks.current.set(id, cb);
+    }
+    return cb;
+  };
+
   function sanitizeFileName(name: string): string {
     const raw = (name || "MediSpark-Material").trim();
     // Remove invalid filename chars: < > : " / \ | ? * and control chars, also leading dots
@@ -202,10 +219,20 @@ export default function MaterialPdfGeneratorPage() {
     };
   }, []);
 
-  // Invalidate generated PDF when preview content changes (requires regeneration)
+  // Invalidate generated PDF when preview content changes (requires regeneration).
+  // NOTE: lightweight signature (lengths, not full text) — JSON.stringify(questions)
+  // every render copies multi-MB image dataUrls and janks the UI.
   const prevPreviewKeyRef = useRef<string>("");
   useEffect(() => {
-    const key = JSON.stringify(questions) + "|" + materialName + "|" + subtitle + "|" + String(lineSpacing)
+    const qSig = questions
+      .map(
+        (q) =>
+          `${q.id}:${q.qNumber}:${q.question.length}:${q.options.map((o) => o.length).join(",")}:` +
+          `${q.answer}:${q.image ? `${q.image.dataUrl.length}:${q.image.widthPercent ?? 100}` : "-"}:` +
+          `${q.topic ?? ""}:${q.isStandaloneImage ? 1 : 0}`,
+      )
+      .join("|");
+    const key = qSig + "#" + materialName + "|" + subtitle + "|" + String(lineSpacing)
       + "|" + (watermarkEnabled ? "wm1" : "wm0") + "|" + watermarkOpacity + "|" + watermarkSize + "|" + watermarkPosition
       + "|" + (watermarkLogo ?? "");
     if (prevPreviewKeyRef.current && prevPreviewKeyRef.current !== key && pdfReady) {
@@ -225,6 +252,25 @@ export default function MaterialPdfGeneratorPage() {
   }, [questions, lineSpacing, materialName]);
   const [paginateDebugOn, setPaginateDebugOn] = useState(false);
 
+  // Prune cached ref callbacks + measured heights for pages/questions that no
+  // longer exist (delete/move/edit shrinks the maps instead of leaking them).
+  useEffect(() => {
+    const livePages = new Set(pages.map((p) => p.pageNumber));
+    for (const k of [...pageRefCallbacks.current.keys()]) {
+      if (!livePages.has(k)) pageRefCallbacks.current.delete(k);
+    }
+    for (const k of [...pageHeightRefs.current.keys()]) {
+      if (!livePages.has(k)) pageHeightRefs.current.delete(k);
+    }
+    const liveIds = new Set(questions.map((q) => q.id));
+    for (const k of [...questionFileRefCallbacks.current.keys()]) {
+      if (!liveIds.has(k)) {
+        questionFileRefCallbacks.current.delete(k);
+        questionFileRefs.current.delete(k);
+      }
+    }
+  }, [pages, questions]);
+
   // Pagination decision log: available height, per-question heights,
   // remaining space at every page break (devtools console).
   useEffect(() => {
@@ -236,15 +282,23 @@ export default function MaterialPdfGeneratorPage() {
   useEffect(() => {
     const el = previewRef.current;
     if (!el) return;
+    let raf = 0;
     const compute = () => {
-      const avail = el.clientWidth - 32; // p-4 padding on both sides
-      setPreviewScale(avail >= A4_PREVIEW_W ? 1 : Math.max(0.2, avail / A4_PREVIEW_W));
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const avail = el.clientWidth - 32; // p-4 padding on both sides
+        setPreviewScale(avail >= A4_PREVIEW_W ? 1 : Math.max(0.2, avail / A4_PREVIEW_W));
+      });
     };
     compute();
     if (typeof ResizeObserver !== "undefined") {
       const ro = new ResizeObserver(compute);
       ro.observe(el);
-      return () => ro.disconnect();
+      return () => {
+        if (raf) cancelAnimationFrame(raf);
+        ro.disconnect();
+      };
     }
   }, [questions.length]);
 
@@ -643,7 +697,7 @@ export default function MaterialPdfGeneratorPage() {
           // Fix: html2canvas 1.4.1 cannot parse oklch() (Tailwind v4 default). Convert to rgb via canvas.
           try {
             const fixStyle = clonedDoc.createElement("style");
-            fixStyle.textContent = `.a4-page, .a4-page * { color-scheme: light !important; } .a4-page { background-color: #ffffff !important; }`;
+            fixStyle.textContent = `.a4-page, .a4-page * { color-scheme: light !important; } .a4-page { background-color: #ffffff !important; } .pdf-hide { display: none !important; }`;
             clonedDoc.head.appendChild(fixStyle);
             const all = clonedDoc.querySelectorAll(".a4-page, .a4-page *");
             // Use a canvas to convert oklch -> rgb (ctx.fillStyle normalizes)
@@ -1490,7 +1544,11 @@ D. 150 দিন
                             contentEditable
                             suppressContentEditableWarning
                             onBlur={(e) => {
-                              const txt = (e.currentTarget.innerText || "").trim();
+                              // Ignore the "[Empty — click to edit]" placeholder: when the
+                              // stem is empty the placeholder text becomes the element's
+                              // innerText — saving it would persist "[Empty…]" as real data.
+                              const raw = (e.currentTarget.innerText || "").trim();
+                              const txt = raw === "" || raw.startsWith("[Empty") ? "" : raw;
                               if (txt !== q.question) handleUpdate(q.id, { question: txt });
                             }}
                             title="Click to edit question (bold in PDF) — statements (1. 2. 3.) remain with question as one block"
@@ -1570,10 +1628,7 @@ D. 150 দিন
                               + Add Image to this question
                             </button>
                             <input
-                              ref={(el) => {
-                                if (el) questionFileRefs.current.set(q.id, el);
-                                else questionFileRefs.current.delete(q.id);
-                              }}
+                              ref={getQuestionFileRef(q.id)}
                               type="file"
                               accept="image/*"
                               className="hidden"
@@ -1594,7 +1649,9 @@ D. 150 দিন
                                 contentEditable
                                 suppressContentEditableWarning
                                 onBlur={(e) => {
-                                  const txt = (e.currentTarget.textContent || "").trim();
+                                  // Ignore the "[Empty]" placeholder (see question stem).
+                                  const raw = (e.currentTarget.textContent || "").trim();
+                                  const txt = raw === "" || raw.startsWith("[Empty") ? "" : raw;
                                   if (txt !== q.options[idx]) {
                                     const next = [...q.options] as [string, string, string, string];
                                     next[idx] = txt;

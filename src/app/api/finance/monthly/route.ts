@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAnyPermission } from "@/lib/admin";
+import { getFirebaseUser } from "@/lib/auth-api";
 import { fetchMonthlyReport } from "@/lib/finance";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/finance/monthly?year=2026
- * Public. Month | Course Income | Physical Costs | Net.
+ * Permission-gated. Month | Course Income | Physical Costs | Net.
  */
 export async function GET(request: NextRequest) {
+  const admin = await requireAnyPermission(request, [
+    "manageSystem",
+    "manageCourses",
+  ]);
+  if (!admin) {
+    const user = await getFirebaseUser(request);
+    return NextResponse.json(
+      { error: user ? "Forbidden." : "Unauthorized." },
+      { status: user ? 403 : 401 },
+    );
+  }
   const url = new URL(request.url);
   const raw = Number(url.searchParams.get("year"));
   const year =

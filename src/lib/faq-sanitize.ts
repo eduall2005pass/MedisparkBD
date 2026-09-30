@@ -44,7 +44,7 @@ export function stripHtml(html: string): string {
 export function sanitizeFaqHtml(input: string): string {
   if (!input) return "";
 
-  let html = input
+  const html = input
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<(script|style|iframe|object|embed|form)[\s\S]*?<\/\1>/gi, "");
 

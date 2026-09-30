@@ -199,7 +199,7 @@ export default function ExamParticipationArea({
       }
       if (durationMinutes) {
         const rem = Math.max(60, durationMinutes * 60);
-        expiresAtRef.current = now + rem * 1000;
+        expiresAtRef.current = now + serverOffsetRef.current + rem * 1000;
         setSecondsLeft(rem);
       }
     },

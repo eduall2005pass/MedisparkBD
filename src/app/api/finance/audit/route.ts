@@ -1,14 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin";
+import { requireAnyPermission } from "@/lib/admin";
+import { getFirebaseUser } from "@/lib/auth-api";
 import { fetchFinanceAudit } from "@/lib/finance";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/finance/audit — admin only. Full modification trail. */
+/** GET /api/finance/audit — permission-gated. Full modification trail. */
 export async function GET(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireAnyPermission(request, [
+    "manageSystem",
+    "manageCourses",
+  ]);
   if (!admin) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    const user = await getFirebaseUser(request);
+    return NextResponse.json(
+      { error: user ? "Forbidden." : "Unauthorized." },
+      { status: user ? 403 : 401 },
+    );
   }
   const url = new URL(request.url);
   const limit = Math.min(

@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -108,18 +109,17 @@ function friendlyRedirectError(code: string, fallback: string): string {
 }
 
 async function fetchProfile(user: User): Promise<StudentProfile | null> {
-  try {
-    const token = await user.getIdToken();
-    const response = await fetch("/api/me", {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!response.ok) return null;
-    const data = (await response.json()) as { profile?: StudentProfile | null };
-    return data.profile ?? null;
-  } catch {
-    return null;
-  }
+  // Throws on token/network failure so callers can keep old state;
+  // returns null only for a genuine 404 / missing profile.
+  const token = await user.getIdToken();
+  const response = await fetch("/api/me", {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`profile fetch failed: ${response.status}`);
+  const data = (await response.json()) as { profile?: StudentProfile | null };
+  return data.profile ?? null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -130,16 +130,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileLoading, setProfileLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const loadUserData = useCallback(async (firebaseUser: User) => {
+  const genRef = useRef(0);
+
+  const loadUserData = useCallback(async (firebaseUser: User, gen?: number) => {
     setProfileLoading(true);
-    const [studentProfile, studentEnrollments] = await Promise.all([
-      fetchProfile(firebaseUser),
-      fetchEnrollments(firebaseUser),
-    ]);
-    setProfile(studentProfile);
-    setEnrollments(studentEnrollments);
-    setProfileLoading(false);
-    return studentProfile;
+    try {
+      // allSettled: valid enrollments still apply when profile fetch throws (and vice versa).
+      const [profileResult, enrollmentsResult] = await Promise.allSettled([
+        fetchProfile(firebaseUser),
+        fetchEnrollments(firebaseUser),
+      ]);
+      // Stale async result must never clobber newer auth state.
+      if (gen !== undefined && gen !== genRef.current) return null;
+      let studentProfile: StudentProfile | null = null;
+      if (profileResult.status === "fulfilled") {
+        // null = genuine 404 / deleted profile → clear; value → set.
+        // Rejected (token/network) → keep prev, touch nothing.
+        studentProfile = profileResult.value;
+        setProfile(studentProfile);
+      }
+      if (enrollmentsResult.status === "fulfilled") {
+        // Genuine [] is valid → accept. Rejected → keep prev.
+        setEnrollments(enrollmentsResult.value);
+      }
+      return profileResult.status === "fulfilled" ? studentProfile : null;
+    } finally {
+      if (gen === undefined || gen === genRef.current) {
+        setProfileLoading(false);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -157,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const gen = ++genRef.current;
       setUser(firebaseUser);
       setAuthLoading(false);
       if (!firebaseUser) {
@@ -165,7 +185,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfileLoading(false);
         return;
       }
-      await loadUserData(firebaseUser);
+      await loadUserData(firebaseUser, gen);
     });
 
     // Process a completed redirect sign-in. The page reloads after Google
@@ -187,9 +207,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const hadPendingRedirect = pending && !isStalePending;
 
+    let cancelled = false;
     getRedirectResult(auth)
       .then((result) => {
+        if (cancelled) return;
         if (result?.user) {
+          const gen = ++genRef.current;
           safeRemove(REDIRECT_PENDING_KEY);
           safeRemove(REDIRECT_PENDING_AT_KEY);
           safeRemove(REDIRECT_ERROR_KEY);
@@ -197,7 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAuthError(null);
           setUser(result.user);
           setAuthLoading(false);
-          void loadUserData(result.user);
+          void loadUserData(result.user, gen);
           return;
         }
         // Redirect was started (pending flag set) but we came back with no
@@ -215,6 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch((err) => {
+        if (cancelled) return;
         console.error("[auth] getRedirectResult failed:", err);
         safeRemove(REDIRECT_PENDING_KEY);
         safeRemove(REDIRECT_PENDING_AT_KEY);
@@ -230,7 +254,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         safeSet(REDIRECT_ERROR_KEY, msg);
       });
 
-    return unsubscribe;
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [loadUserData]);
 
   const refreshProfile = useCallback(async () => {
@@ -239,9 +266,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     setProfileLoading(true);
-    const studentProfile = await fetchProfile(user);
-    setProfile(studentProfile);
-    setProfileLoading(false);
+    try {
+      const studentProfile = await fetchProfile(user);
+      // null = genuine 404 / deleted → clear. Throw path below keeps prev.
+      setProfile(studentProfile);
+    } catch {
+      // Keep old profile on token/network failure; never null it.
+    } finally {
+      setProfileLoading(false);
+    }
   }, [user]);
 
   const refreshEnrollments = useCallback(async () => {
@@ -249,8 +282,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setEnrollments([]);
       return;
     }
-    const studentEnrollments = await fetchEnrollments(user);
-    setEnrollments(studentEnrollments);
+    try {
+      const studentEnrollments = await fetchEnrollments(user);
+      // Genuine [] is valid → accept. Throw path below keeps prev.
+      setEnrollments(studentEnrollments);
+    } catch {
+      // Keep old enrollments on failure.
+    }
   }, [user]);
 
   const signInWithGoogle = useCallback(async () => {
@@ -303,9 +341,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       safeRemove(REDIRECT_PENDING_KEY);
       safeRemove(REDIRECT_PENDING_AT_KEY);
       safeRemove(USE_REDIRECT_NEXT_KEY);
+      // Rely on onAuthStateChanged as the single source of truth for loading
+      // user data — no gen bump / loadUserData here, so no double-fetch race.
       setUser(result.user);
       setAuthLoading(false);
-      return loadUserData(result.user);
+      return null;
     } catch (err) {
       const code =
         typeof err === "object" && err !== null && "code" in err
@@ -375,10 +415,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (auth) {
       await signOut(auth);
     }
+    genRef.current += 1;
     setUser(null);
     setProfile(null);
     setEnrollments([]);
-  }, [user?.uid]);
+  }, [user]);
 
 const access = useMemo<StudentAccess>(() => {
     const activeEnrollments = enrollments.filter(isActiveEnrollment);

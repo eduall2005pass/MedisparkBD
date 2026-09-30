@@ -65,19 +65,28 @@ function readSessionGate(uid: string): GateResult | null {
 function readCachedGate(
   uid: string,
 ): (GateResult & { fresh: boolean; at: number }) | null {
+  let carryToken: string | null = null;
   if (memoryGate && memoryGate.uid === uid) {
-    const fresh = Date.now() - memoryGate.at < GATE_CACHE_TTL_MS;
-    if (fresh || Date.now() - memoryGate.at < GATE_CACHE_TTL_MS * 6) {
-      return { ...memoryGate.result, fresh, at: memoryGate.at };
+    // Honor cache only within TTL — never serve stale past expiry.
+    if (Date.now() - memoryGate.at < GATE_CACHE_TTL_MS) {
+      return { ...memoryGate.result, fresh: true, at: memoryGate.at };
     }
+    carryToken = memoryGate.result.token;
     memoryGate = null;
   }
   const session = readSessionGate(uid);
   if (session) {
-    memoryGate = { uid, result: session, at: Date.now() };
-    return { ...session, fresh: true, at: Date.now() };
+    // Session stores role only (token:null) — never clobber a minted token.
+    const merged = carryToken ? { ...session, token: carryToken } : session;
+    memoryGate = { uid, result: merged, at: Date.now() };
+    return { ...merged, fresh: true, at: Date.now() };
   }
   return null;
+}
+
+function clearMemoryGate(uid?: string): void {
+  if (!uid || (memoryGate && memoryGate.uid === uid)) memoryGate = null;
+  if (!uid) gateInFlight = null;
 }
 
 function applyGateResult(uid: string, result: GateResult): void {
@@ -156,6 +165,7 @@ export function useAdminGate(): AdminGate {
     const uid = user.uid;
     // New user (login switch): drop stale state, resolve below.
     if (lastUidRef.current !== null && lastUidRef.current !== uid) {
+      clearMemoryGate(lastUidRef.current);
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsAdmin(null);
       setRole(null);
@@ -164,6 +174,7 @@ export function useAdminGate(): AdminGate {
     }
     lastUidRef.current = uid;
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const applyResult = (result: GateResult) => {
       if (result.uid !== uid) return;
@@ -226,12 +237,19 @@ export function useAdminGate(): AdminGate {
       if (result) {
         applyResult(result);
       } else {
-        // No cache and the check failed — deny like before (next mount retries).
-        setIsAdmin(false);
+        // Network/exception = unknown, never denied: keep isAdmin null and
+        // retry once; the next mount retries again.
+        retryTimer = setTimeout(() => {
+          if (cancelled) return;
+          void fetchSharedGate(user).then((r) => {
+            if (!cancelled && r) applyResult(r);
+          });
+        }, 5000);
       }
     })();
     return () => {
       cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading]);
@@ -241,6 +259,7 @@ export function useAdminGate(): AdminGate {
   useEffect(() => {
     if (!authLoading && !user) {
       lastUidRef.current = null;
+      clearMemoryGate();
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsAdmin(null);
       setRole(null);

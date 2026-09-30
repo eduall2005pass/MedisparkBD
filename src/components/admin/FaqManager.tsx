@@ -17,6 +17,9 @@ const ANSWER_TYPE_LABELS: Record<FaqAnswerType, string> = {
   text_video: "Text + Video",
 };
 
+// Render cap — full filtered lists can be large; show first N + refine hint.
+const FAQ_LIST_LIMIT = 100;
+
 function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
   const date = new Date(value);
@@ -397,6 +400,8 @@ export default function FaqManager({
     });
   }, [faqs, search, filter]);
 
+  const visibleCapped = visible.slice(0, FAQ_LIST_LIMIT);
+
   if (authLoading || adminCheck === "checking" || initialLoading) {
     return <AccessLoading label={loadingLabel} />;
   }
@@ -498,7 +503,7 @@ export default function FaqManager({
                 </p>
               ) : (
                 <ul>
-                  {visible.map((faq) => {
+                  {visibleCapped.map((faq) => {
                     const globalIndex = faqs.indexOf(faq);
                     const live = faq.status === "published" && faq.isActive;
                     return (
@@ -633,6 +638,11 @@ export default function FaqManager({
                 </ul>
               )}
             </section>
+            {visible.length > FAQ_LIST_LIMIT && (
+              <p className="mt-3 text-center text-xs font-semibold text-slate-500 admin-dark:text-slate-400">
+                Showing first {FAQ_LIST_LIMIT} of {visible.length} — refine search to narrow results.
+              </p>
+            )}
 
             {notice && (
               <p

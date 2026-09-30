@@ -14,7 +14,7 @@ type ExamMeta = {
   durationMinutes: number;
   totalMarks: number;
   negativeMarks: number;
-  phase?: "upcoming" | "live" | "practice" | "no-window" | null;
+  phase?: "upcoming" | "live" | "practice" | "no-window" | "draft" | "closed" | "archived" | null;
   isFlow4?: boolean;
   isEnrolled?: boolean;
 };

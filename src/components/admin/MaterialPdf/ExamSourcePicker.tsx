@@ -452,7 +452,7 @@ export default function ExamSourcePicker({
               Version
               <select
                 value={langVersion}
-                disabled={loadingQuestions}
+                disabled={loadingQuestions || coverageLoading}
                 onChange={(e) => setLangVersion(e.target.value as LangVersion)}
                 className="rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-bold text-[#0b1e3a] outline-none disabled:opacity-50 admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
               >
@@ -464,7 +464,7 @@ export default function ExamSourcePicker({
               Set
               <select
                 value={setLabel}
-                disabled={loadingQuestions}
+                disabled={loadingQuestions || coverageLoading}
                 onChange={(e) => setSetLabel(e.target.value as SetLabel)}
                 className="rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-bold text-[#0b1e3a] outline-none disabled:opacity-50 admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
               >

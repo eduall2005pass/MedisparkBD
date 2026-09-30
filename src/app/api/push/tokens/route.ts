@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-/** Unsubscribe a browser push token. */
+/** Unsubscribe a browser push token (ownership-checked: only the caller's own token). */
 export async function DELETE(request: NextRequest) {
   const user = await getFirebaseUser(request);
   if (!user) {
@@ -41,7 +41,7 @@ export async function DELETE(request: NextRequest) {
   }
   const body = (await request.json().catch(() => null)) as { token?: unknown } | null;
   if (typeof body?.token === "string") {
-    await deletePushToken(body.token).catch(() => undefined);
+    await deletePushToken(body.token, user.uid).catch(() => undefined);
   }
   return NextResponse.json({ ok: true });
 }

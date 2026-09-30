@@ -50,9 +50,25 @@ function sanitizeFileName(name: string): string {
 }
 
 const PART_LINE_RE = /^\s*([কখগঘঙচABCDabcd])\s*[).:ঃ\-–]\s*(.*?)\s*$/;
-const BLOCK_START_RE = /^\s*(\d+)\s*[.)।:]\s*(.*)$/;
+const BLOCK_START_RE = /^\s*(\d+|[০-৯]+)\s*[.)।:]\s*(.*)$/;
 const MARKS_RE = /[\[\(（]\s*(\d+)\s*(?:marks?|mark|নম্বর)?\s*[\]\)）]\s*$/i;
 const MARKS_TAIL_RE = /\s*(\d+)\s*নম্বর\s*$/;
+
+const CQ_BN_DIGIT_MAP: Record<string, string> = { "০": "0", "১": "1", "২": "2", "৩": "3", "৪": "4", "৫": "5", "৬": "6", "৭": "7", "৮": "8", "৯": "9" };
+
+function cqBlockNumber(raw: string): number | null {
+  const t = raw.trim();
+  if (/^\d+$/.test(t)) {
+    const n = parseInt(t, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  if (/^[০-৯]+$/.test(t)) {
+    const ascii = t.replace(/[০-৯]/g, (ch) => CQ_BN_DIGIT_MAP[ch] ?? ch);
+    const n = parseInt(ascii, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  return null;
+}
 
 function parsePartLine(line: string, fallbackLabel: string): CqPart {
   const m = line.match(PART_LINE_RE);
@@ -95,7 +111,7 @@ export function parsePastedCqs(raw: string): CqItem[] {
   blocks.forEach((lines, bi) => {
     const first = lines[0] ?? "";
     const bm = first.match(BLOCK_START_RE);
-    const number = bm ? parseInt(bm[1], 10) : bi + 1;
+    const number = bm ? (cqBlockNumber(bm[1]) ?? bi + 1) : bi + 1;
     const rest = bm ? [bm[2], ...lines.slice(1)] : lines;
     const stemLines: string[] = [];
     const partLines: string[] = [];
@@ -119,7 +135,24 @@ export function parsePastedCqs(raw: string): CqItem[] {
     });
   });
   // Renumber sequentially 1..N preserving order.
-  return items.map((item, idx) => ({ ...item, number: idx + 1 }));
+  return renumberCqItems(items);
+}
+
+/** Preserve user-edited numbers: keep existing unique positive numbers, only
+ *  fill missing/duplicates sequentially. Never clobbers intentional edits. */
+function renumberCqItems(list: CqItem[]): CqItem[] {
+  const seen = new Set<number>();
+  return list.map((item, idx) => {
+    const n = item.number;
+    if (Number.isInteger(n) && n > 0 && !seen.has(n)) {
+      seen.add(n);
+      return item;
+    }
+    let fallback = idx + 1;
+    while (seen.has(fallback)) fallback += 1;
+    seen.add(fallback);
+    return { ...item, number: fallback };
+  });
 }
 
 // ── Pagination (single column A4) ──
@@ -235,7 +268,7 @@ export default function CqPdfGenerator({ onBack }: { onBack: () => void }) {
   const pages: CqPage[] = useMemo(() => paginateCqs(items), [items]);
   const partCount = items.reduce((acc, item) => acc + item.parts.length, 0);
 
-  const renumber = (list: CqItem[]): CqItem[] => list.map((item, idx) => ({ ...item, number: idx + 1 }));
+  const renumber = (list: CqItem[]): CqItem[] => renumberCqItems(list);
 
   const handleDetect = () => {
     if (!pasteText.trim()) {

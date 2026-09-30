@@ -80,6 +80,9 @@ type FormState = typeof EMPTY_FORM;
 
 type MentorOption = { id: string; name: string };
 
+// Render cap — full filtered lists can be large; show first N + refine hint.
+const COURSE_LIST_LIMIT = 100;
+
 /** Sensible default batch id per course category for the pre-filled form. */
 function defaultBatchFor(category: CatalogCourseCategory): string {
   switch (category) {
@@ -475,6 +478,7 @@ export default function CourseManager({
   const filtered = (courses ?? []).filter((course) =>
     `${course.name} ${course.slug}`.toLowerCase().includes(search.toLowerCase()),
   );
+  const visibleCourses = filtered.slice(0, COURSE_LIST_LIMIT);
 
   return (
     <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
@@ -521,7 +525,7 @@ export default function CourseManager({
         </p>
       ) : (
         <ul className="mt-5 space-y-3">
-          {filtered.map((course) => (
+          {visibleCourses.map((course) => (
             <li key={course.slug} className={`${cardClass} p-4 sm:p-5`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -630,6 +634,11 @@ export default function CourseManager({
             </li>
           ))}
         </ul>
+      )}
+      {filtered.length > COURSE_LIST_LIMIT && (
+        <p className="mt-3 text-center text-xs font-semibold text-slate-500">
+          Showing first {COURSE_LIST_LIMIT} of {filtered.length} — refine search to narrow results.
+        </p>
       )}
 
       {showForm && (

@@ -56,7 +56,19 @@ export function flow5SubjectTitle(key: string): string {
  * Course Content). `phase` is the Upcoming → Live → Practice lifecycle
  * derived server-side from Start/End time.
  */
-export type Flow5ExamPhase = "upcoming" | "live" | "practice" | "no-window";
+export type Flow5ExamPhase = "upcoming" | "live" | "practice" | "archived" | "no-window";
+
+/** "archived" is the canonical post-live value; "practice" is a legacy alias. */
+export function normalizeFlow5Phase(phase: string | null | undefined): Flow5ExamPhase | null {
+  if (phase === "archived" || phase === "practice") return "archived";
+  if (phase === "upcoming" || phase === "live" || phase === "no-window") return phase;
+  return null;
+}
+
+/** True for post-live practice (canonical "archived" + legacy "practice" alias). */
+export function isFlow5PracticePhase(phase: string | null | undefined): boolean {
+  return phase === "archived" || phase === "practice";
+}
 
 export type Flow5ExamItem = {
   id: string;

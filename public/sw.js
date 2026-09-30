@@ -1,8 +1,12 @@
 /* MediSpark PWA + push service worker (single root-scope worker).
    - PWA: cache-first for versioned static assets only (never API/exam pages).
-   - Push: Firebase Cloud Messaging background handler + tap-to-open. */
+   - Push: Firebase Cloud Messaging background handler + tap-to-open.
+   SINGLE SOURCE OF TRUTH for web push config: /firebase-messaging-sw.js is a
+   thin stub that importScripts("/sw.js"). Rotate keys in the Firebase console,
+   then update the config below (these apiKey/appId values are public web SDK
+   identifiers, not secrets). */
 
-const PWA_CACHE = "medispark-pwa-v3";
+const PWA_CACHE = "medispark-pwa-v4";
 
 /* ---------- Firebase (compat builds for classic workers) ---------- */
 try {

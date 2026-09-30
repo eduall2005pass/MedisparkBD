@@ -257,6 +257,8 @@ export type ResolvedQuestion = {
   questionImage: string | null;
   /** True when this content came from the authored version/set variant. */
   fromVariant: boolean;
+  /** Mirrors fromVariant — false whenever variant content is corrupt/absent. */
+  hasVariant: boolean;
 };
 
 export type BaseQuestionRow = {
@@ -278,10 +280,50 @@ function preserveAnswerIndex(value: number | string | null | undefined): number 
   return Number.isFinite(n) ? n : null;
 }
 
+/** Resolve displayable marks: finite > 0 wins, else the fallback, else 1. */
+export function resolveMarks(raw: unknown, fallback: unknown): number {
+  const n = Number(raw);
+  if (Number.isFinite(n) && n > 0) return n;
+  const f = Number(fallback);
+  if (Number.isFinite(f) && f > 0) return f;
+  return 1;
+}
+
+/**
+ * Overlay one authored variant cell onto a base question row (admin version/set
+ * view). Corrupt variant options JSON yields hasVariant:false with pure base
+ * content — never a mix of variant text with base options. Invalid variant
+ * marks fall back to the base marks (validated finite > 0, else 1).
+ */
+export function overlayVariantOntoBase(
+  base: Record<string, unknown>,
+  variant: VariantRow | undefined | null,
+): Record<string, unknown> & { hasVariant: boolean } {
+  if (!variant) return { ...base, hasVariant: false };
+  const parsed = parseJsonColumn<unknown[]>(variant.options);
+  if (!Array.isArray(parsed)) return { ...base, hasVariant: false };
+  const answer = preserveAnswerIndex(variant.correct_index);
+  return {
+    ...base,
+    question: variant.question,
+    options: parsed.map(String),
+    // Overlay the authored answer — base answer must not leak into a variant
+    // view (and vice versa). NULL stays NULL, never coerced to 0/A.
+    correctIndex: answer,
+    correct_index: answer,
+    marks: resolveMarks(variant.marks, base.marks),
+    explanation: variant.explanation ?? null,
+    questionImage: variant.question_image ?? null,
+    question_image: variant.question_image ?? null,
+    hasVariant: true,
+  };
+}
 /**
  * Resolve displayable questions for one (version, set): variant content wins,
  * base exam_questions row is the fallback. Result is in ADMIN order
  * (sort_order, id); callers apply the locked shuffled order afterwards.
+ * A corrupt variant cell (non-array options JSON) falls back to the pure base
+ * row with fromVariant:false AND hasVariant:false — never mixed sources.
  */
 export function resolveQuestions(
   baseRows: BaseQuestionRow[],
@@ -299,11 +341,12 @@ export function resolveQuestions(
           id: Number(row.id),
           question: variant.question,
           options: parsed.map(String),
-          marks: Number(variant.marks) || Number(row.marks) || 1,
+          marks: resolveMarks(variant.marks, row.marks),
           correctIndex: preserveAnswerIndex(variant.correct_index),
           explanation: variant.explanation ?? null,
           questionImage: variant.question_image ?? null,
           fromVariant: true,
+          hasVariant: true,
         });
         continue;
       }
@@ -314,11 +357,12 @@ export function resolveQuestions(
       id: Number(row.id),
       question: row.question,
       options: parsed.map(String),
-      marks: Number(row.marks) || 1,
+      marks: resolveMarks(row.marks, 1),
       correctIndex: preserveAnswerIndex(row.correct_index),
       explanation: row.explanation ?? null,
       questionImage: (row.question_image as string | null) ?? null,
       fromVariant: false,
+      hasVariant: false,
     });
   }
   return out;
@@ -329,8 +373,9 @@ export async function variantCoverage(examId: string): Promise<{
   totalSlots: number;
   coverage: Record<string, number>;
   hasAnyVariant: boolean;
+  error?: boolean;
 }> {
-  const fallback = { totalSlots: 0, coverage: {} as Record<string, number>, hasAnyVariant: false };
+  const fallback = { totalSlots: 0, coverage: {} as Record<string, number>, hasAnyVariant: false, error: true };
   try {
     await ensureVariantTables();
     const slots = await query<{ n: number }[]>(

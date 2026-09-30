@@ -101,14 +101,21 @@ export default function ExamRuleTemplatesManager() {
   async function removeRule(id: number) {
     if (!window.confirm("Delete this rule?")) return;
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch("/api/admin/exam-rule-templates", {
         method: "DELETE",
         headers: { "Content-Type": "application/json", ...gate.headers },
         body: JSON.stringify({ template: tab, lang, id }),
       });
-      const data = (await res.json().catch(() => null)) as { rules?: Rule[] } | null;
-      if (res.ok && data?.rules) setRules(data.rules);
+      const data = (await res.json().catch(() => null)) as { error?: string; rules?: Rule[] } | null;
+      if (!res.ok || !data?.rules) {
+        setError(data?.error ?? "Failed to delete the rule.");
+        return;
+      }
+      setRules(data.rules);
+    } catch {
+      setError("Failed to delete the rule.");
     } finally {
       setBusy(false);
     }
@@ -122,14 +129,21 @@ export default function ExamRuleTemplatesManager() {
     [next[index], next[target]] = [next[target], next[index]];
     const ids = next.map((r) => r.id).filter((id): id is number => id !== null);
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch("/api/admin/exam-rule-templates", {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...gate.headers },
         body: JSON.stringify({ template: tab, lang, order: ids }),
       });
-      const data = (await res.json().catch(() => null)) as { rules?: Rule[] } | null;
-      if (res.ok && data?.rules) setRules(data.rules);
+      const data = (await res.json().catch(() => null)) as { error?: string; rules?: Rule[] } | null;
+      if (!res.ok || !data?.rules) {
+        setError(data?.error ?? "Failed to reorder rules.");
+        return;
+      }
+      setRules(data.rules);
+    } catch {
+      setError("Failed to reorder rules.");
     } finally {
       setBusy(false);
     }
@@ -219,6 +233,8 @@ export default function ExamRuleTemplatesManager() {
         </div>
 
         {rules === null && !loadError && <p className="mt-4 text-xs text-slate-500">Loading rules…</p>}
+        {busy && rules !== null && <p className="mt-2 text-xs text-slate-500">Saving…</p>}
+        {error && !showAdd && <p className="mt-2 text-xs font-semibold text-red-500">{error}</p>}
         {loadError && (
           <div className="mt-4">
             <p className="text-xs font-semibold text-red-500">Something went wrong.</p>

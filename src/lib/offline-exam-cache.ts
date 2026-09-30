@@ -35,19 +35,21 @@ function safeGet<T>(key: string): T | null {
  * pending — cap it at 7 days so a deleted exam/result eventually drops
  * out even when the network keeps failing.
  */
-const OFFLINE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const OFFLINE_IDS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Result scripts / merit lists go stale fast (deletion must propagate) — 24h max. */
+const OFFLINE_RESULT_TTL_MS = 24 * 60 * 60 * 1000;
 
-function isFresh(cachedAt: unknown): boolean {
+function isFresh(cachedAt: unknown, ttlMs: number): boolean {
   return (
     typeof cachedAt === "number" &&
     Number.isFinite(cachedAt) &&
-    Date.now() - cachedAt <= OFFLINE_CACHE_TTL_MS
+    Date.now() - cachedAt <= ttlMs
   );
 }
 
-function safeGetFresh<T extends { cachedAt?: unknown }>(key: string): T | null {
+function safeGetFresh<T extends { cachedAt?: unknown }>(key: string, ttlMs = OFFLINE_IDS_TTL_MS): T | null {
   const cached = safeGet<T>(key);
-  if (!cached || !isFresh(cached.cachedAt)) {
+  if (!cached || !isFresh(cached.cachedAt, ttlMs)) {
     if (cached) {
       try {
         window.localStorage.removeItem(key);
@@ -125,8 +127,28 @@ export function cacheExamResult<T>(uid: string, examId: string, script: T): void
 
 export function getCachedExamResult<T>(uid: string, examId: string): T | null {
   if (!uid || !examId || typeof window === "undefined") return null;
-  const cached = safeGetFresh<ResultCache<T>>(keyFor(uid, `exam-result:${examId}`));
+  const cached = safeGetFresh<ResultCache<T>>(keyFor(uid, `exam-result:${examId}`), OFFLINE_RESULT_TTL_MS);
   return cached?.script ?? null;
+}
+
+/** Drop one cached result (call when the server reports the exam deleted / inaccessible). */
+export function removeCachedExamResult(uid: string, examId: string): void {
+  if (!uid || !examId || typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(keyFor(uid, `exam-result:${examId}`));
+  } catch {
+    // Ignore.
+  }
+}
+
+/** Intersect cached completed IDs with the server-known valid set; prunes deleted exams. */
+export function pruneCachedCompletedIds(uid: string, validIds: string[] | Set<string>): string[] | null {
+  const cached = getCachedCompletedExamIds(uid);
+  if (!cached) return null;
+  const valid = validIds instanceof Set ? validIds : new Set(validIds);
+  const pruned = cached.filter((id) => valid.has(id));
+  if (pruned.length !== cached.length) cacheCompletedExamIds(uid, pruned);
+  return pruned;
 }
 
 // ---------- Dashboard "my results" list ----------
@@ -143,6 +165,6 @@ export function cacheMyResults<T>(uid: string, data: T): void {
 
 export function getCachedMyResults<T>(uid: string): T | null {
   if (!uid || typeof window === "undefined") return null;
-  const cached = safeGetFresh<MyResultsCache<T>>(keyFor(uid, "my-exam-results"));
+  const cached = safeGetFresh<MyResultsCache<T>>(keyFor(uid, "my-exam-results"), OFFLINE_RESULT_TTL_MS);
   return (cached?.data as T | undefined) ?? null;
 }

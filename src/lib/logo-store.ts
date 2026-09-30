@@ -145,6 +145,13 @@ export async function fetchThemeLogos(): Promise<{
   }
 }
 
+function safeBaseName(name: string): string {
+  let base = (name || "").replace(/\\/g, "/");
+  base = base.slice(base.lastIndexOf("/") + 1).replace(/\0/g, "").trim().replace(/[. ]+$/g, "");
+  base = base.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128).replace(/[. ]+$/g, "");
+  return base || "logo";
+}
+
 function targetIdFor(mode?: LogoMode): string {
   return mode ? LOGO_VARIANT_IDS[mode] : LOGO_DOCUMENT_ID;
 }
@@ -203,20 +210,27 @@ export async function saveActiveLogo(
 
   // Store clean URL in DB; cache-bust is added at read time.
   // Store actualStoragePath (not temp) so removeFile can correctly delete via medifiles API.
-  await query(
-    `INSERT INTO logos
-      (id, url, file_name, width, height, storage_path, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
-     ON DUPLICATE KEY UPDATE
-      url = VALUES(url),
-      file_name = VALUES(file_name),
-      width = VALUES(width),
-      height = VALUES(height),
-      storage_path = VALUES(storage_path),
-      updated_at = NOW(),
-      updated_by = VALUES(updated_by)`,
-    [targetId, cleanUrl, file.name, width, height, actualStoragePath, adminUid],
-  );
+  const safeDbName = safeBaseName(file.name).slice(0, 255);
+  try {
+    await query(
+      `INSERT INTO logos
+        (id, url, file_name, width, height, storage_path, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
+       ON DUPLICATE KEY UPDATE
+        url = VALUES(url),
+        file_name = VALUES(file_name),
+        width = VALUES(width),
+        height = VALUES(height),
+        storage_path = VALUES(storage_path),
+        updated_at = NOW(),
+        updated_by = VALUES(updated_by)`,
+      [targetId, cleanUrl, safeDbName, width, height, actualStoragePath, adminUid],
+    );
+  } catch (dbErr) {
+    // No orphan: DB write failed so delete the newly uploaded file.
+    await removeFile(cleanUrl).catch(() => undefined);
+    throw dbErr;
+  }
 
   // Only clean up this slot's previous file — other slots stay untouched so
   // both theme logos always remain available simultaneously.
@@ -231,7 +245,7 @@ export async function saveActiveLogo(
   const account = await fetchAdminAccount(adminUid);
   const now = Date.now();
   return {
-    fileName: file.name,
+    fileName: safeDbName,
     url: withCacheBust(cleanUrl, now),
     width,
     height,

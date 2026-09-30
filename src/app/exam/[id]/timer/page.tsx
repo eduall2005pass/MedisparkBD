@@ -37,28 +37,13 @@ export default function TimerSelectionPage({
       try {
         const token = await user.getIdToken();
         const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-        // Exam details + prior-attempt are independent — fetch together
-        // instead of sequentially.
-        const [examRes, priorRes] = await Promise.all([
-          fetch(`/api/exams/${encodeURIComponent(examId)}`, {
-            headers,
-            cache: "no-store",
-          }),
-          fetch(`/api/exams/${encodeURIComponent(examId)}/prior-attempt`, {
-            headers,
-            cache: "no-store",
-          }),
-        ]);
-        const examData = (await examRes.json().catch(() => ({}))) as {
-          exam?: { id: string; title: string };
-          error?: string;
-        };
-        if (!examRes.ok) {
-          if (!cancelled) {
-            setData({ exam: null, hasPriorAttempt: false, error: examData.error ?? "Exam not found." });
-          }
-          return;
-        }
+        // Prior-attempt endpoint is the single source here — the plain
+        // GET /api/exams/[id] preview no longer carries question content
+        // pre-start, so don't consume it at all.
+        const priorRes = await fetch(`/api/exams/${encodeURIComponent(examId)}/prior-attempt`, {
+          headers,
+          cache: "no-store",
+        });
 
         // Check prior attempt — use dedicated prior-attempt endpoint (exam ID is the primary identifier)
         const priorData = (await priorRes.json().catch(() => ({}))) as {
@@ -71,6 +56,12 @@ export default function TimerSelectionPage({
           };
           error?: string;
         };
+        if (!priorRes.ok) {
+          if (!cancelled) {
+            setData({ exam: null, hasPriorAttempt: false, error: priorData.error ?? "Exam not found." });
+          }
+          return;
+        }
 
         if (cancelled) return;
 
@@ -94,10 +85,10 @@ export default function TimerSelectionPage({
         }
 
         setData({
-          exam: examData.exam
+          exam: priorData.exam
             ? {
-                id: examData.exam.id,
-                name: examData.exam.title,
+                id: priorData.exam.id,
+                name: priorData.exam.name,
                 description: null,
                 bannerUrl: null,
                 batch: "",
@@ -122,7 +113,7 @@ export default function TimerSelectionPage({
               }
             : null,
           hasPriorAttempt: Boolean(priorData.hasPriorAttempt),
-          error: examData.error,
+          error: priorData.error,
         });
       } catch {
         if (!cancelled) {

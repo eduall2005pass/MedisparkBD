@@ -1,4 +1,4 @@
-import { fetchCatalogCourses, type CatalogCourse } from "@/lib/courses-admin";
+import { fetchCatalogCourse as fetchCatalogCourseBase, fetchCatalogCourses, type CatalogCourse } from "@/lib/courses-admin";
 import { query } from "@/lib/mysql";
 import {
   courses as staticCourses,
@@ -10,6 +10,29 @@ import {
 // Live course catalog: reads the MySQL `catalog_courses` table (managed from
 // Admin Panel → Courses). Falls back to the static catalog in @/lib/courses
 // when the DB is unreachable or the table has no rows yet.
+
+/** True when a course is visible on the public site (published, not hidden). */
+export function isCoursePublished(
+  course: Pick<CatalogCourse, "status" | "availability"> | Pick<Course, "status" | "availability">,
+): boolean {
+  return course.status === "published" && course.availability !== "hidden";
+}
+
+/**
+ * Single-course catalog read. Pass `{ cache: false }` for a fresh DB read
+ * (bypasses the mysql SELECT cache) — enrollment validation must never act
+ * on a stale unpublished/hidden row.
+ */
+export async function fetchCatalogCourse(
+  slug: string,
+  options?: { cache?: number | false },
+): Promise<CatalogCourse | null> {
+  if (options?.cache === false) {
+    const { invalidateQueryCache } = await import("@/lib/mysql");
+    invalidateQueryCache("catalog_courses");
+  }
+  return fetchCatalogCourseBase(slug);
+}
 
 /** Class/exam totals per course from the live learning tables. */
 export async function fetchContentCounts(): Promise<{
@@ -34,6 +57,43 @@ export async function fetchContentCounts(): Promise<{
          JOIN course_chapters ch ON ch.subject_id = a.subject_id AND ch.is_active = 1
          JOIN exams ex ON ex.chapter_id = ch.id AND ex.status = 'published'
         GROUP BY a.course_slug`,
+    );
+    for (const row of examRows) exams.set(row.course_slug, Number(row.cnt) || 0);
+  } catch {
+    // Counts are optional — missing tables simply hide the stats on cards.
+  }
+  return { classes, exams };
+}
+
+/** Targeted class/exam totals for ONE course slug — avoids full GROUP BY scans. */
+export async function fetchContentCountsForCourse(slug: string): Promise<{
+  classes: Map<string, number>;
+  exams: Map<string, number>;
+}> {
+  const classes = new Map<string, number>();
+  const exams = new Map<string, number>();
+  const key = slug.trim();
+  if (!key) return { classes, exams };
+  try {
+    const classRows = await query<{ course_slug: string; cnt: string | number }[]>(
+      `SELECT a.course_slug, COUNT(cl.id) AS cnt
+         FROM course_subject_assignments a
+         JOIN course_chapters ch ON ch.subject_id = a.subject_id AND ch.is_active = 1
+         JOIN course_classes cl ON cl.chapter_id = ch.id AND cl.is_active = 1
+        WHERE a.course_slug = ?
+        GROUP BY a.course_slug`,
+      [key],
+    );
+    for (const row of classRows) classes.set(row.course_slug, Number(row.cnt) || 0);
+
+    const examRows = await query<{ course_slug: string; cnt: string | number }[]>(
+      `SELECT a.course_slug, COUNT(ex.id) AS cnt
+         FROM course_subject_assignments a
+         JOIN course_chapters ch ON ch.subject_id = a.subject_id AND ch.is_active = 1
+         JOIN exams ex ON ex.chapter_id = ch.id AND ex.status = 'published'
+        WHERE a.course_slug = ?
+        GROUP BY a.course_slug`,
+      [key],
     );
     for (const row of examRows) exams.set(row.course_slug, Number(row.cnt) || 0);
   } catch {
@@ -91,14 +151,26 @@ export async function getLiveCourses(): Promise<Course[]> {
 
 /** Published + available courses for the public site. */
 export async function getLivePublicCourses(): Promise<Course[]> {
-  return (await getLiveCourses()).filter(
-    (course) => course.status === "published" && course.availability === "available",
-  );
+  return (await getLiveCourses()).filter(isCoursePublished);
 }
 
-export async function getLiveCourse(slug: string): Promise<Course | undefined> {
-  const all = await getLiveCourses();
-  return all.find((course) => course.slug === slug);
+export async function getLiveCourse(
+  slug: string,
+  options?: { cache?: number | false },
+): Promise<Course | undefined> {
+  const key = slug.trim();
+  if (!key) return undefined;
+  try {
+    // Scoped DB lookup (LIMIT 1) + targeted counts — no full catalog load.
+    const row = await fetchCatalogCourse(key, options);
+    if (row) {
+      const counts = await fetchContentCountsForCourse(row.slug);
+      return toCourse(row, counts);
+    }
+  } catch {
+    // fall through to static
+  }
+  return staticCourses.find((course) => course.slug === key);
 }
 
 /** Latest-batch featured courses (mirrors getFeaturedCourses). */
@@ -163,8 +235,7 @@ export async function fetchCourseCategoryCounts(): Promise<Record<string, number
     }
 
     for (const row of rows) {
-      if (row.status !== "published") continue;
-      if (row.availability === "hidden") continue;
+      if (!isCoursePublished(row)) continue;
       let targetId: string | null = row.categoryId ?? null;
       if (targetId && counts[targetId] === undefined) {
         // Stale id (category deleted) — try fallback via name.

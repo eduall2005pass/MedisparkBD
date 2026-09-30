@@ -1,5 +1,5 @@
 import { exec, parseJsonColumn, query, ensureColumn, withTransaction } from "@/lib/mysql";
-import { seedDefaultExamRules } from "@/lib/exam-rules";
+import { buildDefaultExamRules } from "@/lib/exam-rules";
 import { strictAnswerIndex } from "@/lib/paste-mcq-parser";
 import { revalidatePath, revalidateTag, unstable_cache } from "next/cache";
 
@@ -755,6 +755,10 @@ export type ExamListFilters = {
   chapterId?: string;
   /** Flow 4 Exam Batch — exams assigned to this course via exam_courses. */
   courseId?: string;
+  /** Filter by publish status (draft/published/closed). */
+  status?: ExamStatus | ExamStatus[];
+  /** Filter by archive flag (Public Exam Control archive action). */
+  archived?: boolean;
 };
 
 /** Normalize the fetchExams argument (legacy single-kind string or filters). */
@@ -772,7 +776,10 @@ function normalizeExamFilters(
     (!filters.ids || filters.ids.length === 0) &&
     !filters.categoryId &&
     !filters.chapterId &&
-    !filters.courseId;
+    !filters.courseId &&
+    (!filters.status ||
+      (Array.isArray(filters.status) && filters.status.length === 0)) &&
+    filters.archived === undefined;
   return { filters, cacheable };
 }
 
@@ -824,6 +831,19 @@ export async function fetchExams(
         `id IN (SELECT exam_id FROM exam_courses WHERE course_id = ?)`,
       );
       params.push(filters.courseId);
+    }
+    if (filters.status) {
+      const statuses = (Array.isArray(filters.status) ? filters.status : [filters.status]).filter((st) =>
+        ["draft", "published", "closed"].includes(st),
+      );
+      if (statuses.length > 0) {
+        where.push(`status IN (${statuses.map(() => "?").join(",")})`);
+        params.push(...statuses);
+      }
+    }
+    if (filters.archived !== undefined) {
+      where.push(`archived = ?`);
+      params.push(filters.archived ? 1 : 0);
     }
     const clause = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
     void needsCourseJoin;
@@ -983,13 +1003,13 @@ export async function saveExam(
 
   // Per-exam marking settings (Admin → Public Exam Control).
   let negativeEnabled = input.negativeEnabled === true;
-  let negativePerWrongRaw = Number(input.negativePerWrong);
+  const negativePerWrongRaw = Number(input.negativePerWrong);
   let negativePerWrong =
     Number.isFinite(negativePerWrongRaw) && negativePerWrongRaw > 0
       ? Math.min(99, negativePerWrongRaw)
       : 0.25;
   let secondTimerEnabled = input.secondTimerEnabled === true;
-  let secondTimerDeductionRaw = Number(input.secondTimerDeduction);
+  const secondTimerDeductionRaw = Number(input.secondTimerDeduction);
   let secondTimerDeduction =
     Number.isFinite(secondTimerDeductionRaw) && secondTimerDeductionRaw > 0
       ? Math.min(9999, secondTimerDeductionRaw)
@@ -1081,8 +1101,45 @@ export async function saveExam(
   } else if (examFormat !== "topic-wise") {
     topicSubject = null;
   }
-  await exec(
-    `INSERT INTO exams (${EXAM_COLUMNS}, created_by)
+  // Single transaction: exam upsert + default rules + question slots + course
+  // sync + scope mirror — all succeed or all roll back (same withTransaction
+  // pattern as saveQuestionsBulk). Reads above stay outside; only writes are
+  // inside.
+  const examParams: unknown[] = [
+    id,
+    title,
+    asString(input.description) || null,
+    asString(input.bannerUrl) || null,
+    kind,
+    examMode,
+    asString(input.batchId),
+    asString(input.subject),
+    chapterId,
+    sortOrder,
+    input.courseType === "Admission" ? "Admission" : "Academic",
+    examFormat,
+    topicSubject,
+    Math.max(1, Number(input.durationMinutes) || 30),
+    totalMarks,
+    marksPerQuestion,
+    Math.max(0, Number(input.negativeMarks) || 0) || (negativeEnabled ? negativePerWrong : 0),
+    negativeEnabled ? 1 : 0,
+    negativePerWrong,
+    secondTimerEnabled ? 1 : 0,
+    secondTimerDeduction,
+    questionCount,
+    ["draft", "published", "closed"].includes(String(input.status))
+      ? String(input.status)
+      : "draft",
+    featured ? 1 : 0,
+    scheduledAt,
+    endsAt,
+    answerKeyJson,
+    categoryId,
+    resolvedRuleTemplate,
+    adminUid,
+  ];
+  const examUpsertSql = `INSERT INTO exams (${EXAM_COLUMNS}, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE title = VALUES(title), description = VALUES(description),
        banner_url = VALUES(banner_url),
@@ -1100,84 +1157,110 @@ export async function saveExam(
        question_count = VALUES(question_count), status = VALUES(status),
        featured = VALUES(featured),
        scheduled_at = VALUES(scheduled_at), ends_at = VALUES(ends_at),
-       answer_key = VALUES(answer_key), created_by = VALUES(created_by)`,
-    [
-      id,
-      title,
-      asString(input.description) || null,
-      asString(input.bannerUrl) || null,
-      kind,
-      examMode,
-      asString(input.batchId),
-      asString(input.subject),
-      chapterId,
-      sortOrder,
-      input.courseType === "Admission" ? "Admission" : "Academic",
-      examFormat,
-      topicSubject,
-      Math.max(1, Number(input.durationMinutes) || 30),
-      totalMarks,
-      marksPerQuestion,
-      Math.max(0, Number(input.negativeMarks) || 0) || (negativeEnabled ? negativePerWrong : 0),
-      negativeEnabled ? 1 : 0,
-      negativePerWrong,
-      secondTimerEnabled ? 1 : 0,
-      secondTimerDeduction,
-      questionCount,
-      ["draft", "published", "closed"].includes(String(input.status))
-        ? String(input.status)
-        : "draft",
-      featured ? 1 : 0,
-      scheduledAt,
-      endsAt,
-      answerKeyJson,
-      categoryId,
-      resolvedRuleTemplate,
-      adminUid,
-    ],
-  );
+       answer_key = VALUES(answer_key), created_by = VALUES(created_by)`;
+  await withTransaction(async (conn) => {
+    await conn.query(examUpsertSql, examParams);
 
-  // New public exams start with their template's rule set from the central
-  // Exam Rules page (Academic/Medical/Varsity) — fully
-  // editable/deletable afterwards from Public Exam Control → Rules.
-  if (isNew) {
-    try {
-      await seedDefaultExamRules(id, resolvedRuleTemplate);
-    } catch {
-      // Best effort — rules can still be added manually.
+    // New exams start with their template's rule set from the central Exam
+    // Rules page — fully editable/deletable afterwards from Exam Control.
+    if (isNew) {
+      try {
+        const [have] = await conn.query(`SELECT id FROM exam_rules WHERE exam_id = ? LIMIT 1`, [id]);
+        if ((have as unknown[]).length === 0) {
+          const { normalizeTemplate, normalizeLang } = await import("@/lib/exam-rule-templates");
+          let seeded = false;
+          try {
+            for (const lang of ["bangla", "english"] as const) {
+              const [tpl] = await conn.query(
+                `SELECT rule_title, rule_text, sort_order FROM exam_rule_template_items WHERE template = ? AND lang = ? ORDER BY sort_order ASC`,
+                [normalizeTemplate(resolvedRuleTemplate), normalizeLang(lang)],
+              );
+              const tplRows = tpl as unknown as { rule_title: string | null; rule_text: string; sort_order: number }[];
+              const rows =
+                tplRows.length > 0
+                  ? tplRows.map((r) => ({ title: r.rule_title ?? "", text: r.rule_text, sortOrder: r.sort_order }))
+                  : buildDefaultExamRules(id, resolvedRuleTemplate, lang).map((r) => ({ title: r.title, text: r.text, sortOrder: r.sortOrder }));
+              for (const r of rows) {
+                await conn.query(
+                  `INSERT INTO exam_rules (exam_id, lang, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?, ?)`,
+                  [id, lang, r.title, r.text, r.sortOrder],
+                );
+              }
+            }
+            seeded = true;
+          } catch {
+            seeded = false;
+          }
+          if (!seeded) {
+            for (const lang of ["bangla", "english"] as const) {
+              const rules = buildDefaultExamRules(id, resolvedRuleTemplate, lang);
+              for (const rule of rules) {
+                await conn.query(
+                  `INSERT INTO exam_rules (exam_id, lang, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?, ?)`,
+                  [rule.examId, lang, rule.title, rule.text, rule.sortOrder],
+                );
+              }
+            }
+          }
+        }
+      } catch {
+        // Best effort — rules can still be added manually.
+      }
     }
-  }
 
-  // Auto-generate question slots when exam is created with question_count = N
-  if (questionCount > 0) {
-    try {
-      await ensureQuestionSlots(id, questionCount);
-    } catch {
-      // Best effort — slots may be created on next edit.
+    // Auto-generate question slots when exam is created with question_count = N
+    if (questionCount > 0) {
+      try {
+        const [have] = await conn.query(
+          `SELECT sort_order FROM exam_questions WHERE exam_id = ? ORDER BY sort_order ASC`,
+          [id],
+        );
+        const existingOrders = new Set((have as unknown as { sort_order: number }[]).map((r) => Number(r.sort_order)));
+        const missing: number[] = [];
+        for (let i = 1; i <= questionCount; i += 1) {
+          if (!existingOrders.has(i)) missing.push(i);
+        }
+        if (missing.length > 0) {
+          let marksPerSlot = marksPerQuestion;
+          try {
+            const [examRows] = await conn.query(`SELECT marks_per_question FROM exams WHERE id = ? LIMIT 1`, [id]);
+            const raw = Number((examRows as unknown as { marks_per_question: string | number | null }[])[0]?.marks_per_question ?? marksPerQuestion);
+            if (Number.isFinite(raw) && raw > 0) marksPerSlot = raw;
+          } catch {
+            // Keep input-derived marks.
+          }
+          const placeholders = missing.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+          const values: unknown[] = [];
+          for (const order of missing) {
+            values.push(id, "", "", null, JSON.stringify(["", "", "", ""]), 0, null, marksPerSlot, order, 1);
+          }
+          await conn.query(
+            `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active)
+             VALUES ${placeholders}`,
+            values,
+          );
+        }
+      } catch {
+        // Best effort — slots may be created on next edit.
+      }
     }
-  }
 
-  // Keep course assignments in sync (COURSE scope).
-  // Chapter-linked course exams (chapter_id chain) keep working with an empty
-  // assignment list — the link itself carries the course scope.
-  await exec(`DELETE FROM exam_courses WHERE exam_id = ?`, [id]);
-  for (const courseId of courseIds) {
-    await exec(
-      `INSERT IGNORE INTO exam_courses (exam_id, course_id) VALUES (?, ?)`,
-      [id, courseId],
-    );
-  }
-  // Mirror the unified scope into the `type` column (public/course) so
-  // SQL-level scope filtering stays consistent with `kind`. Best-effort on
-  // legacy DBs where the column may not exist yet.
-  try {
-    await exec(`UPDATE exams SET type = ? WHERE id = ?`, [
-      scope === "COURSE" ? "course" : "public",
-      id,
-    ]);
-  } catch {
-    // Best effort — kind remains the source of truth.
-  }
+    // Keep course assignments in sync (COURSE scope).
+    // Chapter-linked course exams (chapter_id chain) keep working with an empty
+    // assignment list — the link itself carries the course scope.
+    await conn.query(`DELETE FROM exam_courses WHERE exam_id = ?`, [id]);
+    for (const courseId of courseIds) {
+      await conn.query(`INSERT IGNORE INTO exam_courses (exam_id, course_id) VALUES (?, ?)`, [id, courseId]);
+    }
+    // Mirror the unified scope into the `type` column (public/course) so
+    // SQL-level scope filtering stays consistent with `kind`. Best-effort on
+    // legacy DBs where the column may not exist yet.
+    try {
+      await conn.query(`UPDATE exams SET type = ? WHERE id = ?`, [scope === "COURSE" ? "course" : "public", id]);
+    } catch {
+      // Best effort — kind remains the source of truth.
+    }
+  });
 
   const rows = await query<ExamRow[]>(`SELECT ${EXAM_COLUMNS} FROM exams WHERE id = ? LIMIT 1`, [id]);
   if (!rows[0]) throw new Error("Failed to save the exam.");
@@ -1226,23 +1309,27 @@ export const createExam = saveExam;
 /** Change display order of exams from an ordered id list. */
 export async function reorderExams(orderedIds: string[]): Promise<void> {
   await ensureTables();
-  for (let index = 0; index < orderedIds.length; index += 1) {
-    await exec(`UPDATE exams SET sort_order = ? WHERE id = ?`, [
-      index + 1,
-      orderedIds[index],
-    ]);
-  }
+  await withTransaction(async (conn) => {
+    for (let index = 0; index < orderedIds.length; index += 1) {
+      await conn.query(`UPDATE exams SET sort_order = ? WHERE id = ?`, [
+        index + 1,
+        orderedIds[index],
+      ]);
+    }
+  });
   invalidateExamsCache();
 }
 
 export async function deleteExam(id: string): Promise<void> {
   await ensureTables();
-  await exec(`DELETE FROM exam_questions WHERE exam_id = ?`, [id]);
-  await exec(`DELETE FROM exam_enrollments WHERE exam_id = ?`, [id]);
-  await exec(`DELETE FROM exam_results WHERE exam_id = ?`, [id]);
-  await exec(`DELETE FROM exam_courses WHERE exam_id = ?`, [id]);
-  await exec(`DELETE FROM exam_rules WHERE exam_id = ?`, [id]);
-  await exec(`DELETE FROM exams WHERE id = ?`, [id]);
+  await withTransaction(async (conn) => {
+    await conn.query(`DELETE FROM exam_questions WHERE exam_id = ?`, [id]);
+    await conn.query(`DELETE FROM exam_enrollments WHERE exam_id = ?`, [id]);
+    await conn.query(`DELETE FROM exam_results WHERE exam_id = ?`, [id]);
+    await conn.query(`DELETE FROM exam_courses WHERE exam_id = ?`, [id]);
+    await conn.query(`DELETE FROM exam_rules WHERE exam_id = ?`, [id]);
+    await conn.query(`DELETE FROM exams WHERE id = ?`, [id]);
+  });
   invalidateExamsCache();
 }
 
@@ -1263,6 +1350,8 @@ export async function fetchQuestions(
       where.push("bank_subject = ?");
       params.push(filters.subject);
     }
+    // NOTE: capped at 500 rows — callers needing more must paginate (shape is
+    // intentionally unchanged: plain ExamQuestion[], no truncation flag).
     const sql = `SELECT * FROM exam_questions ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY sort_order ASC, id ASC LIMIT 500`;
     const rows = await query<QuestionRow[]>(sql, params);
     return rows.map(rowToQuestion);
@@ -1476,11 +1565,27 @@ export async function duplicateQuestion(id: number): Promise<ExamQuestion[]> {
     src.exam_id ? [src.exam_id] : [],
   );
   const sortOrder = (next[0]?.m ?? 0) + 1;
-  await exec(
-    `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [src.exam_id, src.bank_subject, src.question, (src as unknown as { question_image?: string | null }).question_image ?? null, src.options, src.correct_index, src.explanation, Math.max(0.5, Number(src.marks) || 1), sortOrder, 1],
-  );
+  await withTransaction(async (conn) => {
+    const [result] = await conn.query(
+      `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [src.exam_id, src.bank_subject, src.question, (src as unknown as { question_image?: string | null }).question_image ?? null, src.options, src.correct_index, src.explanation, Math.max(0.5, Number(src.marks) || 1), sortOrder, 1],
+    );
+    const newId = (result as unknown as { insertId?: number })?.insertId;
+    // Carry the bilingual variant cells (bangla/english x set A/B) to the copy.
+    if (newId) {
+      try {
+        await conn.query(
+          `INSERT INTO exam_question_variants (question_id, lang, set_label, question, options, correct_index, explanation, marks, question_image)
+           SELECT ?, lang, set_label, question, options, correct_index, explanation, marks, question_image
+           FROM exam_question_variants WHERE question_id = ?`,
+          [newId, id],
+        );
+      } catch {
+        // Best effort — variants table may not exist yet.
+      }
+    }
+  });
   await recomputeExamTotals(src.exam_id);
   invalidateExamsCache();
   return fetchQuestions({ examId: src.exam_id ?? "bank" });
@@ -1488,9 +1593,11 @@ export async function duplicateQuestion(id: number): Promise<ExamQuestion[]> {
 
 export async function reorderQuestions(examId: string | null, orderedIds: number[]): Promise<ExamQuestion[]> {
   await ensureTables();
-  for (let index = 0; index < orderedIds.length; index += 1) {
-    await exec(`UPDATE exam_questions SET sort_order = ? WHERE id = ? AND ${examId ? "exam_id = ?" : "exam_id IS NULL"}`, examId ? [index + 1, orderedIds[index], examId] : [index + 1, orderedIds[index]]);
-  }
+  await withTransaction(async (conn) => {
+    for (let index = 0; index < orderedIds.length; index += 1) {
+      await conn.query(`UPDATE exam_questions SET sort_order = ? WHERE id = ? AND ${examId ? "exam_id = ?" : "exam_id IS NULL"}`, examId ? [index + 1, orderedIds[index], examId] : [index + 1, orderedIds[index]]);
+    }
+  });
   const key = examId ?? "bank";
   invalidateExamsCache();
   return fetchQuestions({ examId: key });
@@ -1514,10 +1621,19 @@ export async function attachBankQuestion(
   );
   const src = source[0];
   if (!src) throw new Error("Bank question not found.");
+  // Append at the end (MAX sort_order + 1) so the copy never collides with an
+  // existing slot order.
+  let nextOrder = 1;
+  try {
+    const max = await query<{ m: number | null }[]>(`SELECT MAX(sort_order) AS m FROM exam_questions WHERE exam_id = ?`, [examId]);
+    nextOrder = (max[0]?.m ?? 0) + 1;
+  } catch {
+    nextOrder = 1;
+  }
   await exec(
-    `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [examId, src.bank_subject, src.question, (src as unknown as { question_image?: string | null }).question_image ?? null, src.options, src.correct_index, src.explanation, Math.max(0.5, Number(src.marks) || 1)],
+    `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [examId, src.bank_subject, src.question, (src as unknown as { question_image?: string | null }).question_image ?? null, src.options, src.correct_index, src.explanation, Math.max(0.5, Number(src.marks) || 1), nextOrder],
   );
   await recomputeExamTotals(examId);
   invalidateExamsCache();
@@ -1530,7 +1646,16 @@ export async function deleteQuestion(id: number): Promise<void> {
     `SELECT exam_id FROM exam_questions WHERE id = ? LIMIT 1`,
     [id],
   );
-  await exec(`DELETE FROM exam_questions WHERE id = ?`, [id]);
+  await withTransaction(async (conn) => {
+    // Explicit variant cleanup alongside the FK CASCADE — legacy DBs may lack
+    // the constraint, and orphans would otherwise leak into variant lookups.
+    try {
+      await conn.query(`DELETE FROM exam_question_variants WHERE question_id = ?`, [id]);
+    } catch {
+      // Best effort — variants table may not exist yet.
+    }
+    await conn.query(`DELETE FROM exam_questions WHERE id = ?`, [id]);
+  });
   await recomputeExamTotals(rows[0]?.exam_id ?? null);
   invalidateExamsCache();
 }
@@ -1554,77 +1679,104 @@ export async function duplicateExam(sourceId: string, adminUid: string): Promise
   // Preserve sort order: put duplicate after source
   const maxRows = await query<{ m: number | null }[]>(`SELECT MAX(sort_order) AS m FROM exams`);
   const nextOrder = (maxRows[0]?.m ?? 0) + 1;
-  await exec(
-    `INSERT INTO exams (${EXAM_COLUMNS}, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      newId,
-      newTitle,
-      src.description,
-      src.banner_url,
-      src.kind,
-      (src as unknown as { exam_mode?: string }).exam_mode ?? "live",
-      src.batch_id,
-      src.subject,
-      src.chapter_id,
-      nextOrder,
-      src.course_type,
-      src.exam_format ?? null,
-      src.topic_subject ?? null,
-      src.duration_minutes,
-      0,
-      (src as unknown as { marks_per_question?: string | number | null }).marks_per_question ?? 1,
-      src.negative_marks,
-      src.negative_enabled ?? 0,
-      src.negative_per_wrong ?? 0.25,
-      src.second_timer_enabled ?? 0,
-      src.second_timer_deduction ?? 3,
-      0,
-      "draft",
-      0,
-      null,
-      null,
-      null,
-      src.category_id ?? null,
-      (src as unknown as { rule_template?: string | null }).rule_template ?? null,
-      adminUid,
-    ],
-  );
-  // Copy questions
+  // Read source payloads before the transaction (reads outside; copy writes atomic).
   const qs = await query<QuestionRow[]>(`SELECT * FROM exam_questions WHERE exam_id = ?`, [sourceId]);
-  for (const q of qs) {
-    await exec(
-      `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [newId, q.bank_subject, q.question, (q as unknown as { question_image?: string | null }).question_image ?? null, q.options, q.correct_index, q.explanation, q.marks, q.sort_order ?? 0, q.is_active],
-    );
-  }
-  // Copy rules
+  let ruleRows: { rule_title: string; rule_text: string; sort_order: number }[] = [];
   try {
-    const rules = await query<{ rule_title: string; rule_text: string; sort_order: number }[]>(`SELECT rule_title, rule_text, sort_order FROM exam_rules WHERE exam_id = ? ORDER BY sort_order ASC`, [sourceId]);
-    for (const r of rules) {
-      await exec(`INSERT INTO exam_rules (exam_id, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`, [newId, r.rule_title, r.rule_text, r.sort_order]);
-    }
+    ruleRows = await query<{ rule_title: string; rule_text: string; sort_order: number }[]>(`SELECT rule_title, rule_text, sort_order FROM exam_rules WHERE exam_id = ? ORDER BY sort_order ASC`, [sourceId]);
   } catch {
     // rules table may not exist yet
   }
-  // Copy course assignments (same COURSE scope linkage as the source).
+  let courseRows: { course_id: string }[] = [];
   try {
-    const courses = await query<{ course_id: string }[]>(`SELECT course_id FROM exam_courses WHERE exam_id = ?`, [sourceId]);
-    for (const c of courses) {
-      await exec(`INSERT IGNORE INTO exam_courses (exam_id, course_id) VALUES (?, ?)`, [newId, c.course_id]);
-    }
+    courseRows = await query<{ course_id: string }[]>(`SELECT course_id FROM exam_courses WHERE exam_id = ?`, [sourceId]);
   } catch {
     // best effort
   }
-  // Mirror the unified scope (kind → type) for the duplicate.
-  try {
-    await exec(`UPDATE exams SET type = ? WHERE id = ?`, [
-      src.kind === "enrolled" ? "course" : "public",
-      newId,
-    ]);
-  } catch {
-    // Best effort — kind remains the source of truth.
-  }
-  await recomputeExamTotals(newId);
+  // Single transaction: exam + questions (+ their variants) + rules + course
+  // assignments + scope mirror + totals — a partial copy never persists.
+  await withTransaction(async (conn) => {
+    await conn.query(
+      `INSERT INTO exams (${EXAM_COLUMNS}, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        newId,
+        newTitle,
+        src.description,
+        src.banner_url,
+        src.kind,
+        (src as unknown as { exam_mode?: string }).exam_mode ?? "live",
+        src.batch_id,
+        src.subject,
+        src.chapter_id,
+        nextOrder,
+        src.course_type,
+        src.exam_format ?? null,
+        src.topic_subject ?? null,
+        src.duration_minutes,
+        0,
+        (src as unknown as { marks_per_question?: string | number | null }).marks_per_question ?? 1,
+        src.negative_marks,
+        src.negative_enabled ?? 0,
+        src.negative_per_wrong ?? 0.25,
+        src.second_timer_enabled ?? 0,
+        src.second_timer_deduction ?? 3,
+        0,
+        "draft",
+        0,
+        null,
+        null,
+        null,
+        src.category_id ?? null,
+        (src as unknown as { rule_template?: string | null }).rule_template ?? null,
+        adminUid,
+      ],
+    );
+    // Copy questions (+ their bilingual variant cells, remapped to the new ids)
+    for (const q of qs) {
+      const [result] = await conn.query(
+        `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [newId, q.bank_subject, q.question, (q as unknown as { question_image?: string | null }).question_image ?? null, q.options, q.correct_index, q.explanation, q.marks, q.sort_order ?? 0, q.is_active],
+      );
+      const newQid = (result as unknown as { insertId?: number })?.insertId;
+      if (newQid) {
+        try {
+          await conn.query(
+            `INSERT INTO exam_question_variants (question_id, lang, set_label, question, options, correct_index, explanation, marks, question_image)
+             SELECT ?, lang, set_label, question, options, correct_index, explanation, marks, question_image
+             FROM exam_question_variants WHERE question_id = ?`,
+            [newQid, q.id],
+          );
+        } catch {
+          // Best effort — variants table may not exist yet.
+        }
+      }
+    }
+    // Copy rules
+    for (const r of ruleRows) {
+      await conn.query(`INSERT INTO exam_rules (exam_id, rule_title, rule_text, sort_order) VALUES (?, ?, ?, ?)`, [newId, r.rule_title, r.rule_text, r.sort_order]);
+    }
+    // Copy course assignments (same COURSE scope linkage as the source).
+    for (const c of courseRows) {
+      await conn.query(`INSERT IGNORE INTO exam_courses (exam_id, course_id) VALUES (?, ?)`, [newId, c.course_id]);
+    }
+    // Mirror the unified scope (kind → type) for the duplicate.
+    try {
+      await conn.query(`UPDATE exams SET type = ? WHERE id = ?`, [
+        src.kind === "enrolled" ? "course" : "public",
+        newId,
+      ]);
+    } catch {
+      // Best effort — kind remains the source of truth.
+    }
+    // Recompute totals inside the transaction (single connection).
+    try {
+      const [totRows] = await conn.query(`SELECT COUNT(*) AS count, SUM(marks) AS marks FROM exam_questions WHERE exam_id = ? AND is_active = 1`, [newId]);
+      const tot = (totRows as unknown as { count: number; marks: string | null }[])[0];
+      await conn.query(`UPDATE exams SET question_count = ?, total_marks = ? WHERE id = ?`, [tot?.count ?? 0, Number(tot?.marks ?? 0) || 0, newId]);
+    } catch {
+      // Best-effort sync.
+    }
+  });
   invalidateExamsCache();
   const newRows = await query<ExamRow[]>(`SELECT ${EXAM_COLUMNS} FROM exams WHERE id = ? LIMIT 1`, [newId]);
   if (!newRows[0]) throw new Error("Failed to duplicate exam.");
@@ -2000,7 +2152,7 @@ export async function fetchPublishedPublicExams(
     const params: unknown[] = [];
     // PUBLIC scope category listing — both public + practice kinds belong to
     // the Main Website (course/enrolled exams never leak here).
-    let where = `kind IN ('public','practice') AND status <> 'draft'`;
+    let where = `kind IN ('public','practice') AND status = 'published'`; // closed/draft stay hidden
     if (categoryId && categoryId.trim()) {
       where += ` AND category_id = ?`;
       params.push(categoryId.trim());
@@ -2033,7 +2185,7 @@ export async function fetchPublishedCourseExams(
     await ensureTables();
     const rows = await query<ExamRow[]>(
       `SELECT ${EXAM_COLUMNS} FROM exams ex
-        WHERE ex.kind = 'enrolled' AND ex.status <> 'draft'
+        WHERE ex.kind = 'enrolled' AND ex.status = 'published'
           AND (
             EXISTS (SELECT 1 FROM exam_courses ec WHERE ec.exam_id = ex.id AND ec.course_id = ?)
             OR EXISTS (

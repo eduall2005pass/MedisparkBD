@@ -87,13 +87,19 @@ function rowToReview(row: ReviewRow): ReviewRecord {
 }
 
 /** Published reviews only, ordered 5★→1★ — used by the live homepage. */
-export async function fetchPublishedReviewRecords(): Promise<ReviewRecord[]> {
+export async function fetchPublishedReviewRecords(
+  limit = 100,
+  offset = 0,
+): Promise<ReviewRecord[]> {
   try {
     await ensureReviewsTable();
+    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 200);
+    const safeOffset = Math.max(Math.floor(offset), 0);
     const rows = await query<ReviewRow[]>(
       `SELECT id, student_uid, student_name, photo_url, photo_storage_path, course_name, batch_label,
               rating, review_text, is_published, created_at
-       FROM reviews WHERE is_published = 1 ${REVIEW_ORDER_CLAUSE}`,
+       FROM reviews WHERE is_published = 1 ${REVIEW_ORDER_CLAUSE} LIMIT ? OFFSET ?`,
+      [safeLimit, safeOffset],
     );
     return rows.map(rowToReview);
   } catch {
@@ -102,13 +108,19 @@ export async function fetchPublishedReviewRecords(): Promise<ReviewRecord[]> {
 }
 
 /** All reviews (including hidden), ordered 5★→1★ — used by the Admin Panel. */
-export async function fetchAllReviewRecords(): Promise<ReviewRecord[]> {
+export async function fetchAllReviewRecords(
+  limit = 200,
+  offset = 0,
+): Promise<ReviewRecord[]> {
   try {
     await ensureReviewsTable();
+    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 500);
+    const safeOffset = Math.max(Math.floor(offset), 0);
     const rows = await query<ReviewRow[]>(
       `SELECT id, student_uid, student_name, photo_url, photo_storage_path, course_name, batch_label,
               rating, review_text, is_published, created_at
-       FROM reviews ${REVIEW_ORDER_CLAUSE}`,
+       FROM reviews ${REVIEW_ORDER_CLAUSE} LIMIT ? OFFSET ?`,
+      [safeLimit, safeOffset],
     );
     return rows.map(rowToReview);
   } catch {
@@ -296,11 +308,21 @@ export async function saveStudentReview(
   if (text.length === 0 || text.length > 2000) {
     throw new Error("Review text is required and must be under 2000 characters.");
   }
+  if (text.length < 10) {
+    throw new Error("Please write a little more (at least 10 characters).");
+  }
 
-  const existing = await query<{ id: string }[]>(
-    "SELECT id FROM reviews WHERE student_uid = ? ORDER BY created_at DESC LIMIT 1",
+  const existing = await query<{ id: string; updated_at: Date | string }[]>(
+    "SELECT id, updated_at FROM reviews WHERE student_uid = ? ORDER BY created_at DESC LIMIT 1",
     [uid],
+    { cache: false },
   );
+  if (existing[0]?.updated_at) {
+    const lastEdit = new Date(String(existing[0].updated_at)).getTime();
+    if (!Number.isNaN(lastEdit) && Date.now() - lastEdit < 60_000) {
+      throw new Error("You just edited your review — please wait a minute before editing again.");
+    }
+  }
   const id = existing[0]?.id ?? generateReviewId();
   const nextOrder =
     (

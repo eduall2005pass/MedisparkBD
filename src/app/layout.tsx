@@ -12,11 +12,14 @@ import { NavHistoryProvider } from "@/components/navigation/NavHistoryContext";
 import AnnouncementBar from "@/components/home/AnnouncementBar";
 import { getActiveLogo, fetchThemeLogos } from "@/lib/logo-store";
 import { getWebsiteSettingsWithFallback } from "@/lib/website-settings";
-import { fetchSeoSettings } from "@/lib/seo-settings";
+import { fetchSeoSettings, DEFAULT_SEO_SETTINGS } from "@/lib/seo-settings";
 import { fetchNavbarConfig } from "@/lib/navbar";
+import { DEFAULT_NAVBAR_CONFIG } from "@/lib/navbar-constants";
+import { DEFAULT_WEBSITE_SETTINGS } from "@/lib/website-settings-constants";
 import {
   fetchThemeSettings,
   buildThemeOverrideCss,
+  DEFAULT_THEME_SETTINGS,
 } from "@/lib/theme-settings";
 import { Suspense } from "react";
 import { unstable_cache } from "next/cache";
@@ -61,7 +64,12 @@ const DEFAULT_META_DESCRIPTION =
   "MediSpark is an HSC academic and medical admission preparation platform — courses, exams, and Q&A built for future medical students.";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const seo = await getCachedSeo();
+  let seo = DEFAULT_SEO_SETTINGS;
+  try {
+    seo = await getCachedSeo();
+  } catch {
+    seo = DEFAULT_SEO_SETTINGS;
+  }
   const siteTitle = seo.siteTitle || DEFAULT_SITE_TITLE;
   const description = seo.metaDescription || DEFAULT_META_DESCRIPTION;
   return {
@@ -109,14 +117,27 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [initialLogo, initialThemeLogos, initialSettings, navbarConfig, themeSettings] =
-    await Promise.all([
-      getCachedActiveLogo(),
-      getCachedThemeLogos(),
-      getCachedWebsiteSettings(),
-      getCachedNavbarConfig(),
-      getCachedThemeSettings(),
+  let initialLogo = null;
+  let initialThemeLogos: Awaited<ReturnType<typeof getCachedThemeLogos>> = { light: null, dark: null };
+  let initialSettings = DEFAULT_WEBSITE_SETTINGS;
+  let navbarConfig = DEFAULT_NAVBAR_CONFIG;
+  let themeSettings = DEFAULT_THEME_SETTINGS;
+  try {
+    const [logo, themeLogos, settings, nav, theme] = await Promise.all([
+      getCachedActiveLogo().catch(() => null),
+      getCachedThemeLogos().catch(() => ({ light: null, dark: null })),
+      getCachedWebsiteSettings().catch(() => DEFAULT_WEBSITE_SETTINGS),
+      getCachedNavbarConfig().catch(() => DEFAULT_NAVBAR_CONFIG),
+      getCachedThemeSettings().catch(() => DEFAULT_THEME_SETTINGS),
     ]);
+    initialLogo = logo;
+    initialThemeLogos = themeLogos;
+    initialSettings = settings;
+    navbarConfig = nav;
+    themeSettings = theme;
+  } catch {
+    // Safe fallbacks above keep the whole site renderable if data fetches fail.
+  }
   const themeOverrideCss = buildThemeOverrideCss(themeSettings);
   return (
     <html

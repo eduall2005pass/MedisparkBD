@@ -381,6 +381,8 @@ function ParticipantsTab({ examId, headers }: { examId: string; headers: Record<
 function ResultsTab({ examId, examTitle, headers }: { examId: string; examTitle: string; headers: Record<string, string> }) {
   const [rows, setRows] = useState<Result[] | null>(null);
   const [error, setError] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const load = useCallback(async () => {
     // Enter LOADING: reset to null so a retry never renders a stale `[]` as
     // a false "No results yet" while the new request is still pending.
@@ -407,6 +409,7 @@ function ResultsTab({ examId, examTitle, headers }: { examId: string; examTitle:
         </div>
         <button type="button" onClick={() => void load()} className={buttonSecondaryClass}>↻ Refresh</button>
       </div>
+      {deleteError && <p role="alert" className={noticeClass({ kind: "error", text: deleteError })}>{deleteError}</p>}
       {rows === null && !error ? (
         <p className="mt-4 text-center text-sm text-slate-500">Loading…</p>
       ) : error ? (
@@ -433,9 +436,26 @@ function ResultsTab({ examId, examTitle, headers }: { examId: string; examTitle:
               <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${r.totalMarks > 0 && r.score / r.totalMarks >= 0.6 ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-500"}`}>{r.score}/{r.totalMarks}</span>
               <button
                 type="button"
-                onClick={() => void fetch("/api/admin/exams/results", { method: "DELETE", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify({ id: r.id }) }).then(() => load())}
+                disabled={deletingId === r.id}
+                onClick={() => {
+                  if (!window.confirm(`Delete result for “${r.studentName || r.studentUid}” (${r.score}/${r.totalMarks})? This cannot be undone.`)) return;
+                  setDeletingId(r.id);
+                  setDeleteError(null);
+                  void (async () => {
+                    try {
+                      const res = await fetch("/api/admin/exams/results", { method: "DELETE", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify({ id: r.id }) });
+                      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+                      if (!res.ok) throw new Error(data?.error ?? "Failed to delete result.");
+                      await load();
+                    } catch (e) {
+                      setDeleteError(e instanceof Error ? e.message : "Failed to delete result.");
+                    } finally {
+                      setDeletingId(null);
+                    }
+                  })();
+                }}
                 className={buttonSecondaryClass}
-              >Delete</button>
+              >{deletingId === r.id ? "Deleting…" : "Delete"}</button>
             </li>
           ))}
         </ul>

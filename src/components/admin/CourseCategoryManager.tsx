@@ -254,6 +254,7 @@ export default function CourseCategoryManager({
   }
 
   async function removeImage(category: CourseCategory) {
+    if (!window.confirm(`Remove image of “${category.name}”?`)) return;
     await request(
       "/api/course-categories",
       {

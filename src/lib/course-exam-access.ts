@@ -3,6 +3,27 @@ import { hasPriorExamAttempt } from "@/lib/exam-taking";
 import { query } from "@/lib/mysql";
 
 /**
+ * True when the student has a prior SCHEDULED (live) result for this exam.
+ * Practice attempts never count — they must not block Live entry or
+ * archived-phase practice retakes. On legacy DBs without the attempt_type
+ * column, every row is scheduled-equivalent, so fall back to any-result.
+ */
+async function hasScheduledExamAttempt(
+  examId: string,
+  uid: string,
+): Promise<boolean> {
+  try {
+    const rows = await query<{ n: number }[]>(
+      `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+      [examId, uid],
+    );
+    return (rows[0]?.n ?? 0) > 0;
+  } catch {
+    return hasPriorExamAttempt(examId, uid);
+  }
+}
+
+/**
  * Course (enrolled) exam access — thin wrapper over the shared exam engine.
  *
  * MASTER PROMPT §50 — "DO NOT build separate exam engines" rule:
@@ -62,17 +83,25 @@ export async function checkCourseExamAccess(
   // Archived allows Practice Again (practice attempts never affect official merit/ranking).
   const { getEnrolledExamPhase, isEnrolledExam, isEnrolledPracticePhase } = await import("@/lib/enrolled-exam-lifecycle");
   const enrolled = await isEnrolledExam(normalizedId);
+  let enrolledPractice = false;
 
   if (enrolled) {
     const phase = getEnrolledExamPhase(exam);
+    if (phase === "draft") {
+      return { allowed: false, reason: "This exam is not published yet." };
+    }
+    if (phase === "closed") {
+      return { allowed: false, reason: "This exam is closed." };
+    }
     if (phase === "upcoming") {
       return { allowed: false, reason: "This exam has not started yet." };
     }
     if (phase === "no-window") {
       // No schedule set — treat as always Live (legacy) — fall through.
     }
-    // Live and Archived(practice) both fall through to gates below.
-    // One-attempt check happens after enrollment verification.
+    // Archived (post-live Practice): still startable as practice — practice
+    // attempts are completable but never ranked. Fall through to gates below.
+    enrolledPractice = isEnrolledPracticePhase(phase);
   }
 
   // Course-enrollment gate — delegates to the shared helper which checks
@@ -86,24 +115,35 @@ export async function checkCourseExamAccess(
     };
   }
 
-  // One-attempt rule for course exams: if student has any prior result
-  // (scheduled OR practice), block access.
-  try {
-    const hasPrior = await hasPriorExamAttempt(normalizedId, cleanUid);
-    if (hasPrior) {
-      return {
-        allowed: false,
-        reason: "You have already appeared in this exam. View your result.",
-      };
+  // One-attempt rule for course exams: only a prior SCHEDULED (live)
+  // result blocks re-entry. Practice attempts never block — archived exams
+  // stay startable as practice (LIVE → PRACTICE promise).
+  // In the practice phase the check is skipped entirely (retakes allowed).
+  if (!enrolledPractice) {
+    try {
+      const hasPrior = await hasScheduledExamAttempt(
+        normalizedId,
+        cleanUid,
+      );
+      if (hasPrior) {
+        return {
+          allowed: false,
+          reason: "You have already appeared in this exam. View your result.",
+        };
+      }
+    } catch {
+      // Fail open for DB errors — other guards remain enforced.
     }
-  } catch {
-    // Fail open for DB errors — other guards remain enforced.
   }
 
   // Attempt limits — same guard as the engine's startExamAttempt.
-  // For Practice phase this block is never reached (returned above).
-  // For Live phase, enforce maxAttempts counting only live attempts
-  // so a prior practice does not block a Live entry, and vice versa.
+  // Practice phase is exempt (mirrors the engine bypass): enrolled students
+  // may retake for practice even when maxAttempts would otherwise block.
+  // Otherwise count only scheduled attempts so a prior practice never
+  // blocks a Live entry — consistent with the engine's scheduled-only merit.
+  if (enrolledPractice) {
+    return { allowed: true };
+  }
   try {
     const settingsRows = await query<
       { max_attempts: number | string | null }[]
@@ -116,8 +156,8 @@ export async function checkCourseExamAccess(
       Number.isFinite(maxAttempts) &&
       maxAttempts > 0
     ) {
-      // For enrolled exams, count only live attempts so a prior practice
-      // does not block a Live entry, and vice versa.
+      // For enrolled exams, count only scheduled attempts so a prior
+      // practice does not block a Live entry.
       let count = 0;
       try {
         const liveRows = await query<{ n: number }[]>(

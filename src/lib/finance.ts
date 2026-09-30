@@ -123,19 +123,6 @@ function mapCost(row: CostRow): ManualCost {
   };
 }
 
-export function toPublicCost(cost: ManualCost): PublicManualCost {
-  return {
-    costDate: cost.costDate,
-    category: cost.category,
-    itemName: cost.itemName,
-    description: cost.description,
-    amount: cost.amount,
-    paidBy: cost.paidBy,
-    paymentMethod: cost.paymentMethod,
-    status: cost.status,
-  };
-}
-
 let tablesEnsured = false;
 
 export async function ensureFinanceTables(): Promise<void> {
@@ -719,7 +706,7 @@ function parseMaybeJson(value: unknown): unknown {
   if (value === null || value === undefined) return null;
   if (typeof value !== "string") return value;
   try {
-    return JSON.parse(value);
+    return JSON.parse(value) as unknown;
   } catch {
     return value;
   }

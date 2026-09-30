@@ -20,6 +20,8 @@ type MyExam = {
 
 function toPublicExam(exam: MyExam): PublicExam {
   const scheduledIso = exam.scheduledAt ?? "";
+  const schedMs = scheduledIso ? new Date(scheduledIso).getTime() : NaN;
+  const hasValidSchedule = Number.isFinite(schedMs);
   const isAdmission = exam.courseType === "Admission";
   const neg = exam.negativeMarks !== undefined
     ? Math.max(0, Number(exam.negativeMarks) || 0)
@@ -42,7 +44,7 @@ function toPublicExam(exam: MyExam): PublicExam {
     endsAt: null,
     examMode: "live",
     examDate: toDhakaDateKey(scheduledIso || null),
-    examTime: scheduledIso
+    examTime: hasValidSchedule
       ? new Date(scheduledIso).toLocaleTimeString("en-US", {
           hour: "numeric",
           minute: "2-digit",

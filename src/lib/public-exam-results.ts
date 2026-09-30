@@ -275,13 +275,34 @@ type ResultDetailRow = {
  * the same ordering (final marks desc → less time → earlier submission).
  * Now also computes correct/wrong/unanswered per student from the stored
  * answers snapshot so the admin table can show them without opening detail.
+ *
+ * NOTE: LIMIT 1000 truncation is surfaced via
+ * {@link fetchPublicExamRankedResultsPage} (total + hasMore). This wrapper
+ * keeps the legacy array return for existing callers.
  */
 export async function fetchPublicExamRankedResults(
   examId: string,
 ): Promise<PublicExamResultRow[]> {
+  const page = await fetchPublicExamRankedResultsPage(examId);
+  return page.rows;
+}
+
+export type PublicExamRankedResultsPage = {
+  rows: PublicExamResultRow[];
+  /** Total scheduled (ranked) participants — unaffected by the LIMIT. */
+  total: number;
+  /** True when total exceeds the returned rows (silent-truncation flag). */
+  hasMore: boolean;
+};
+
+/** Ranked rows + total count + hasMore truncation flag. */
+export async function fetchPublicExamRankedResultsPage(
+  examId: string,
+): Promise<PublicExamRankedResultsPage> {
+  const empty: PublicExamRankedResultsPage = { rows: [], total: 0, hasMore: false };
   try {
     const meta = await fetchPublicExamMeta(examId);
-    if (!meta) return [];
+    if (!meta) return empty;
     // Try to include auto_submitted when the column exists (best-effort).
     // Practice attempts (attempt_type='practice', i.e. post-live practice)
     // are EXCLUDED everywhere here: they must never appear on or affect the
@@ -321,6 +342,29 @@ export async function fetchPublicExamRankedResults(
         [examId],
       );
     }
+
+    // Total scheduled participants (same exclusion filter) so callers can
+    // detect LIMIT truncation instead of silently showing a partial board.
+    let total = rows.length;
+    try {
+      const countRows = await query<{ n: string | number }[]>(
+        `SELECT COUNT(*) AS n FROM exam_results
+            WHERE exam_id = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+        [examId],
+      );
+      total = toNumber(countRows[0]?.n ?? rows.length);
+    } catch {
+      try {
+        const countRows = await query<{ n: string | number }[]>(
+          `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ?`,
+          [examId],
+        );
+        total = toNumber(countRows[0]?.n ?? rows.length);
+      } catch {
+        total = rows.length;
+      }
+    }
+    const hasMore = total > rows.length;
 
     // Load active questions once for counting; also for negativePerWrong.
     // Unknown answers stay unknown (NULL) — never coerced to 0/A.
@@ -369,13 +413,13 @@ export async function fetchPublicExamRankedResults(
       }
     }
 
-    return rows.map((row) => {
+    const mapped = rows.map((row) => {
       const profile = profileMap.get(row.student_uid);
       // Derive correct/wrong/unanswered from answers snapshot.
       let correct = 0;
       let wrong = 0;
       let unanswered = 0;
-      let rawMarks: number | null = null;
+      const rawMarks: number | null = null;
       try {
         const ans = parseJsonColumn<Record<string, number>>(row.answers) ?? {};
         if (questionMeta.size > 0) {
@@ -419,11 +463,12 @@ export async function fetchPublicExamRankedResults(
         timeTakenSeconds: row.time_taken_seconds ?? null,
         startedAt: null,
         submittedAt: toIso(row.submitted_at) ?? "",
-        submissionType: (row as { auto_submitted?: number | null }).auto_submitted === 1 ? "auto" : "manual",
+        submissionType: ((row as { auto_submitted?: number | null }).auto_submitted === 1 ? "auto" : "manual") as "auto" | "manual",
       };
     });
+    return { rows: mapped, total, hasMore };
   } catch {
-    return [];
+    return empty;
   }
 }
 
@@ -440,18 +485,58 @@ export async function fetchPublicExamStudentResult(
     const meta = await fetchPublicExamMeta(examId);
     if (!meta) return null;
 
-    const resultRows = await query<ResultDetailRow[]>(
-      `SELECT id, merit_position, student_uid, student_name,
-              score, total_marks, answers,
-              negative_deduction, timer_penalty, is_second_timer,
-              time_taken_seconds, submitted_at
-         FROM exam_results
-        WHERE exam_id = ? AND student_uid = ?
-        ORDER BY id DESC LIMIT 1`,
-      [examId, studentUid],
-    );
+    // Official card = latest SCHEDULED result only. Practice attempts
+    // (post-live practice) must never mix into the official result.
+    // Legacy DBs without attempt_type fall back to the latest row.
+    let resultRows: ResultDetailRow[];
+    try {
+      resultRows = await query<ResultDetailRow[]>(
+        `SELECT id, merit_position, student_uid, student_name,
+                score, total_marks, answers,
+                negative_deduction, timer_penalty, is_second_timer,
+                time_taken_seconds, submitted_at
+           FROM exam_results
+          WHERE exam_id = ? AND student_uid = ?
+            AND (attempt_type = 'scheduled' OR attempt_type IS NULL)
+          ORDER BY id DESC LIMIT 1`,
+        [examId, studentUid],
+      );
+    } catch {
+      resultRows = await query<ResultDetailRow[]>(
+        `SELECT id, merit_position, student_uid, student_name,
+                score, total_marks, answers,
+                negative_deduction, timer_penalty, is_second_timer,
+                time_taken_seconds, submitted_at
+           FROM exam_results
+          WHERE exam_id = ? AND student_uid = ?
+          ORDER BY id DESC LIMIT 1`,
+        [examId, studentUid],
+      );
+    }
     const result = resultRows[0];
     if (!result) return null;
+
+    // Scheduled participant count (ranking scope) — practice excluded,
+    // legacy DBs fall back to all rows.
+    let participantCount = 0;
+    try {
+      try {
+        const countRows = await query<{ n: string | number }[]>(
+          `SELECT COUNT(*) AS n FROM exam_results
+            WHERE exam_id = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+          [examId],
+        );
+        participantCount = toNumber(countRows[0]?.n ?? 0);
+      } catch {
+        const countRows = await query<{ n: string | number }[]>(
+          `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ?`,
+          [examId],
+        );
+        participantCount = toNumber(countRows[0]?.n ?? 0);
+      }
+    } catch {
+      participantCount = 0;
+    }
 
     // Question order = insertion order of the exam's active questions.
     const questionRows = await query<
@@ -565,7 +650,7 @@ export async function fetchPublicExamStudentResult(
       examTitle: meta.title,
       categoryName: meta.category_name ?? null,
       rank: result.merit_position ?? null,
-      participantCount: 0,
+      participantCount,
       studentUid,
       studentName: result.student_name,
       studentId: profile?.student_id ?? null,
@@ -682,13 +767,24 @@ export async function fetchPublicExamResultStats(examId: string): Promise<{
     }
 
     // Auto-submitted count — best-effort when column exists; otherwise 0.
+    // Scheduled scope, consistent with the ranking exclusion.
     let autoSubmitted = 0;
     try {
-      const autoRows = await query<{ n: string | number }[]>(
-        `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND auto_submitted = 1`,
-        [examId],
-      );
-      autoSubmitted = toNumber(autoRows[0]?.n ?? 0);
+      try {
+        const autoRows = await query<{ n: string | number }[]>(
+          `SELECT COUNT(*) AS n FROM exam_results
+            WHERE exam_id = ? AND auto_submitted = 1
+              AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+          [examId],
+        );
+        autoSubmitted = toNumber(autoRows[0]?.n ?? 0);
+      } catch {
+        const autoRows = await query<{ n: string | number }[]>(
+          `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND auto_submitted = 1`,
+          [examId],
+        );
+        autoSubmitted = toNumber(autoRows[0]?.n ?? 0);
+      }
     } catch {
       autoSubmitted = 0;
     }

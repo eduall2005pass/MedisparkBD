@@ -328,7 +328,7 @@ export async function resolveCourseSlugsForChapter(
       [id],
     );
     const direct = rows[0]?.course_slug?.trim();
-    let slugs: string[] = direct ? [direct] : [];
+    const slugs: string[] = direct ? [direct] : [];
     try {
       const assigned = await query<Array<{ course_slug: string }>>(
         `SELECT a.course_slug AS course_slug

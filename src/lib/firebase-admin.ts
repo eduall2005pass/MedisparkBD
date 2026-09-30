@@ -19,14 +19,22 @@ function normalizePrivateKey(value: string): string {
     .trim();
 }
 
-function getServiceAccount() {
+let parseError: string | null = null;
+
+function getServiceAccount(): Record<string, string> | null {
   const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (rawJson && rawJson.length > 0) {
-    const parsed = JSON.parse(rawJson) as Record<string, string>;
-    if (parsed.private_key) {
-      parsed.private_key = normalizePrivateKey(parsed.private_key);
+    try {
+      const parsed = JSON.parse(rawJson) as Record<string, string>;
+      if (parsed.private_key) {
+        parsed.private_key = normalizePrivateKey(parsed.private_key);
+      }
+      return parsed;
+    } catch (err) {
+      parseError =
+        err instanceof Error ? err.message : String(err ?? "unknown error");
+      return null;
     }
-    return parsed;
   }
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -50,13 +58,25 @@ function getServiceAccount() {
   return null;
 }
 
-const serviceAccount = getServiceAccount();
+let cachedServiceAccount: Record<string, string> | null | undefined;
 
-export const isFirebaseAdminConfigured = serviceAccount !== null;
+function getCachedServiceAccount(): Record<string, string> | null {
+  if (cachedServiceAccount === undefined) {
+    cachedServiceAccount = getServiceAccount();
+  }
+  return cachedServiceAccount;
+}
+
+export const isFirebaseAdminConfigured = getCachedServiceAccount() !== null;
 
 export function getFirebaseAdminApp(): App {
+  const serviceAccount = getCachedServiceAccount();
   if (!serviceAccount) {
-    throw new Error("Firebase Admin is not configured.");
+    throw new Error(
+      parseError
+        ? `Firebase Admin is not configured: FIREBASE_SERVICE_ACCOUNT_JSON is invalid (${parseError}).`
+        : "Firebase Admin is not configured. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY.",
+    );
   }
   if (!getApps().length) {
     initializeApp({
@@ -82,7 +102,7 @@ export async function verifyFirebaseToken(
     return null;
   }
   try {
-    return await getFirebaseAdminAuth().verifyIdToken(token);
+    return await getFirebaseAdminAuth().verifyIdToken(token, true);
   } catch {
     return null;
   }

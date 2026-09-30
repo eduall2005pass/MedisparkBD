@@ -43,6 +43,13 @@ function rowToLogo(data: LogoRow): LogoInfo {
   };
 }
 
+function safeBaseName(name: string): string {
+  let base = (name || "").replace(/\\/g, "/");
+  base = base.slice(base.lastIndexOf("/") + 1).replace(/\0/g, "").trim().replace(/[. ]+$/g, "");
+  base = base.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 128).replace(/[. ]+$/g, "");
+  return base || "logo";
+}
+
 export async function fetchWatermarkLogo(): Promise<LogoInfo | null> {
   try {
     const rows = await query<LogoRow[]>(
@@ -100,28 +107,35 @@ export async function saveWatermarkLogo(
     // Keep going — cleaning up the old file is best-effort only.
   }
 
-  await query(
-    `INSERT INTO logos
-      (id, url, file_name, width, height, storage_path, updated_at, updated_by)
-     VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
-     ON DUPLICATE KEY UPDATE
-      url = VALUES(url),
-      file_name = VALUES(file_name),
-      width = VALUES(width),
-      height = VALUES(height),
-      storage_path = VALUES(storage_path),
-      updated_at = NOW(),
-      updated_by = VALUES(updated_by)`,
-    [
-      WATERMARK_LOGO_DOCUMENT_ID,
-      cleanUrl,
-      file.name,
-      width,
-      height,
-      actualStoragePath,
-      adminUid,
-    ],
-  );
+  const safeDbName = safeBaseName(file.name).slice(0, 255);
+  try {
+    await query(
+      `INSERT INTO logos
+        (id, url, file_name, width, height, storage_path, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, NOW(), ?)
+       ON DUPLICATE KEY UPDATE
+        url = VALUES(url),
+        file_name = VALUES(file_name),
+        width = VALUES(width),
+        height = VALUES(height),
+        storage_path = VALUES(storage_path),
+        updated_at = NOW(),
+        updated_by = VALUES(updated_by)`,
+      [
+        WATERMARK_LOGO_DOCUMENT_ID,
+        cleanUrl,
+        safeDbName,
+        width,
+        height,
+        actualStoragePath,
+        adminUid,
+      ],
+    );
+  } catch (dbErr) {
+    // No orphan: DB write failed so delete the newly uploaded file.
+    await removeFile(cleanUrl).catch(() => undefined);
+    throw dbErr;
+  }
 
   if (previousUrl && previousUrl !== cleanUrl) {
     await removeFile(previousUrl);
@@ -133,7 +147,7 @@ export async function saveWatermarkLogo(
   const account = await fetchAdminAccount(adminUid);
   const now = Date.now();
   return {
-    fileName: file.name,
+    fileName: safeDbName,
     url: withCacheBust(cleanUrl, now),
     width,
     height,

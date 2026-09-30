@@ -71,6 +71,11 @@ export async function fetchCoupons(): Promise<Coupon[]> {
   }
 }
 
+/** True when the coupon has exhausted its capped usage (maxUses > 0). */
+export function isCouponExhausted(coupon: Coupon): boolean {
+  return coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses;
+}
+
 /** Returns the coupon when valid and usable, otherwise an error message. */
 export async function validateCoupon(
   code: string,
@@ -80,9 +85,12 @@ export async function validateCoupon(
   let rows: CouponRow[];
   try {
     await ensureCouponsTable();
+    // Fresh read: used_count must never come from the SELECT cache, or an
+    // exhausted coupon could validate between the check and increment.
     rows = await query<CouponRow[]>(
       `SELECT * FROM coupons WHERE code = ? LIMIT 1`,
       [normalized],
+      { cache: false },
     );
   } catch {
     return { error: "Could not verify the coupon. Try again." };
@@ -97,7 +105,7 @@ export async function validateCoupon(
   if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < now) {
     return { error: "This coupon has expired." };
   }
-  if (coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses) {
+  if (isCouponExhausted(coupon)) {
     return { error: "This coupon has reached its usage limit." };
   }
   return { coupon };
@@ -176,14 +184,18 @@ export function computeDiscountedFee(coupon: Coupon, amount: number): number {
   return Math.max(0, Math.round(base - coupon.value));
 }
 
-/** Count one more use — call only after a successful checkout. */
-export async function incrementCouponUsage(code: string): Promise<void> {
+/** Count one more use — atomic cap check. Returns true when counted. */
+export async function incrementCouponUsage(code: string): Promise<boolean> {
   try {
-    await exec(
-      `UPDATE coupons SET used_count = used_count + 1 WHERE code = ?`,
+    await ensureCouponsTable();
+    const result = await exec(
+      `UPDATE coupons SET used_count = used_count + 1
+       WHERE code = ? AND (max_uses <= 0 OR used_count < max_uses)`,
       [code.trim().toUpperCase()],
     );
+    return result.affectedRows > 0;
   } catch {
     // Usage counting is best-effort; enrollment must not fail for it.
+    return false;
   }
 }

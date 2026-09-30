@@ -15,8 +15,16 @@ import {
 // Public content: edge-cached for fast loads (60s revalidation).
 export const revalidate = 300;
 
-export async function GET() {
-  const reviews = await fetchPublishedReviewRecords();
+export async function GET(request: NextRequest) {
+  const limit = Math.min(
+    Math.max(Number(request.nextUrl.searchParams.get("limit")) || 100, 1),
+    200,
+  );
+  const offset = Math.max(
+    Number(request.nextUrl.searchParams.get("offset")) || 0,
+    0,
+  );
+  const reviews = await fetchPublishedReviewRecords(limit, offset);
   return NextResponse.json({ reviews });
 }
 
@@ -119,6 +127,12 @@ async function handleStudentPost(request: NextRequest) {
   if (!text) {
     return NextResponse.json(
       { error: "Please write your review before submitting." },
+      { status: 400 },
+    );
+  }
+  if (text.length < 10) {
+    return NextResponse.json(
+      { error: "Please write a little more (at least 10 characters)." },
       { status: 400 },
     );
   }

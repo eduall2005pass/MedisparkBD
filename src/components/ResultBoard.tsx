@@ -42,6 +42,7 @@ function formatDate(iso: string): string {
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Dhaka",
   });
 }
 
@@ -76,6 +77,7 @@ export default function ResultBoard() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [page, setPage] = useState(1);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const limit = 20;
   // Searchable exam dropdown.
   const [examOpen, setExamOpen] = useState(false);
@@ -136,6 +138,7 @@ export default function ResultBoard() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const sp = new URLSearchParams({
         page: String(page),
@@ -144,6 +147,7 @@ export default function ResultBoard() {
       if (examId) sp.set("examId", examId);
       if (debouncedQ) sp.set("q", debouncedQ);
       const res = await fetch(`/api/results?${sp.toString()}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`Request failed (${res.status})`);
       const data = (await res.json()) as {
         results?: BoardRow[];
         total?: number;
@@ -153,6 +157,7 @@ export default function ResultBoard() {
     } catch {
       setRows([]);
       setTotal(0);
+      setLoadError("Could not load results. Please retry.");
     } finally {
       setLoading(false);
     }
@@ -302,6 +307,15 @@ export default function ResultBoard() {
               <tr>
                 <td colSpan={11} className="px-3 py-10 text-center text-neutral-500">
                   লোড হচ্ছে…
+                </td>
+              </tr>
+            ) : loadError ? (
+              <tr>
+                <td colSpan={11} className="px-3 py-10 text-center text-red-400">
+                  {loadError}{" "}
+                  <button type="button" onClick={() => void load()} className="ml-2 font-bold underline">
+                    Retry
+                  </button>
                 </td>
               </tr>
             ) : rows.length === 0 ? (

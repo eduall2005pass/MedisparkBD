@@ -32,27 +32,18 @@ export async function GET(request: NextRequest) {
   // slots so each language/set is managed separately (same IDs, same order).
   if (version && set && (params.get("examId") ?? "") !== "bank") {
     try {
-      const { fetchVariantMap } = await import("@/lib/exam-variants");
-      const { parseJsonColumn } = await import("@/lib/mysql");
-      const { normalizeStoredAnswerIndex } = await import("@/lib/paste-mcq-parser");
+      const { fetchVariantMap, overlayVariantOntoBase } = await import("@/lib/exam-variants");
       const examId = String(params.get("examId") ?? "");
       const variants = await fetchVariantMap(examId);
       const merged = questions.map((q, index) => {
-        const v = variants.get(`${Number(q.id)}:${version}:${set}`);
-        if (!v || q.id === null) return { ...q, order: index + 1, hasVariant: false };
-        const opts = parseJsonColumn<unknown[]>(v.options);
-        return {
-          ...q,
-          order: index + 1,
-          hasVariant: true,
-          question: v.question,
-          options: Array.isArray(opts) ? opts.map(String) : q.options,
-          // Preserve an explicit unknown (NULL) — never coerce it to 0/A here.
-          correctIndex: normalizeStoredAnswerIndex(v.correct_index),
-          explanation: v.explanation ?? null,
-          marks: Number(v.marks) || q.marks,
-          questionImage: v.question_image ?? null,
-        };
+        if (q.id === null) return { ...q, order: index + 1, hasVariant: false };
+        // Corrupt variant options → pure base + hasVariant:false (never mixed).
+        // Marks resolved via resolveMarks inside the overlay helper.
+        const overlaid = overlayVariantOntoBase(
+          q as unknown as Record<string, unknown>,
+          variants.get(`${Number(q.id)}:${version}:${set}`),
+        );
+        return { ...overlaid, order: index + 1 };
       });
       return NextResponse.json(
         { questions: merged },
@@ -83,6 +74,11 @@ export async function POST(request: NextRequest) {
   const { normalizeSet, normalizeVersion } = await import("@/lib/exam-variants");
   const bodyVersion = normalizeVersion((body as Record<string, unknown>).version);
   const bodySet = normalizeSet((body as Record<string, unknown>).set);
+  // Invalid version/set must never fall through to the base save.
+  const hasVariantIntent = "version" in body || "set" in body;
+  if (hasVariantIntent && !(bodyVersion && bodySet)) {
+    return NextResponse.json({ error: "Invalid version or set. Expected version=bangla|english and set=A|B." }, { status: 400 });
+  }
   if (bodyVersion && bodySet) {
     try {
       const { query } = await import("@/lib/mysql");
@@ -115,13 +111,21 @@ export async function POST(request: NextRequest) {
           const raw = Number(examRows[0]?.marks_per_question ?? 1);
           if (Number.isFinite(raw) && raw > 0) marksPerSlot = raw;
         } catch {}
-        const inserted = await exec(
-          `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [examId, "", "", null, JSON.stringify(["", "", "", ""]), null, null, marksPerSlot, order, 1],
-        );
-        const insertId = (inserted as unknown as { insertId?: number })?.insertId;
-        if (insertId) return Number(insertId);
+        // Race-safe: concurrent creators may insert the same slot. With a
+        // unique key on (exam_id, sort_order) INSERT IGNORE turns the loser
+        // into a no-op; without it the catch + re-SELECT still recovers.
+        try {
+          await exec(`ALTER TABLE exam_questions ADD UNIQUE KEY uq_exam_slot (exam_id, sort_order)`, []).catch(() => {});
+        } catch {}
+        try {
+          const inserted = await exec(
+            `INSERT IGNORE INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [examId, "", "", null, JSON.stringify(["", "", "", ""]), null, null, marksPerSlot, order, 1],
+          );
+          const insertId = (inserted as unknown as { insertId?: number })?.insertId;
+          if (insertId) return Number(insertId);
+        } catch {}
         const retry = await query<{ id: number }[]>(
           `SELECT id FROM exam_questions WHERE exam_id = ? AND sort_order = ? LIMIT 1`,
           [examId, order],
@@ -140,10 +144,17 @@ export async function POST(request: NextRequest) {
           [examId],
         );
         const byOrder = new Map(slotRows.map((r) => [Number(r.sort_order), Number(r.id)]));
+        const examSlotIds = new Set(slotRows.map((r) => Number(r.id)));
         let saved = 0;
+        const errors: { index: number; error: string }[] = [];
         for (let idx = 0; idx < items.length; idx += 1) {
           const item = items[idx] as Record<string, unknown>;
           const explicitId = num(item.id, 0);
+          const hasExplicitId = Number.isInteger(explicitId) && explicitId > 0;
+          if (hasExplicitId && !examSlotIds.has(explicitId)) {
+            errors.push({ index: idx, error: "Question does not belong to this exam." });
+            continue;
+          }
           const order = num(item.order, idx + 1);
           let questionId = Number.isInteger(explicitId) && explicitId > 0
             ? explicitId
@@ -152,14 +163,26 @@ export async function POST(request: NextRequest) {
             // eslint-disable-next-line no-await-in-loop
             questionId = await resolveOrCreateSlot(examId, order);
           }
-          if (!questionId) continue;
+          if (!questionId) {
+            errors.push({ index: idx, error: "Missing question slot." });
+            continue;
+          }
           const qImage = str(item.questionImage) || str(item.question_image) || null;
           const text = str(item.question);
-          if (text.trim().length < 3 && !qImage) continue;
+          if (text.trim().length < 3 && !qImage) {
+            errors.push({ index: idx, error: "Question text too short." });
+            continue;
+          }
           const options = Array.isArray(item.options) ? item.options.map((o) => String(o)) : [];
-          if (options.length < 2 || options.some((o) => o.length === 0)) continue;
+          if (options.length < 2 || options.some((o) => o.length === 0)) {
+            errors.push({ index: idx, error: "At least 2 non-empty options required." });
+            continue;
+          }
           const correctIndex = num(item.correctIndex, -1);
-          if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) continue;
+          if (!Number.isInteger(correctIndex) || correctIndex < 0 || correctIndex >= options.length) {
+            errors.push({ index: idx, error: "Invalid correctIndex." });
+            continue;
+          }
           // eslint-disable-next-line no-await-in-loop
           await saveVariant({
             questionId,
@@ -173,9 +196,14 @@ export async function POST(request: NextRequest) {
             questionImage: qImage,
           });
           saved += 1;
+          examSlotIds.add(questionId);
+          byOrder.set(order, questionId);
+        }
+        if (saved === 0) {
+          return NextResponse.json({ error: "No valid questions to save.", errors }, { status: 400 });
         }
         await logAdminAction(admin, "question.variant_bulk_save", `exam=${examId} ${bodyVersion}/${bodySet} count=${saved}`, request);
-        return NextResponse.json({ ok: true, saved });
+        return NextResponse.json({ ok: true, saved, ...(errors.length > 0 ? { errors } : {}) });
       }
       // Single variant save.
       const examId = asString((body as Record<string, unknown>).examId).trim();

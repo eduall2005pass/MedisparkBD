@@ -15,6 +15,8 @@ import { query } from "@/lib/mysql";
 import type { Exam } from "@/lib/exams-admin";
 
 export type EnrolledExamPhase =
+  | "draft"
+  | "closed"
   | "upcoming"
   | "live"
   | "archived"
@@ -25,6 +27,10 @@ export function getEnrolledExamPhase(
   exam: Pick<Exam, "scheduledAt" | "endsAt" | "status">,
   nowMs: number = Date.now(),
 ): EnrolledExamPhase {
+  // Honor admin status first, mirroring getCourseState (draft → draft).
+  // Closed stays blocked even inside the live window (explicit admin intent).
+  if (exam.status === "draft") return "draft";
+  if (exam.status === "closed") return "closed";
   const now = nowMs;
   const start = exam.scheduledAt ? new Date(exam.scheduledAt).getTime() : NaN;
   const end = exam.endsAt ? new Date(exam.endsAt).getTime() : NaN;
@@ -43,6 +49,8 @@ export function isEnrolledPracticePhase(phase: string | null | undefined): boole
 }
 
 export function enrolledExamPhaseLabel(phase: EnrolledExamPhase): string {
+  if (phase === "draft") return "Draft";
+  if (phase === "closed") return "Closed";
   if (phase === "upcoming") return "Upcoming";
   if (phase === "live") return "Live";
   if (phase === "practice" || phase === "archived") return "Practice";

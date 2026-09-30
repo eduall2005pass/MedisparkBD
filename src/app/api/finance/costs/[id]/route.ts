@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin";
+import { requireAnyPermission } from "@/lib/admin";
+import { getFirebaseUser } from "@/lib/auth-api";
 import { logAdminAction } from "@/lib/administration";
 import {
   fetchCostById,
@@ -7,6 +8,14 @@ import {
   updateManualCost,
   validateCostInput,
 } from "@/lib/finance";
+
+/** 401 (unauthenticated) vs 403 (authenticated, no permission). */
+function denied() {
+  return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+}
+function unauthorized() {
+  return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+}
 
 export const dynamic = "force-dynamic";
 
@@ -16,11 +25,15 @@ function idFrom(request: NextRequest): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-/** PATCH /api/finance/costs/[id] — admin only. Whitelisted fields only. */
+/** PATCH /api/finance/costs/[id] — permission-gated. Whitelisted fields only. */
 export async function PATCH(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireAnyPermission(request, [
+    "manageSystem",
+    "manageCourses",
+  ]);
   if (!admin) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    const user = await getFirebaseUser(request);
+    return user ? denied() : unauthorized();
   }
   const id = idFrom(request);
   if (!id) {
@@ -57,11 +70,15 @@ export async function PATCH(request: NextRequest) {
   return NextResponse.json({ cost: updated });
 }
 
-/** DELETE /api/finance/costs/[id] — admin only, SOFT delete. */
+/** DELETE /api/finance/costs/[id] — permission-gated, SOFT delete. */
 export async function DELETE(request: NextRequest) {
-  const admin = await requireAdmin(request);
+  const admin = await requireAnyPermission(request, [
+    "manageSystem",
+    "manageCourses",
+  ]);
   if (!admin) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    const user = await getFirebaseUser(request);
+    return user ? denied() : unauthorized();
   }
   const id = idFrom(request);
   if (!id) {

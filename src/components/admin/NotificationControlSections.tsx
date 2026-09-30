@@ -196,7 +196,10 @@ export function SentNotificationsList({
             </button>
             <button
               type="button"
-              onClick={() => onDelete(notification)}
+              onClick={() => {
+                if (!window.confirm(`Delete “${notification.title}”? This cannot be undone.`)) return;
+                onDelete(notification);
+              }}
               className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-500/15 admin-dark:text-red-400"
             >
               Delete

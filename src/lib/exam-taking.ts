@@ -6,6 +6,7 @@ import {
   ensureVariantTables,
   fetchVariantMap,
   normalizeVersion,
+  resolveMarks,
   resolveQuestions,
   shuffledOrder,
   type QuestionSet,
@@ -37,7 +38,7 @@ export type TakingExam = {
   negativeMarks: number;
   startedAt: string | null;
   /** Course lifecycle phase — null for non-course / public exams */
-  phase?: "upcoming" | "live" | "closed" | "archived" | "practice" | "no-window" | null;
+  phase?: "draft" | "upcoming" | "live" | "closed" | "archived" | "practice" | "no-window" | null;
   /** True when a public live-mode exam is past its End Time (post-live Practice phase). Attempts are unranked practice attempts. */
   isPostLivePractice?: boolean;
   /** True when this is a Flow 4 Exam Batch exam */
@@ -522,12 +523,22 @@ async function startExamAttempt(
       }
     }
     if (!isPracticeMode || (examForCheck?.kind === "enrolled")) {
-      // Post-live Practice phase: retakes are allowed — every attempt after
-      // the live window is recorded as an unranked practice attempt.
+      // Post-live Practice phase + enrolled-archived (practice) phase: retakes
+      // are allowed — every attempt after the live window is recorded as a
+      // new unranked practice attempt (never returns the old live outcome).
       const isPostLivePractice = examForCheck
         ? await isPostLivePracticeExam(examForCheck).catch(() => false)
         : false;
-      if (!isPostLivePractice) {
+      let isEnrolledPracticeRetake = false;
+      try {
+        const { getEnrolledExamPhase, isEnrolledPracticePhase } = await import("@/lib/enrolled-exam-lifecycle");
+        if (examForCheck && examForCheck.kind === "enrolled") {
+          isEnrolledPracticeRetake = isEnrolledPracticePhase(getEnrolledExamPhase(examForCheck));
+        }
+      } catch {
+        // Best-effort — keep default enforcement.
+      }
+      if (!isPostLivePractice && !isEnrolledPracticeRetake) {
         const hasCompleted = await hasPriorExamAttempt(examId, uid);
         if (hasCompleted) {
           throw new Error("You have already appeared in this exam. View your result.");
@@ -681,6 +692,8 @@ async function startExamAttempt(
     );
   }
   // Read back the authoritative token (a concurrent starter may have won).
+  // Only the owner of the current attempt may clear answers: a loser that
+  // resumes the winner's active session must never wipe the winner's answers.
   try {
     const won = await query<AttemptRow[]>(
       `SELECT session_token FROM exam_attempts WHERE exam_id = ? AND student_uid = ? LIMIT 1`,
@@ -690,7 +703,7 @@ async function startExamAttempt(
       return won[0].session_token;
     }
   } catch {}
-  // Fresh session — clear any leftover answers.
+  // Fresh session owned by this caller — clear any leftover answers.
   await exec(
     `DELETE FROM exam_attempt_answers WHERE exam_id = ? AND student_uid = ?`,
     [examId, uid],
@@ -897,10 +910,20 @@ async function finalizeAttempt(
   const found = exams.find((exam) => exam.id === examId);
   if (!found) return null;
   // One-attempt for live-window exams: a prior completed result is returned
-  // as-is. Post-live Practice phase is exempt — each practice attempt is
-  // graded and stored as its own (unranked) result.
+  // as-is. Practice retakes (post-live Practice phase AND enrolled-archived
+  // practice phase) are exempt — each practice attempt is graded and stored
+  // as its own new unranked practice row, never the old live outcome.
   const isPostLivePracticeFinalize = await isPostLivePracticeExam(found).catch(() => false);
-  if (!isPostLivePracticeFinalize) {
+  let isEnrolledPracticeFinalize = false;
+  try {
+    const { getEnrolledExamPhase, isEnrolledPracticePhase } = await import("@/lib/enrolled-exam-lifecycle");
+    if (found.kind === "enrolled") {
+      isEnrolledPracticeFinalize = isEnrolledPracticePhase(getEnrolledExamPhase(found));
+    }
+  } catch {
+    // Best-effort — fall through to the live-window rule.
+  }
+  if (!isPostLivePracticeFinalize && !isEnrolledPracticeFinalize) {
     try {
       const hasCompleted = await hasPriorExamAttempt(examId, uid);
       if (hasCompleted) {
@@ -1044,6 +1067,51 @@ async function finalizeAttempt(
   } catch {
     // Fallback to live on error — never block submission.
   }
+  // Atomic claim FIRST: only the first closer flips active → final. The
+  // exam_results insert below runs solely for the winner, so concurrent
+  // submit/expiry calls can never double-insert.
+  const finalStatus = auto ? "auto_submitted" : "submitted";
+  let priorMaxId = 0;
+  try {
+    const maxRows = await query<{ maxId: number | null }[]>(
+      `SELECT MAX(id) AS maxId FROM exam_results WHERE exam_id = ? AND student_uid = ?`,
+      [examId, uid],
+    );
+    priorMaxId = Number(maxRows[0]?.maxId) || 0;
+  } catch {
+    // Best-effort — loser falls back to a single latestOutcome read.
+  }
+  try {
+    const res = (await exec(
+      `UPDATE exam_attempts SET status = ?, submitted_at = CURRENT_TIMESTAMP WHERE exam_id = ? AND student_uid = ? AND status = 'active'`,
+      [finalStatus, examId, uid],
+    )) as unknown as { affectedRows?: number };
+    if (res && typeof res.affectedRows === "number" && res.affectedRows === 0) {
+      // Lost the race: wait briefly for the winner's insert, then return the
+      // stored result instead of inserting a duplicate.
+      for (let i = 0; i < 20; i++) {
+        try {
+          const latest = await query<{ maxId: number | null }[]>(
+            `SELECT MAX(id) AS maxId FROM exam_results WHERE exam_id = ? AND student_uid = ?`,
+            [examId, uid],
+          );
+          if ((Number(latest[0]?.maxId) || 0) > priorMaxId) break;
+        } catch {}
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      const existing = await latestOutcome(examId, uid);
+      if (existing) return auto ? { ...existing, autoSubmitted: true } : existing;
+      return null;
+    }
+  } catch {
+    // Legacy DB without new enum values / submitted_at → fallback.
+    try {
+      await exec(
+        `UPDATE exam_attempts SET status = 'submitted' WHERE exam_id = ? AND student_uid = ? AND status = 'active'`,
+        [examId, uid],
+      );
+    } catch {}
+  }
   // Insert with attempt_type when column exists; fallback without it for legacy DBs.
   // The locked Version/Set/Order snapshot travels with the result so the
   // answer script replays the student's own language version and order.
@@ -1134,32 +1202,6 @@ async function finalizeAttempt(
     }
   }
   await updateMeritPositions(examId);
-  // Atomic state transition: only the first closer flips active → final.
-  // Concurrent submit/expiry requests: loser sees rowCount 0 and returns the
-  // stored result instead of inserting a duplicate.
-  const finalStatus = auto ? "auto_submitted" : "submitted";
-  let claimed = true;
-  try {
-    const res = (await exec(
-      `UPDATE exam_attempts SET status = ?, submitted_at = CURRENT_TIMESTAMP WHERE exam_id = ? AND student_uid = ? AND status = 'active'`,
-      [finalStatus, examId, uid],
-    )) as unknown as { affectedRows?: number };
-    if (res && typeof res.affectedRows === "number" && res.affectedRows === 0) {
-      claimed = false;
-    }
-  } catch {
-    // Legacy DB without new enum values / submitted_at → fallback.
-    try {
-      await exec(
-        `UPDATE exam_attempts SET status = 'submitted' WHERE exam_id = ? AND student_uid = ? AND status = 'active'`,
-        [examId, uid],
-      );
-    } catch {}
-  }
-  if (!claimed) {
-    const existing = await latestOutcome(examId, uid);
-    if (existing) return auto ? { ...existing, autoSubmitted: true } : existing;
-  }
   await exec(
     `DELETE FROM exam_attempt_answers WHERE exam_id = ? AND student_uid = ?`,
     [examId, uid],
@@ -1448,12 +1490,13 @@ export async function getExamForTaking(
         id: Number(row.id),
         question: row.question,
         options: parsed.map(String),
-        marks: Number(row.marks) || 1,
+        marks: resolveMarks(row.marks, 1),
         // Preserve an explicit unknown (NULL) — never coerce it to 0/A.
         correctIndex: normalizeStoredAnswerIndex(row.correct_index),
         explanation: row.explanation ?? null,
         questionImage: (row.question_image as string | null) ?? null,
         fromVariant: false,
+        hasVariant: false,
       });
     }
   }
@@ -1780,8 +1823,21 @@ export async function submitExamAttempt(
   await ensureAttemptTables();
 
   // One-attempt for live-window exams: a prior completed result is returned
-  // as-is. Post-live Practice phase is exempt (see finalizeAttempt).
-  if (!(await isPostLivePracticeExam(found).catch(() => false))) {
+  // as-is. Practice retakes (post-live Practice phase AND enrolled-archived
+  // practice phase) are exempt — each practice submit writes its own new
+  // unranked practice row (see finalizeAttempt).
+  let isPracticeRetakeSubmit = await isPostLivePracticeExam(found).catch(() => false);
+  if (!isPracticeRetakeSubmit) {
+    try {
+      const { getEnrolledExamPhase, isEnrolledPracticePhase } = await import("@/lib/enrolled-exam-lifecycle");
+      if (found.kind === "enrolled") {
+        isPracticeRetakeSubmit = isEnrolledPracticePhase(getEnrolledExamPhase(found));
+      }
+    } catch {
+      // Best-effort — keep default enforcement.
+    }
+  }
+  if (!isPracticeRetakeSubmit) {
     try {
       const hasCompleted = await hasPriorExamAttempt(examId, uid);
       if (hasCompleted) {

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAnyPermission } from "@/lib/admin";
+import { getFirebaseUser } from "@/lib/auth-api";
 import {
   fetchIncomeTotals,
   fetchCostTotals,
@@ -11,10 +13,21 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/finance/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
- * Public. No PII: only aggregated totals.
+ * Permission-gated. No PII: only aggregated totals.
  *   courseIncome (automated) - physicalCosts (manual) = netBalance
  */
 export async function GET(request: NextRequest) {
+  const admin = await requireAnyPermission(request, [
+    "manageSystem",
+    "manageCourses",
+  ]);
+  if (!admin) {
+    const user = await getFirebaseUser(request);
+    return NextResponse.json(
+      { error: user ? "Forbidden." : "Unauthorized." },
+      { status: user ? 403 : 401 },
+    );
+  }
   const url = new URL(request.url);
   const { from, to } = normalizeRange(
     url.searchParams.get("from"),

@@ -43,17 +43,15 @@ async function authHeaders(user: User): Promise<Record<string, string>> {
 }
 
 export async function fetchEnrollments(user: User): Promise<Enrollment[]> {
-  try {
-    const response = await fetch("/api/enrollments", {
-      headers: await authHeaders(user),
-      cache: "no-store",
-    });
-    if (!response.ok) return [];
-    const data = (await response.json()) as { enrollments?: unknown };
-    return Array.isArray(data.enrollments) ? (data.enrollments as Enrollment[]) : [];
-  } catch {
-    return [];
-  }
+  // Throws on network/non-ok so callers can distinguish failure (keep prev)
+  // from a genuine empty list (valid []).
+  const response = await fetch("/api/enrollments", {
+    headers: await authHeaders(user),
+    cache: "no-store",
+  });
+  if (!response.ok) throw new Error(`enrollments fetch failed: ${response.status}`);
+  const data = (await response.json()) as { enrollments?: unknown };
+  return Array.isArray(data.enrollments) ? (data.enrollments as Enrollment[]) : [];
 }
 
 export async function getEnrollment(

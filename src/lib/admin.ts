@@ -16,8 +16,14 @@ export type AdminAccount = {
  * src/sql/logo-admin-migration.sql. Writes to website settings are
  * rejected unless the caller resolves to an admin here.
  *
- * Falls back to matching by verified email so accounts keep their access
- * even when the underlying Firebase project (and therefore UID) changes.
+ * Email fallback keeps access working when the underlying Firebase project
+ * (and therefore UID) changes — but it is BOUND: it only applies when the
+ * caller's UID is not known to the `admins` table at all. A UID that is
+ * known but inactive/unauthorized can never inherit admin via email, so a
+ * re-registered email cannot escalate a different account.
+ *
+ * Fail-closed: any query error denies (returns false). Only verified emails
+ * are trusted — callers must pass `null` unless `email_verified === true`.
  */
 export async function isAdminUid(
   uid: string | null,
@@ -25,45 +31,41 @@ export async function isAdminUid(
 ): Promise<boolean> {
   if (!isMysqlConfigured) return false;
 
-  // Single round-trip: match by uid OR verified email in one query instead
-  // of two sequential lookups.
   const hasUid = typeof uid === "string" && uid.length > 0;
   const cleanEmail = typeof email === "string" && email.length > 0 ? email : null;
   if (!hasUid && !cleanEmail) return false;
 
-  const conditions: string[] = [];
-  const params: unknown[] = [];
-  if (hasUid) {
-    conditions.push("uid = ?");
-    params.push(uid);
-  }
-  if (cleanEmail) {
-    conditions.push("LOWER(email) = LOWER(?)");
-    params.push(cleanEmail);
-  }
   try {
-    // Inactive admins are no longer authorized — see Admin Management.
-    const rows = await query<{ uid: string }[]>(
-      `SELECT uid FROM admins WHERE is_active = 1 AND (${conditions.join(" OR ")}) LIMIT 1`,
-      params,
-    );
-    if (rows.length > 0) return true;
-    // No active match — still check plain lookup? No: inactive must stay
-    // denied. Only fall through to the legacy (pre-migration) lookup on
-    // query failure below.
+    // Primary: match by UID (binds identity to the stored row).
+    if (hasUid) {
+      const uidRows = await query<{ uid: string }[]>(
+        "SELECT uid FROM admins WHERE uid = ? AND is_active = 1 LIMIT 1",
+        [uid],
+      );
+      if (uidRows.length > 0) return true;
+      // Bind the email fallback: this UID is known to the table, so it must
+      // never fall through to email matching (that would let a re-registered
+      // email inherit another row's admin grant).
+      const known = await query<{ uid: string }[]>(
+        "SELECT uid FROM admins WHERE uid = ? LIMIT 1",
+        [uid],
+      );
+      if (known.length > 0) return false;
+    }
+    // Fallback (UID unknown — e.g. Firebase project change): match an active
+    // row by verified email.
+    if (cleanEmail) {
+      const emailRows = await query<{ uid: string }[]>(
+        "SELECT uid FROM admins WHERE is_active = 1 AND LOWER(email) = LOWER(?) LIMIT 1",
+        [cleanEmail],
+      );
+      return emailRows.length > 0;
+    }
     return false;
   } catch {
-    // Migration (src/sql/admins-management-migration.sql) may not be
-    // applied yet — fall back to plain lookup so nobody gets locked out.
-    try {
-      const rows = await query<{ uid: string }[]>(
-        `SELECT uid FROM admins WHERE ${conditions.join(" OR ")} LIMIT 1`,
-        params,
-      );
-      return rows.length > 0;
-    } catch {
-      return false;
-    }
+    // Fail CLOSED: deny on any query error (no legacy plain lookup — it
+    // ignored is_active and could re-authorize deactivated admins).
+    return false;
   }
 }
 
@@ -90,19 +92,48 @@ export async function fetchAdminAccount(
 }
 
 /**
+ * Discriminated gate result so routes can return 401 vs 403 distinctly:
+ * - `unauthenticated` → caller has no valid session → respond 401.
+ * - `forbidden`       → caller is signed in but not an admin (or lacks the
+ *                       permission) → respond 403.
+ * The legacy `requireAdmin` / `requirePermission` / `requireAnyPermission`
+ * wrappers below conflate both to `null` (callers respond 401); prefer the
+ * `*Result` variants in new code.
+ */
+export type AdminGateResult =
+  | { status: "ok"; user: DecodedIdToken }
+  | { status: "unauthenticated"; user: null }
+  | { status: "forbidden"; user: null };
+
+function verifiedEmail(user: DecodedIdToken): string | null {
+  return user.email_verified === true ? (user.email ?? null) : null;
+}
+
+/**
+ * Verifies the caller is an authenticated, authorized admin.
+ * Returns the decoded token on success, null otherwise.
+ */
+export async function requireAdminResult(
+  request: NextRequest,
+): Promise<AdminGateResult> {
+  const user = await getFirebaseUser(request);
+  if (!user) return { status: "unauthenticated", user: null };
+  // Email fallback keeps access working even when the underlying Firebase
+  // project (and therefore UID) changes. Only verified emails are trusted.
+  const authorized = await isAdminUid(user.uid, verifiedEmail(user));
+  if (!authorized) return { status: "forbidden", user: null };
+  return { status: "ok", user };
+}
+
+/**
  * Verifies the caller is an authenticated, authorized admin.
  * Returns the decoded token on success, null otherwise.
  */
 export async function requireAdmin(
   request: NextRequest,
 ): Promise<DecodedIdToken | null> {
-  const user = await getFirebaseUser(request);
-  if (!user) return null;
-  // Email fallback keeps access working even when the underlying Firebase
-  // project (and therefore UID) changes. Only verified emails are trusted.
-  const email = user.email_verified === true ? (user.email ?? null) : null;
-  const authorized = await isAdminUid(user.uid, email);
-  return authorized ? user : null;
+  const result = await requireAdminResult(request);
+  return result.status === "ok" ? result.user : null;
 }
 
 /**
@@ -115,30 +146,35 @@ export async function requireAdmin(
  * the same canonical permission set (`src/lib/admin-access.ts`). If a permission
  * is ON in Admin Center, this gate allows it; if OFF, it denies it.
  */
+export async function requirePermissionResult(
+  request: NextRequest,
+  permission: AdminPermission,
+): Promise<AdminGateResult> {
+  const user = await getFirebaseUser(request);
+  if (!user) return { status: "unauthenticated", user: null };
+  // Single consistent identity: verified token email + UID. `isAdminUid` and
+  // `resolveAdminPermissions` both resolve from exactly these inputs (the
+  // latter falls back to the UID-bound `admins` row email internally), so the
+  // gate and the role can never skew via an unverified account email.
+  const email = verifiedEmail(user);
+  const [authorized, resolved] = await Promise.all([
+    isAdminUid(user.uid, email),
+    resolveAdminPermissions(email, user.uid),
+  ]);
+  if (!authorized) return { status: "forbidden", user: null };
+  // Admin always passes; other roles must have the specific permission.
+  if (resolved.role === "admin") return { status: "ok", user };
+  if (resolved.permissions.includes(permission))
+    return { status: "ok", user };
+  return { status: "forbidden", user: null };
+}
+
 export async function requirePermission(
   request: NextRequest,
   permission: AdminPermission,
 ): Promise<DecodedIdToken | null> {
-  const user = await getFirebaseUser(request);
-  if (!user) return null;
-  const email = user.email_verified === true ? (user.email ?? null) : null;
-  // Resolve via UID + verified email fallback so UID-based admins with unverified
-  // token emails still get their correct role (mirrors /api/admin logic).
-  // Pass both token email and UID; resolve prioritizes token email then UID lookup.
-  const [authorized, resolved] = await Promise.all([
-    isAdminUid(user.uid, email),
-    (async () => {
-      // Prefer account email when available (survives Firebase project changes)
-      const account = await fetchAdminAccount(user.uid);
-      const effectiveEmail = account?.email ?? user.email ?? null;
-      return resolveAdminPermissions(effectiveEmail, user.uid);
-    })(),
-  ]);
-  if (!authorized) return null;
-  // Admin always passes; other roles must have the specific permission.
-  if (resolved.role === "admin") return user;
-  if (resolved.permissions.includes(permission)) return user;
-  return null;
+  const result = await requirePermissionResult(request, permission);
+  return result.status === "ok" ? result.user : null;
 }
 
 /**
@@ -146,25 +182,31 @@ export async function requirePermission(
  * Admin always passes. Used for Teacher-scoped controls where either
  * the granular or the legacy broad permission should grant access.
  */
+export async function requireAnyPermissionResult(
+  request: NextRequest,
+  permissions: readonly AdminPermission[],
+): Promise<AdminGateResult> {
+  const user = await getFirebaseUser(request);
+  if (!user) return { status: "unauthenticated", user: null };
+  // Same consistent identity as requirePermissionResult (verified email + UID).
+  const email = verifiedEmail(user);
+  const [authorized, resolved] = await Promise.all([
+    isAdminUid(user.uid, email),
+    resolveAdminPermissions(email, user.uid),
+  ]);
+  if (!authorized) return { status: "forbidden", user: null };
+  // Admin always passes.
+  if (resolved.role === "admin") return { status: "ok", user };
+  // Other roles need at least one matching permission.
+  if (permissions.some((p) => resolved.permissions.includes(p)))
+    return { status: "ok", user };
+  return { status: "forbidden", user: null };
+}
+
 export async function requireAnyPermission(
   request: NextRequest,
   permissions: readonly AdminPermission[],
 ): Promise<DecodedIdToken | null> {
-  const user = await getFirebaseUser(request);
-  if (!user) return null;
-  const email = user.email_verified === true ? (user.email ?? null) : null;
-  const [authorized, resolved] = await Promise.all([
-    isAdminUid(user.uid, email),
-    (async () => {
-      const account = await fetchAdminAccount(user.uid);
-      const effectiveEmail = account?.email ?? user.email ?? null;
-      return resolveAdminPermissions(effectiveEmail, user.uid);
-    })(),
-  ]);
-  if (!authorized) return null;
-  // Admin always passes.
-  if (resolved.role === "admin") return user;
-  // Other roles need at least one matching permission.
-  if (permissions.some((p) => resolved.permissions.includes(p))) return user;
-  return null;
+  const result = await requireAnyPermissionResult(request, permissions);
+  return result.status === "ok" ? result.user : null;
 }

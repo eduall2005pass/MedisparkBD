@@ -28,6 +28,8 @@ export type PdfMaterialQuestion = {
   isStandaloneImage?: boolean; // true if block is image-only between questions
   /** Topic group heading — set when pasted text contains Topic: headers. */
   topic?: string;
+  /** Original pasted question number header (e.g. "5.", "১২।") — used for answer-key number-map alignment. */
+  originalNumber?: string | null;
 };
 
 export type PdfMaterialPayload = {
