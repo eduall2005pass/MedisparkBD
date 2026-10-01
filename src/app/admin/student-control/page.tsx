@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { AccessLoading } from "@/components/auth/AccessGuard";
+import StudentContactButtons from "@/components/admin/StudentContactButtons";
+import { buildVCard } from "@/lib/student-contact";
 
 type Student = {
   uid: string;
@@ -46,6 +48,24 @@ export default function StudentControlPage() {
   } | null>(null);
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [groupCopied, setGroupCopied] = useState(false);
+
+  const GROUP_INVITE = "https://t.me/+4-KPFEz_qGMzNjhl";
+
+  async function copyGroupLink() {
+    try {
+      await navigator.clipboard.writeText(GROUP_INVITE);
+    } catch {
+      const area = document.createElement("textarea");
+      area.value = GROUP_INVITE;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+    setGroupCopied(true);
+    window.setTimeout(() => setGroupCopied(false), 2000);
+  }
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -259,6 +279,16 @@ export default function StudentControlPage() {
     downloadFile("student-phones.xls", lines.join("\n"), "application/vnd.ms-excel");
   }
 
+  function exportVCard() {
+    // One .vcf with all numbers — import into Google Contacts / iPhone,
+    // Telegram auto-syncs them, then bulk-add to the group.
+    downloadFile(
+      "student-contacts.vcf",
+      buildVCard(phoneRows),
+      "text/vcard",
+    );
+  }
+
   if (authLoading || (!user && authLoading)) {
     return <AccessLoading label="Loading Student Control…" />;
   }
@@ -364,6 +394,15 @@ export default function StudentControlPage() {
               >
                 Excel
               </button>
+              <button
+                type="button"
+                onClick={exportVCard}
+                disabled={phoneRows.length === 0}
+                title="Telegram group e add korar jonno: vCard download kore phone contacts e import korun"
+                className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs font-bold text-sky-400 transition hover:bg-sky-500/20 disabled:opacity-40"
+              >
+                vCard (Telegram)
+              </button>
             </div>
           </div>
           {phoneRows.length === 0 ? (
@@ -378,6 +417,50 @@ export default function StudentControlPage() {
           <p className="mt-1 text-[11px] text-neutral-500">
             Follows the current tab + course filter. Duplicates removed.
           </p>
+          <details className="mt-2 rounded-lg bg-sky-500/5 px-3 py-2 text-[11px] leading-relaxed text-neutral-400">
+            <summary className="cursor-pointer font-bold text-sky-400">
+              সবাইকে Telegram group এ add করবেন যেভাবে
+            </summary>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-sky-500/25 bg-sky-500/10 px-2.5 py-2">
+              <span className="font-bold text-sky-300">Group invite:</span>
+              <code className="min-w-0 flex-1 truncate font-mono text-sky-200">
+                https://t.me/+4-KPFEz_qGMzNjhl
+              </code>
+              <button
+                type="button"
+                onClick={() => void copyGroupLink()}
+                className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold text-sky-300 transition hover:bg-sky-500/20"
+              >
+                {groupCopied ? "Copied!" : "Copy"}
+              </button>
+              <a
+                href="https://t.me/+4-KPFEz_qGMzNjhl"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold text-sky-300 transition hover:bg-sky-500/20"
+              >
+                Open ↗
+              </a>
+            </div>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-5">
+              <li>
+                উপরের <span className="font-bold">vCard (Telegram)</span> বাটনে সব নম্বর
+                ডাউনলোড করুন (tab + course filter অনুযায়ী)।
+              </li>
+              <li>
+                ফাইলটি ফোনে নিয়ে Contacts এ import করুন — Android হলে Google
+                Contacts app, iPhone হলে সরাসরি open করলেই import হবে।
+              </li>
+              <li>
+                Telegram open করে Settings → Privacy → নিশ্চিত করুন contact sync
+                চালু আছে, তাহলে সবাই Contacts এ চলে আসবে।
+              </li>
+              <li>
+                Group open করে <span className="font-bold">Add Members</span> →
+                imported contacts select করে একসাথে add করুন।
+              </li>
+            </ol>
+          </details>
         </div>
       )}
 
@@ -409,6 +492,12 @@ export default function StudentControlPage() {
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {student.contactNumber?.trim() && (
+                  <p className="mt-0.5 flex items-center gap-2 text-[11px] text-neutral-500">
+                    <span className="font-mono">{student.contactNumber.trim()}</span>
+                    <StudentContactButtons phone={student.contactNumber} size="sm" />
+                  </p>
+                )}
               </div>
               {courseSlug !== "" && activeMembers?.get(student.uid) && (
                 <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-400">

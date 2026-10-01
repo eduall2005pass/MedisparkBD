@@ -113,8 +113,8 @@ export default function ExamCategoryCards({
   // Exam page counts auto-refresh every 10 minutes.
   const AUTO_REFRESH_MS = 10 * 60 * 1000;
 
-  const load = useCallback(async () => {
-    setRefreshing(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setRefreshing(true);
     try {
       const res = await fetch("/api/public-exams/live-counts", { cache: "no-store" });
       if (!res.ok) return;
@@ -144,7 +144,7 @@ export default function ExamCategoryCards({
   }, []);
 
   useEffect(() => {
-    void load();
+    void load({ silent: true });
     const id = setInterval(() => void load(), AUTO_REFRESH_MS);
     return () => clearInterval(id);
   }, [load]);

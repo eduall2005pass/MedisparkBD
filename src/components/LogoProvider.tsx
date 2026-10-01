@@ -79,7 +79,9 @@ export function LogoProvider({
   // causes logo flicker on every tab switch.
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch(`/api/logo`, {
+      // Cache-buster query bypasses the /api/logo edge cache (s-maxage 30s)
+      // so the admin sees the fresh logo immediately after upload.
+      const response = await fetch(`/api/logo?v=${Date.now()}`, {
         cache: "no-store",
       });
       if (!response.ok) return;

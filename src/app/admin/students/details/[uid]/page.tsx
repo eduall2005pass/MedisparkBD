@@ -19,6 +19,7 @@ import type {
   StudentExamResult,
   StudentProgressSummary,
 } from "@/lib/students-admin";
+import StudentContactButtons from "@/components/admin/StudentContactButtons";
 
 function formatDate(value: number | null): string {
   if (!value) return "—";
@@ -226,7 +227,13 @@ export default function StudentDetailsPage({
           <InfoRow label="Full Name" value={student.fullName} />
           <InfoRow label="Student ID" value={student.studentId} />
           <InfoRow label="Email" value={student.email || "—"} />
-          <InfoRow label="Phone" value={student.contactNumber || "—"} />
+          <div className="flex justify-between gap-3 sm:block">
+            <dt className="text-xs font-bold uppercase tracking-wider text-slate-400">Phone</dt>
+            <dd className="flex items-center gap-2 font-mono text-sm text-slate-700 admin-dark:text-zinc-200">
+              {student.contactNumber || "—"}
+              <StudentContactButtons phone={student.contactNumber} size="sm" />
+            </dd>
+          </div>
           <InfoRow label="Gender" value={student.gender || "—"} />
           <InfoRow label="Institution" value={student.institution || "—"} />
           <InfoRow label="HSC Batch" value={student.hscBatch || "—"} />
