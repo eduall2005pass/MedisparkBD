@@ -137,7 +137,7 @@ export async function fetchStudents(
        GROUP BY s.uid, s.student_id, s.full_name, s.gender, s.institution, s.hsc_batch,
                 s.student_level, s.contact_number, s.email, s.facebook_url, s.profile_picture_url,
                 s.provider, s.is_active, s.created_at
-       ORDER BY s.created_at DESC
+       ORDER BY MAX(e.enrollment_date) DESC, s.created_at DESC
        LIMIT 500`,
       params,
     );
@@ -151,7 +151,7 @@ export async function fetchStudents(
                 s.provider, s.created_at,
                 (SELECT COUNT(*) FROM enrollments e WHERE e.student_uid = s.uid) AS enrollment_count
          FROM students s
-         ORDER BY s.created_at DESC
+         ORDER BY (SELECT MAX(e2.enrollment_date) FROM enrollments e2 WHERE e2.student_uid = s.uid) DESC, s.created_at DESC
          LIMIT 500`,
       );
       return rows.map(mapStudent);

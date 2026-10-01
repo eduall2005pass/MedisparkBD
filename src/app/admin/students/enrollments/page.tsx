@@ -371,9 +371,12 @@ export default function StudentEnrollmentsPage() {
             </p>
           </li>
         )}
-        {enrollments?.map((enrollment) => (
+        {enrollments?.map((enrollment, index) => (
           <li key={enrollment.id} className={cardClass}>
             <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
+              <span className="w-7 shrink-0 text-center text-xs font-extrabold tabular-nums text-slate-400 admin-dark:text-slate-500">
+                {index + 1}
+              </span>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-[#0b1e3a] admin-dark:text-zinc-100">
                   {enrollment.courseName}

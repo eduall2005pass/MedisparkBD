@@ -202,9 +202,12 @@ export default function AllStudentsPage() {
             </p>
           </li>
         )}
-        {students?.map((student) => (
+        {students?.map((student, index) => (
           <li key={student.uid} className={cardClass}>
             <div className="flex items-center gap-2.5 p-3 sm:gap-3 sm:p-5">
+              <span className="w-7 shrink-0 text-center text-xs font-extrabold tabular-nums text-slate-400 admin-dark:text-slate-500">
+                {index + 1}
+              </span>
               <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-[#f1f5f9] admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] sm:h-11 sm:w-11">
                 {student.profilePictureUrl ? (
                   <Image
