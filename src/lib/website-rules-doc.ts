@@ -285,7 +285,7 @@ export const RULE_DOC_SECTIONS: RuleDocSection[] = [
       {
         id: "MED-01",
         title: "আপলোড-ডিলিটে গোপন টোকেন লাগে",
-        text: "nginx /var/www/medispark-uploads/ ফোল্ডারটাকে medispark.duckdns.org/medifiles লিংকে দেখায়। আপলোড/ডিলিটে MEDIA_UPLOAD_TOKEN (X-Medifiles-Token হেডার) লাগে। ফাইলের ধরন extension দেখে ঠিক হয়।",
+        text: "nginx আপলোড ফোল্ডারটাকে media server লিংকে দেখায়। আপলোড/ডিলিটে MEDIA_UPLOAD_TOKEN (X-Medifiles-Token হেডার) লাগে। ফাইলের ধরন extension দেখে ঠিক হয়।",
         source: "src/lib/storage.ts, server/medifiles-server.mjs, CODEBASE_SUMMARY.md",
       },
       {

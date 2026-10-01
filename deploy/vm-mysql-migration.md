@@ -1,11 +1,16 @@
-# VM MySQL Persistent — medispark (20.219.193.182)
+# VM MySQL — setup & migration notes
 
-VM MariaDB 10.6 persistent on `medispark` (MEDISPARK RG, CentralIndia). Persisted: `mariadb.service` enabled + `Restart=always`, `datadir=/var/lib/mysql` on `/dev/root 62G`, `/etc/mysql/conf.d/medispark.cnf` + `bind-address=0.0.0.0`, NSG TCP 3306 Allow 300, nightly `/var/backups/mysql` cron.
+> All values below are placeholders. Real host / user / password live in
+> GitHub repo secrets (`VM_HOST`, `VM_USER`, `VM_PASSWORD`, `PROD_ENV`)
+> and local `.env` files — **never commit real credentials to this repo.**
 
-## What was done (2026-09-23)
+VM MariaDB persistent setup: `mariadb.service` enabled with restart policy,
+tuned `max_connections` / InnoDB pool, nightly backup cron.
 
-1. Installed `mariadb-server` 10.6.23 on VM, enabled `mariadb.service`.
-2. Config: `/etc/mysql/mariadb.conf.d/50-server.cnf` -> `bind-address=0.0.0.0`, plus `/etc/mysql/conf.d/medispark.cnf`:
+## What was done
+
+1. Installed `mariadb-server` on the VM, enabled `mariadb.service`.
+2. Server config (tuning only — no secrets here):
    ```
    [mysqld]
    max_connections=50
@@ -15,42 +20,47 @@ VM MariaDB 10.6 persistent on `medispark` (MEDISPARK RG, CentralIndia). Persiste
    skip-name-resolve
    character-set-server=utf8mb4
    ```
-3. Created DB + user:
+3. Created DB + least-privilege user (run on the VM, password from your
+   password manager — do not paste it into any file):
    ```sql
-   CREATE DATABASE bloodare_medispark CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-   CREATE USER 'siam'@'%' IDENTIFIED BY 'MSdb-c2cee58de021f0ef4473ec7c-A9x';
-   GRANT ALL PRIVILEGES ON bloodare_medispark.* TO 'siam'@'%';
+   CREATE DATABASE <DB_NAME> CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+   CREATE USER '<DB_USER>'@'%' IDENTIFIED BY '<DB_PASSWORD>';
+   GRANT ALL PRIVILEGES ON <DB_NAME>.* TO '<DB_USER>'@'%';
    ```
-4. Dump (5.4M, 2427 lines):
-   `mysqldump --single-transaction --routines --triggers bloodare_medispark > /tmp/bloodare_medispark.sql`
-5. Import: `mysql -u siam -p... bloodare_medispark < /tmp/bloodare_medispark.sql` -> 68 tables, 1148 admin_activity_logs, 270 exam_questions, etc.
-6. Backup: `/usr/local/bin/mysql-backup.sh` nightly 02:00 via cron to `/var/backups/mysql/*.sql.gz` (7-day retention, 4.6M gz).
-7. App code: `src/lib/mysql.ts:40` — `MYSQL_SSL=false` for VM.
+4. Dumped the previous database:
+   `mysqldump --single-transaction --routines --triggers <DB_NAME> > /tmp/app.sql`
+5. Imported on the VM: `mysql -u <DB_USER> -p <DB_NAME> < /tmp/app.sql`
+6. Nightly backup via cron (compressed dumps, 7-day retention).
+7. App code: `src/lib/mysql.ts` — `MYSQL_SSL=false` for this VM.
 
-## NSG — Done (2026-09-23 02:03 UTC)
+## Firewall
 
-- Added `medispark-nsg` Inbound `MariaDB` TCP 3306 `Any→Any` Priority `300` Allow via VM → Networking blade.
-- Verified: `nc -zv 20.219.193.182 3306` → `succeeded`, `python3 check → 3306: OPEN`, `mysql -h 20.219.193.182 -e "SELECT 1"` → `1`, all APIs 200 (banners/hero/faqs/website-settings).
-- Vercel env updated to `MYSQL_HOST=20.219.193.182 MYSQL_SSL=false` and site `https://medisparkbd.com` 200 with DB content.
+- Inbound `MariaDB` TCP 3306 Allow rule added on the VM network security group.
+- Verified with `nc` / `mysql -h <DB_HOST> -e "SELECT 1"` and the app APIs.
 
-## Switching the app — Done
+## Switching the app
 
 Local dev (direct, persistent):
 ```bash
-MYSQL_HOST=20.219.193.182 MYSQL_PORT=3306 MYSQL_DATABASE=bloodare_medispark MYSQL_USER=siam MYSQL_PASSWORD='MSdb-c2cee58de021f0ef4473ec7c-A9x' MYSQL_SSL=false pnpm dev
-# fallback tunnel if needed: sshpass -p 'wp159333@A' ssh -L 3309:localhost:3306 -N siam@20.219.193.182 &
+MYSQL_HOST=<DB_HOST> MYSQL_PORT=3306 MYSQL_DATABASE=<DB_NAME> \
+  MYSQL_USER=<DB_USER> MYSQL_PASSWORD='<DB_PASSWORD>' MYSQL_SSL=false pnpm dev
+# fallback SSH tunnel if the port is restricted:
+# ssh -L 3309:localhost:3306 -N <SSH_USER>@<DB_HOST> &
+# then use MYSQL_HOST=127.0.0.1 MYSQL_PORT=3309
 ```
 
-Production (Vercel `medisparkbd`):
-- Env updated: `MYSQL_HOST=20.219.193.182`, `MYSQL_PORT=3306`, `MYSQL_DATABASE=bloodare_medispark`, `MYSQL_USER=siam`, `MYSQL_PASSWORD=MSdb-c2cee58de021f0ef4473ec7c-A9x`, `MYSQL_SSL=false` → Redeployed, APIs 200.
+Production (Vercel): set `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`,
+`MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_SSL=false` in the project dashboard
+(or keep them inside the `PROD_ENV` repo secret used by `vm-deploy.yml`),
+then redeploy.
 
-Keep `local.env`/`all.env` with both options commented.
+Keep `local.env`/`all.env` (git-ignored) with both options commented.
 
 ## Verify
 
 ```bash
-mysql -h 20.219.193.182 -P 3306 -u siam -p... -e "SELECT COUNT(*) FROM bloodare_medispark.students;"
+mysql -h <DB_HOST> -P 3306 -u <DB_USER> -p -e "SELECT COUNT(*) FROM <DB_NAME>.students;"
 # or via tunnel
-mysql -h 127.0.0.1 -P 3309 -u siam -p... -e "SELECT COUNT(*) FROM bloodare_medispark.students;"
+mysql -h 127.0.0.1 -P 3309 -u <DB_USER> -p -e "SELECT COUNT(*) FROM <DB_NAME>.students;"
 ```
-Counts should match expected: students 17, exams 6, exam_questions 270, etc.
+Row counts should match the expected snapshot noted at migration time.

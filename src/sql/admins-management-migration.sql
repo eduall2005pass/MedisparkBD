@@ -1,6 +1,6 @@
 -- Admin Management: role + activation support for the `admins` table.
 -- Apply with:
---   ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/admins-management-migration.sql
+--   ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/admins-management-migration.sql
 
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS role VARCHAR(64) NOT NULL DEFAULT 'admin';
 ALTER TABLE admins ADD COLUMN IF NOT EXISTS is_active TINYINT(1) NOT NULL DEFAULT 1;

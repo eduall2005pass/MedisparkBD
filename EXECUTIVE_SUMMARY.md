@@ -39,7 +39,7 @@
 ### Deployment
 - **Vercel** (frontend, auto-deploys on push to main)
 - **Azure MySQL** (managed database)
-- **Self-hosted VM** (medispark.duckdns.org - media/file storage)
+- **Self-hosted VM** (<MEDIA_HOST> - media/file storage)
 
 ### Key Libraries
 - `firebase@12.17.1` - Authentication
@@ -303,15 +303,15 @@
 - Serverless functions for API routes
 
 ### Database
-- **VM MariaDB 10.6** (self-hosted on `medispark`)
-- Host: `20.219.193.182:3306`
+- **Self-hosted MariaDB 10.6**
+- Host: `<DB_HOST>:3306`
 - Non-TLS, persistent service + nightly backups
 - Schema managed via SQL migrations
 
 ### Media Storage
-- **Self-hosted VM** at `medispark.duckdns.org`
-- nginx serves `/var/www/medispark-uploads/`
-- Token-authenticated upload service on `:4021`
+- **Self-hosted media server**
+- nginx serves the uploads directory
+- Token-authenticated upload service on localhost
 - Fallback: legacy `/api/files/[id]` reads from MySQL LONGBLOB
 
 ### Environment Variables
@@ -369,8 +369,8 @@ npx tsc --noEmit
 
 ### Database Migrations
 ```bash
-mysql -h 20.219.193.182 \
-  -u <admin> -p bloodare_medispark < src/sql/<file>.sql
+mysql -h <DB_HOST> \
+  -u <admin> -p <DB_NAME> < src/sql/<file>.sql
 ```
 
 ### Production Deploy

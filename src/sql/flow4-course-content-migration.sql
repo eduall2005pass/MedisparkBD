@@ -3,7 +3,7 @@
 -- Admin can manage Subjects per Course, Chapters per Subject, Contents per Chapter.
 -- Student navigation remains even when Subject/Chapter has no content (No Content Available).
 --
--- Apply: ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/flow4-course-content-migration.sql
+-- Apply: ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/flow4-course-content-migration.sql
 
 -- 1) Per-course subject ordering (so admin can reorder Subjects inside a course)
 ALTER TABLE course_subject_assignments ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 0 AFTER course_slug;

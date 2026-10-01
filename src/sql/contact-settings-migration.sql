@@ -2,7 +2,7 @@
 -- The app also tolerates missing columns until this migration is applied
 -- (see src/lib/website-settings.ts).
 -- Apply manually if needed:
---   ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/contact-settings-migration.sql
+--   ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/contact-settings-migration.sql
 
 ALTER TABLE website_settings
   ADD COLUMN IF NOT EXISTS address VARCHAR(500) NULL,

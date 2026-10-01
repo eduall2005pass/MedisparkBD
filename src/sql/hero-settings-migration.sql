@@ -1,7 +1,7 @@
 -- Hero Section settings — single "active" row controls the homepage hero.
 -- The app also self-heals this table on first use (see src/lib/hero-settings.ts).
 -- Apply manually if needed:
---   ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/hero-settings-migration.sql
+--   ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/hero-settings-migration.sql
 
 CREATE TABLE IF NOT EXISTS hero_settings (
   id VARCHAR(191) NOT NULL PRIMARY KEY,

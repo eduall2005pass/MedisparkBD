@@ -1,7 +1,7 @@
 -- Mentors shown in the homepage mentors section.
 -- The app also self-heals this table on first use (see src/lib/mentors.ts).
 -- Apply manually if needed:
---   ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/mentors-migration.sql
+--   ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/mentors-migration.sql
 
 CREATE TABLE IF NOT EXISTS mentors (
   id VARCHAR(64) NOT NULL PRIMARY KEY,

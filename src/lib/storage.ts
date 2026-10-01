@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { exec, query } from "@/lib/mysql";
 import sharp from "sharp";
 
-// Media files live on the Azure VM's disk under /var/www/medispark-uploads
+// Media files live on the self-hosted media server's disk
 // and are served over HTTPS by nginx at MEDIA_FILES_BASE_URL. saveFile()
-// forwards bytes to the VM's upload endpoint; only the returned URL is kept.
+// forwards bytes to the media server's upload endpoint; only the returned URL is kept.
 // The uploads table (LONGBLOB) is legacy — /api/files/[id] still serves old
 // rows so nothing breaks, but new writes never touch the database.
 
@@ -354,7 +354,7 @@ export async function removeFile(storagePath: string): Promise<void> {
     /^[A-Za-z0-9._-]+\/[A-Za-z0-9._\/-]+$/.test(storagePath.split(/[?#]/)[0]) &&
     mediaPath === null;
 
-  // Case 1: full VM URL (e.g. https://medispark.duckdns.org/medifiles/...)
+  // Case 1: full media-server URL (e.g. https://<MEDIA_HOST>/medifiles/...)
   if (mediaPath && isVmUrl) {
     try {
       await fetch(MEDIA_DELETE_URL, {

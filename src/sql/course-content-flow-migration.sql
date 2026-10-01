@@ -6,7 +6,7 @@
 -- Flow 2 (Paper):   Course → 1st Paper / 2nd Paper → Class / Exam / Materials / Archive → Chapter → Content
 -- Flow 3 (Subject): Course → Subject → Class / Exam / Materials / Archive → Chapter → Content
 --
--- Apply: ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/course-content-flow-migration.sql
+-- Apply: ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/course-content-flow-migration.sql
 
 -- Step 1: Widen the ENUM to accept both old and new values.
 ALTER TABLE catalog_courses

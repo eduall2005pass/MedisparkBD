@@ -140,8 +140,8 @@ export default function MediaLibraryPage() {
           <h2 className="text-2xl font-extrabold tracking-tight text-[#0b1e3a] admin-dark:text-white">Media Library</h2>
           <p className="mt-1.5 max-w-xl text-sm text-slate-500 admin-dark:text-slate-400">
             Centralized library for uploaded images — upload, search, copy URLs
-            and delete unused files. New uploads go to VM storage
-            (medispark.duckdns.org/medifiles) and return a direct URL; legacy
+            and delete unused files. New uploads go to media-server storage
+            and return a direct URL; legacy
             files remain in MySQL and are served via /api/files/[id].
           </p>
         </div>

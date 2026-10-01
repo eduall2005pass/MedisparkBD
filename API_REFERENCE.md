@@ -857,7 +857,7 @@ FormData:
 **Response**
 ```json
 {
-  "url": "https://medispark.duckdns.org/medifiles/course-images/uuid.png"
+  "url": "https://<MEDIA_HOST>/medifiles/course-images/uuid.png"
 }
 ```
 
@@ -869,7 +869,7 @@ Delete media file.
 **Request**
 ```json
 {
-  "url": "https://medispark.duckdns.org/medifiles/course-images/uuid.png"
+  "url": "https://<MEDIA_HOST>/medifiles/course-images/uuid.png"
 }
 ```
 
@@ -1025,15 +1025,15 @@ Get system information + database status.
 {
   "database": {
     "connected": true,
-    "host": "20.219.193.182"
+    "host": "<DB_HOST>"
   },
   "firebase": {
     "configured": true,
-    "projectId": "medisparkgo"
+    "projectId": "<FIREBASE_PROJECT>"
   },
   "media": {
     "configured": true,
-    "baseUrl": "https://medispark.duckdns.org/medifiles"
+    "baseUrl": "https://<MEDIA_HOST>/medifiles"
   }
 }
 ```

@@ -4,7 +4,7 @@
 -- Only the access-control layer differs; the engine is shared.
 -- ═══════════════════════════════════════════════════════════════════════════
 --
--- Apply: ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/exam-system-architecture-migration.sql
+-- Apply: ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/exam-system-architecture-migration.sql
 
 -- ─── 1. EXAM CATEGORIES ─────────────────────────────────────────────────
 -- Public Exam categories (SSC Academic, HSC Academic, Medical, Varsity).

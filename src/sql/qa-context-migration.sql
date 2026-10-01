@@ -1,6 +1,6 @@
 -- Q&A course context: every question stores Category + Enrolled Course +
 -- Subject (Course Control ids) plus an optional picture URL. Apply with:
---   ssh <vm> 'sudo mysql bloodare_medispark' < src/sql/qa-context-migration.sql
+--   ssh <vm> 'sudo mysql <DB_NAME>' < src/sql/qa-context-migration.sql
 ALTER TABLE qa_questions
   ADD COLUMN category_id VARCHAR(191) NULL AFTER subject_id,
   ADD COLUMN course_id VARCHAR(191) NULL AFTER category_id,

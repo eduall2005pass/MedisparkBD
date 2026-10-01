@@ -165,7 +165,7 @@ See **README.md** for setup instructions
 └─────────────────────────────────────┘
            ↕ HTTP/Token
 ┌─────────────────────────────────────┐
-│   Media VM (medispark.duckdns.org)  │
+│   Media VM (<MEDIA_HOST>)  │
 │   - File uploads/downloads          │
 │   - nginx static serving            │
 └─────────────────────────────────────┘
@@ -359,8 +359,8 @@ If you can't find something:
 - **GitHub**: medisparkbd/MediSparkBD
 - **Deployment**: Vercel (main branch auto-deploys)
 - **Database**: Azure Database for MySQL
-- **Auth**: Firebase Console (project: medisparkgo)
-- **Media**: https://medispark.duckdns.org/medifiles
+- **Auth**: Firebase Console (project: <FIREBASE_PROJECT>)
+- **Media**: https://<MEDIA_HOST>/medifiles
 
 ---
 

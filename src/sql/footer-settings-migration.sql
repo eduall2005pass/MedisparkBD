@@ -2,7 +2,7 @@
 -- The app also tolerates missing columns until this migration is applied
 -- (see src/lib/website-settings.ts).
 -- Apply manually if needed:
---   ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/footer-settings-migration.sql
+--   ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/footer-settings-migration.sql
 
 ALTER TABLE website_settings
   ADD COLUMN IF NOT EXISTS copyright_text VARCHAR(255) NULL,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const CANONICAL_HOSTS = new Set(["medisparkbd.com", "www.medisparkbd.com"]);
 
-// Any non-canonical host (VM: app./vm., previews, duckdns) gets
+// Any non-canonical host (app subdomain, previews, alternate domains) gets
 // X-Robots-Tag: noindex so Google never indexes duplicates.
 // Vercel (medisparkbd.com) stays indexed.
 export function middleware(req: NextRequest) {

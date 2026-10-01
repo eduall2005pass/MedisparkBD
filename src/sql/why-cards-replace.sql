@@ -1,5 +1,5 @@
 -- Replace the existing 6 "Why MediSpark" cards with 8 new ones
--- Run: ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/why-cards-replace.sql
+-- Run: ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/why-cards-replace.sql
 
 DELETE FROM home_cards WHERE section = 'why';
 

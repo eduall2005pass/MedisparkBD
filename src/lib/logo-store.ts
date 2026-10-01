@@ -177,8 +177,8 @@ export async function saveActiveLogo(
     tempStoragePath.split("/").pop() ?? "",
     buffer,
   );
-  // Derive the actual VM path from the returned URL (saveFile uses UUID naming)
-  // e.g. https://medispark.duckdns.org/medifiles/website/logo/<uuid>.png -> website/logo/<uuid>.png
+  // Derive the actual storage path from the returned URL (saveFile uses UUID naming)
+  // e.g. https://<MEDIA_HOST>/medifiles/website/logo/<uuid>.png -> website/logo/<uuid>.png
   const marker = "/medifiles/";
   const markerIndex = cleanUrl.indexOf(marker);
   const actualStoragePath =

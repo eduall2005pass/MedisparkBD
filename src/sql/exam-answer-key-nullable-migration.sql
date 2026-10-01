@@ -16,7 +16,7 @@
 -- writers reject it loudly (never stored), readers preserve it, and the UI
 -- renders "—" instead of "A".
 --
--- Apply: ssh <vm> 'sudo mysql bloodare_medispark' < src/sql/exam-answer-key-nullable-migration.sql
+-- Apply: ssh <vm> 'sudo mysql <DB_NAME>' < src/sql/exam-answer-key-nullable-migration.sql
 -- (Runtime CREATE TABLEs were updated too, so fresh installs already comply.)
 -- ═══════════════════════════════════════════════════════════════════
 

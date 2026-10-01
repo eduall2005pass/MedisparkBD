@@ -14,9 +14,9 @@ courses, live/practice exams, Q&A, and a full admin control panel in one app.
 | Layer | Service |
 |---|---|
 | Web app | Vercel — project `medisparkbd` (auto-deploys on push to `main`) |
-| Database | VM MariaDB `20.219.193.182:3306` (`bloodare_medispark`, non-TLS, 50 conn, nightly backup to `/var/backups/mysql/`) |
-| Media files | `medispark` VM (`medispark.duckdns.org`) — nginx serves `/var/www/medispark-uploads/`, upload service on `127.0.0.1:4021` |
-| Auth | Firebase (Google sign-in, project `medisparkgo`) |
+| Database | Self-hosted MariaDB (`MYSQL_HOST`:`MYSQL_PORT`, non-TLS, nightly backups) |
+| Media files | Self-hosted media server (`MEDIA_FILES_BASE_URL`) — nginx serves uploaded files, private upload service on localhost |
+| Auth | Firebase (Google sign-in, project `<FIREBASE_PROJECT>`) |
 
 - All application data lives in **MySQL** (VM). No Firestore/Supabase/local-disk storage.
 - Uploaded media (logo, banners, course images, profile pictures, audio) live on the
@@ -112,7 +112,7 @@ is what matters). Watch **Vercel → Usage → Function Invocations**.
 
 ## Repository / deploy flow
 
-- Single repo: `medisparkbd/MediSparkBD` — every push to `main` auto-deploys to Vercel (when linked) and runs against VM MariaDB `20.219.193.182:3306` (persistent, see `deploy/vm-mysql-migration.md`) + medispark.duckdns.org.
+- Single repo: `medisparkbd/MediSparkBD` — every push to `main` auto-deploys to Vercel (when linked) and runs against the self-hosted MariaDB (persistent, see `deploy/vm-mysql-migration.md`) + media server.
 - **Never force-push.** If a push is rejected: `git pull --rebase medisparkbd main` first, then push again.
 
 ## Getting started
@@ -139,11 +139,11 @@ Set locally in `.env`, in production via Vercel project settings:
 
 | Variable | Purpose |
 |---|---|
-| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` | MySQL connection — `20.219.193.182:3306` (VM). Set `MYSQL_SSL=false` (see `src/lib/mysql.ts:40`) |
-| `NEXT_PUBLIC_FIREBASE_API_KEY` … | Firebase web config (project `medisparkgo`) |
+| `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DATABASE` / `MYSQL_USER` / `MYSQL_PASSWORD` | MySQL connection (self-hosted). Set `MYSQL_SSL=false` (see `src/lib/mysql.ts:40`) |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` … | Firebase web config (project `<FIREBASE_PROJECT>`) |
 | `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` | Firebase Admin (token verification) |
 | `MEDIA_UPLOAD_TOKEN` | Shared secret between app and the VM upload service |
-| `MEDIA_FILES_BASE_URL` / `MEDIA_UPLOAD_URL` / `MEDIA_DELETE_URL` | Media endpoints (`https://medispark.duckdns.org/…`) |
+| `MEDIA_FILES_BASE_URL` / `MEDIA_UPLOAD_URL` / `MEDIA_DELETE_URL` | Media endpoints (self-hosted media server) |
 | `NEXT_PUBLIC_FIREBASE_VAPID_KEY` | Web push notifications |
 
 Secrets live outside the repo (local `.env` / Vercel dashboard). **Never commit them.**
@@ -153,12 +153,12 @@ Secrets live outside the repo (local `.env` / Vercel dashboard). **Never commit 
 Schema and migrations live in `src/sql/*.sql` (91 files). After changing the schema:
 
 1. Add/update a migration file in `src/sql/`
-2. Apply it (VM):
+2. Apply it on the database server:
 
    ```bash
-   # VM (persistent) — direct:
-   mysql -h 20.219.193.182 -P 3306 -u siam -p bloodare_medispark < src/sql/<file>.sql
-   # tunnel fallback: ssh -L 3309:localhost:3306 -N siam@20.219.193.182 &; mysql -h 127.0.0.1 -P 3309 ...
+   # direct:
+   mysql -h <DB_HOST> -P 3306 -u <DB_USER> -p <DB_NAME> < src/sql/<file>.sql
+   # tunnel fallback: ssh -L 3309:localhost:3306 -N <SSH_USER>@<DB_HOST> &; mysql -h 127.0.0.1 -P 3309 ...
    ```
 
 Note: tables use `uq_<table>_pk` UNIQUE indexes; follow that pattern for new tables.

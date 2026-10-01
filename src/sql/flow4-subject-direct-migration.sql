@@ -4,7 +4,7 @@
 -- Student path: Course Content → Subject → Content → Open Content
 -- Content supports video, PDF, notes, image, audio, quiz, etc.
 --
--- Apply: ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/flow4-subject-direct-migration.sql
+-- Apply: ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/flow4-subject-direct-migration.sql
 
 -- 1) Widen catalog_courses.content_layout ENUM to include flow-4
 ALTER TABLE catalog_courses

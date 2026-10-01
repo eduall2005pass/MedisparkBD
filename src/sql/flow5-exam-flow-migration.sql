@@ -9,7 +9,7 @@
 --   Course → Subject Final Exam → Direct Exam List (no subject page)
 --   Course → Final Model Test → Direct Exam List (no subject page)
 --
--- Apply: ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/flow5-exam-flow-migration.sql
+-- Apply: ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/flow5-exam-flow-migration.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- 1) Exam category/type column: separates the 4 Flow-5 exam categories.

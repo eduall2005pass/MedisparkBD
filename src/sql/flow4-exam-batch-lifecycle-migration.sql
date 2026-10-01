@@ -1,5 +1,5 @@
 -- Flow 4 Exam Batch — Live → Practice lifecycle
--- Apply: ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/flow4-exam-batch-lifecycle-migration.sql
+-- Apply: ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/flow4-exam-batch-lifecycle-migration.sql
 --
 -- This lifecycle is ONLY for Course Content Flow 4 Exam Batch (enrolled exams
 -- linked to a catalog_courses.content_layout='flow-4' course).

@@ -1,7 +1,7 @@
 -- Admin-managed courses (Admin Panel → Courses → All Courses).
 -- The app also self-heals this table on first use (see src/lib/admin-courses.ts).
 -- Apply manually if needed:
---   ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/admin-courses-migration.sql
+--   ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/admin-courses-migration.sql
 
 CREATE TABLE IF NOT EXISTS admin_courses (
   id VARCHAR(64) NOT NULL PRIMARY KEY,

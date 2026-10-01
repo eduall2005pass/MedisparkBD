@@ -4,7 +4,7 @@
 **Tech Stack**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS  
 **Database**: Azure Database for MySQL (TLS enforced)  
 **Auth**: Firebase (Google sign-in)  
-**Media**: Self-hosted VM (medispark.duckdns.org)  
+**Media**: Self-hosted VM (<MEDIA_HOST>)  
 
 ---
 
@@ -18,22 +18,22 @@
                          ↕
 ┌─────────────────────────────────────────────────────────┐
 │         VM MariaDB                                    │
-│  (20.219.193.182:3306)                                │
+│  (<DB_HOST>:3306)                                │
 │  - All application data stored here                      │
 │  - Non-TLS, persistent service + nightly backups        │
 └─────────────────────────────────────────────────────────┘
                          ↕
 ┌─────────────────────────────────────────────────────────┐
 │         Firebase (Authentication)                       │
-│  - Google Sign-In (project: medisparkgo)                │
+│  - Google Sign-In (project: <FIREBASE_PROJECT>)                │
 │  - Token verification on API routes                     │
 │  - Web push notifications (VAPID key)                   │
 └─────────────────────────────────────────────────────────┘
                          ↕
 ┌─────────────────────────────────────────────────────────┐
-│    Media VM (medispark.duckdns.org)                     │
-│  - nginx serves /var/www/medispark-uploads/             │
-│  - Upload service on 127.0.0.1:4021                     │
+│    Media server (self-hosted)                     │
+│  - nginx serves the uploads directory             │
+│  - Token-authenticated upload service (localhost) │
 │  - Token-authenticated file operations                  │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -973,19 +973,19 @@ MediSparkBD/
 
 ### Database
 - **VM MariaDB 10.6** (self-hosted on `medispark`)
-- Host: `20.219.193.182:3306`
-- Database: `bloodare_medispark`
+- Host: `<DB_HOST>:3306`
+- Database: `<DB_NAME>`
 - Non-TLS, persistent + nightly backups
 - Schema managed via SQL migrations (`src/sql/*.sql`)
 
 ### Media Storage
-- **Self-hosted VM** (`medispark.duckdns.org`)
-- nginx serves `/var/www/medispark-uploads/`
-- Token-authenticated upload service on `127.0.0.1:4021`
+- **Self-hosted media server**
+- nginx serves the uploads directory
+- Token-authenticated upload service on localhost
 - Legacy uploads table stores old binary blobs
 
 ### Authentication
-- **Firebase project**: `medisparkgo`
+- **Firebase project**: `<FIREBASE_PROJECT>`
 - Google OAuth provider configured
 - Admin SDK credentials in environment
 
@@ -997,9 +997,9 @@ MediSparkBD/
 
 **Database**
 ```
-MYSQL_HOST=20.219.193.182
+MYSQL_HOST=<DB_HOST>
 MYSQL_PORT=3306
-MYSQL_DATABASE=bloodare_medispark
+MYSQL_DATABASE=<DB_NAME>
 MYSQL_USER=<admin>
 MYSQL_PASSWORD=<secret>
 ```
@@ -1008,7 +1008,7 @@ MYSQL_PASSWORD=<secret>
 ```
 NEXT_PUBLIC_FIREBASE_API_KEY=<key>
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=<domain>
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=medisparkgo
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=<FIREBASE_PROJECT>
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=<bucket>
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=<id>
 NEXT_PUBLIC_FIREBASE_APP_ID=<id>
@@ -1017,7 +1017,7 @@ NEXT_PUBLIC_FIREBASE_VAPID_KEY=<vapid>
 
 **Firebase Admin (server-side)**
 ```
-FIREBASE_PROJECT_ID=medisparkgo
+FIREBASE_PROJECT_ID=<FIREBASE_PROJECT>
 FIREBASE_CLIENT_EMAIL=<service-account-email>
 FIREBASE_PRIVATE_KEY=<private-key>
 # OR
@@ -1027,9 +1027,9 @@ FIREBASE_SERVICE_ACCOUNT_JSON=<full-json>
 **Media Upload**
 ```
 MEDIA_UPLOAD_TOKEN=<shared-secret>
-MEDIA_FILES_BASE_URL=https://medispark.duckdns.org/medifiles
-MEDIA_UPLOAD_URL=https://medispark.duckdns.org/medifiles-upload
-MEDIA_DELETE_URL=https://medispark.duckdns.org/medifiles-delete
+MEDIA_FILES_BASE_URL=https://<MEDIA_HOST>/medifiles
+MEDIA_UPLOAD_URL=https://<MEDIA_HOST>/medifiles-upload
+MEDIA_DELETE_URL=https://<MEDIA_HOST>/medifiles-delete
 ```
 
 **Optional**
@@ -1053,7 +1053,7 @@ pnpm dev              # http://localhost:3000
 1. Create a new SQL file in `src/sql/<name>-migration.sql`
 2. Apply to VM MariaDB:
    ```bash
-   mysql -h 20.219.193.182 -u <admin> -p bloodare_medispark < src/sql/<file>.sql
+   mysql -h <DB_HOST> -u <admin> -p <DB_NAME> < src/sql/<file>.sql
    ```
 
 ### Type Checking
@@ -1149,7 +1149,7 @@ vercel --prod  # Manual deploy (usually Vercel auto-deploys)
 
 ## 🔗 Integration Points & External Services
 
-### Firebase (medisparkgo project)
+### Firebase (<FIREBASE_PROJECT> project)
 - **Google Sign-In**: `signInWithPopup()` / `signInWithRedirect()`
 - **Token Verification**: `getAuth().verifyIdToken(token)`
 - **UID is primary key**: for all student/admin lookups
@@ -1159,7 +1159,7 @@ vercel --prod  # Manual deploy (usually Vercel auto-deploys)
 - **GIPK enabled**: Invisible primary keys on tables without explicit PKs
 - **No SSH tunneling**: Direct HTTPS/TLS connection from Vercel
 
-### Media VM (medispark.duckdns.org)
+### Media VM (<MEDIA_HOST>)
 - **Upload endpoint**: POST with `X-Medifiles-Token` header
 - **Delete endpoint**: POST JSON with full URL
 - **Serve endpoint**: nginx static files at `/medifiles/`

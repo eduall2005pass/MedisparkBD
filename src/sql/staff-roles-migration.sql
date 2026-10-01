@@ -5,7 +5,7 @@
 -- Existing role_permissions rows are preserved; new defaults are inserted via
 -- src/lib/administration.ts when no override exists.
 -- Apply with:
---   mysql bloodare_medispark < src/sql/staff-roles-migration.sql
+--   mysql <DB_NAME> < src/sql/staff-roles-migration.sql
 
 -- Ensure admin_roles can store the new role values (already VARCHAR(64)).
 -- No schema change needed; this migration seeds the flexible permission matrix.

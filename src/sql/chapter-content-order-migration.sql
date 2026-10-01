@@ -11,7 +11,7 @@
 -- (position in the sorted list), so deletes can never break them.
 -- New content is appended at MAX(sort_order)+1 of its chapter.
 --
--- Apply: ssh azureuser@VM 'sudo mysql bloodare_medispark' < src/sql/chapter-content-order-migration.sql
+-- Apply: ssh azureuser@VM 'sudo mysql <DB_NAME>' < src/sql/chapter-content-order-migration.sql
 -- Safe to re-run (all statements are idempotent). The application also
 -- self-heals missing columns at runtime via ensureOrderSchema().
 
