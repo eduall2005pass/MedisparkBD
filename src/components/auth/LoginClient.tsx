@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Logo from "@/components/Logo";
@@ -54,12 +54,35 @@ export default function LoginClient() {
     } catch {}
   }, []);
 
+  // Track whether a profile load has truly completed for the current user.
+  // After sign-in, profileLoading is briefly `false` (from the prior logged-out
+  // state) before onAuthStateChanged fires loadUserData (which sets it to true).
+  // We must wait for profileLoading to go true→false (a full load cycle) before
+  // deciding whether the user needs to register — otherwise the redirect fires
+  // prematurely while profile is still null only because it hasn't been fetched.
+  const [profileLoadedOnce, setProfileLoadedOnce] = useState(false);
+  const prevProfileLoading = useRef(profileLoading);
+
+  useEffect(() => {
+    if (!user) {
+      // Reset on logout so the next sign-in waits for a fresh load.
+      setProfileLoadedOnce(false);
+      prevProfileLoading.current = profileLoading;
+      return;
+    }
+    if (prevProfileLoading.current && !profileLoading) {
+      // profileLoading went true → false: a real load finished.
+      setProfileLoadedOnce(true);
+    }
+    prevProfileLoading.current = profileLoading;
+  }, [user, profileLoading]);
+
   useEffect(() => {
     if (authLoading || !configured) return;
-    if (user && !profileLoading) {
+    if (user && profileLoadedOnce) {
       router.replace(profile ? next || "/dashboard" : registerHref);
     }
-  }, [user, profile, profileLoading, authLoading, configured, router, next, registerHref]);
+  }, [user, profile, profileLoadedOnce, authLoading, configured, router, next, registerHref]);
 
   const handleGoogleSignIn = async () => {
     if (signingIn) return;
