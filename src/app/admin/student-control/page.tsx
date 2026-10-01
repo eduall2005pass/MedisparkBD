@@ -11,6 +11,7 @@ type Student = {
   fullName?: string;
   name?: string;
   email?: string;
+  contactNumber?: string;
   isActive?: boolean;
   institution?: string;
   hscBatch?: string;
@@ -44,6 +45,7 @@ export default function StudentControlPage() {
     members: Map<string, string>;
   } | null>(null);
   const [error, setError] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -164,6 +166,99 @@ export default function StudentControlPage() {
     }
   }, [students, tab, enrolledUids, courseSlug, activeMembers]);
 
+  // Phone-number list derived from the current view (tab + course filter).
+  const phoneRows = useMemo(() => {
+    const seen = new Set<string>();
+    const rows: Array<{ name: string; phone: string; student: Student }> = [];
+    for (const student of visible) {
+      const phone = (student.contactNumber ?? "").trim();
+      if (!phone || seen.has(phone)) continue;
+      seen.add(phone);
+      rows.push({
+        name: student.fullName || student.name || student.email || student.uid,
+        phone,
+        student,
+      });
+    }
+    return rows;
+  }, [visible]);
+  const missingPhoneCount = visible.filter(
+    (student) => !(student.contactNumber ?? "").trim(),
+  ).length;
+
+  async function copyPhones() {
+    if (phoneRows.length === 0) return;
+    const text = phoneRows.map((row) => row.phone).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Clipboard API fallback (non-HTTPS / older browsers).
+      const area = document.createElement("textarea");
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand("copy");
+      document.body.removeChild(area);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
+
+  function downloadFile(filename: string, content: string, mime: string) {
+    const blob = new Blob(["\uFEFF" + content], { type: `${mime};charset=utf-8` });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  function exportTxt() {
+    downloadFile(
+      "student-phones.txt",
+      phoneRows.map((row) => row.phone).join("\n"),
+      "text/plain",
+    );
+  }
+
+  function exportCsv() {
+    const escape = (value: string) =>
+      /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+    const lines = ["Name,Phone,Student ID,Email"];
+    for (const row of phoneRows) {
+      lines.push(
+        [
+          escape(row.name),
+          escape(row.phone),
+          escape(row.student.studentId ?? ""),
+          escape(row.student.email ?? ""),
+        ].join(","),
+      );
+    }
+    downloadFile("student-phones.csv", lines.join("\n"), "text/csv");
+  }
+
+  function exportExcel() {
+    // Tab-separated .xls opens directly in MS Excel / Google Sheets — no dependency needed.
+    const escape = (value: string) =>
+      value.replace(/\t/g, " ").replace(/\r?\n/g, " ");
+    const lines = ["Name\tPhone\tStudent ID\tEmail"];
+    for (const row of phoneRows) {
+      lines.push(
+        [
+          escape(row.name),
+          escape(row.phone),
+          escape(row.student.studentId ?? ""),
+          escape(row.student.email ?? ""),
+        ].join("\t"),
+      );
+    }
+    downloadFile("student-phones.xls", lines.join("\n"), "application/vnd.ms-excel");
+  }
+
   if (authLoading || (!user && authLoading)) {
     return <AccessLoading label="Loading Student Control…" />;
   }
@@ -223,6 +318,68 @@ export default function StudentControlPage() {
           </button>
         ))}
       </div>
+
+      {/* Phone Numbers — one-click copy / TXT / CSV / Excel */}
+      {students !== null && !courseLoadingState && !error && (
+        <div className="mt-4 rounded-xl border border-[#dbeafe] bg-white shadow-sm shadow-[#0b1e3a]/5 admin-dark:border-[#1e3a65] admin-dark:bg-[#112544] px-4 py-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-extrabold text-heading">
+              Phone Numbers ({phoneRows.length})
+            </h2>
+            {missingPhoneCount > 0 && (
+              <span className="text-[11px] text-neutral-500">
+                · {missingPhoneCount} without number
+              </span>
+            )}
+            <div className="ml-auto flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void copyPhones()}
+                disabled={phoneRows.length === 0}
+                className="rounded-lg border border-blue-500/40 bg-blue-600/10 px-3 py-1.5 text-xs font-bold text-blue-400 transition hover:bg-blue-600/20 disabled:opacity-40"
+              >
+                {copied ? "Copied!" : "One-click Copy"}
+              </button>
+              <button
+                type="button"
+                onClick={exportTxt}
+                disabled={phoneRows.length === 0}
+                className="rounded-lg border border-ink/15 bg-ink/5 px-3 py-1.5 text-xs font-bold text-heading transition hover:border-primary-500/50 disabled:opacity-40"
+              >
+                TXT
+              </button>
+              <button
+                type="button"
+                onClick={exportCsv}
+                disabled={phoneRows.length === 0}
+                className="rounded-lg border border-ink/15 bg-ink/5 px-3 py-1.5 text-xs font-bold text-heading transition hover:border-primary-500/50 disabled:opacity-40"
+              >
+                CSV
+              </button>
+              <button
+                type="button"
+                onClick={exportExcel}
+                disabled={phoneRows.length === 0}
+                className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-400 transition hover:bg-emerald-500/20 disabled:opacity-40"
+              >
+                Excel
+              </button>
+            </div>
+          </div>
+          {phoneRows.length === 0 ? (
+            <p className="mt-2 text-xs text-neutral-500">
+              No phone numbers in this view.
+            </p>
+          ) : (
+            <p className="mt-2 max-h-28 overflow-y-auto rounded-lg bg-ink/5 px-3 py-2 font-mono text-xs leading-relaxed text-heading">
+              {phoneRows.map((row) => row.phone).join(", ")}
+            </p>
+          )}
+          <p className="mt-1 text-[11px] text-neutral-500">
+            Follows the current tab + course filter. Duplicates removed.
+          </p>
+        </div>
+      )}
 
       {error ? (
         <p className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
