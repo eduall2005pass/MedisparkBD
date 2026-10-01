@@ -8,12 +8,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  // Private uploads: require auth. fetchUpload exposes no bucket/visibility
-  // metadata, so there are no explicitly-public buckets to exempt.
-  const user = await getFirebaseUser(request);
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  // Public uploads: fetchUpload exposes no bucket/visibility
+  // metadata, so we rely on the UUID being unguessable (like an S3 bucket).
   const { id } = await params;
   if (!/^[0-9a-f-]{16,64}$/i.test(id)) {
     return new Response("Not found", { status: 404 });
