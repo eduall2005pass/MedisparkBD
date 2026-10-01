@@ -72,7 +72,9 @@ function toPublicExam(exam: Exam): PublicExam {
  * Pass categoryId to get ONLY one Public Exam Control category's exams
  * (SQL-level WHERE category_id = ? — same records as the Admin Panel).
  */
-export const fetchPublicExams = unstable_cache(async (options: { categoryId?: string } = {}): Promise<PublicExam[]> => {
+export async function fetchFreshPublicExams(
+  options: { categoryId?: string } = {},
+): Promise<PublicExam[]> {
   const { isPublicLiveHidden } = await import("@/lib/exam-lifecycle");
   const exams = options.categoryId
     ? await fetchPublishedPublicExams(options.categoryId)
@@ -83,7 +85,9 @@ export const fetchPublicExams = unstable_cache(async (options: { categoryId?: st
   // list (kept in DB + Admin Panel). Practice exams are never hidden by time.
   const visible = exams.filter((exam) => !isPublicLiveHidden(exam));
   return visible.map(toPublicExam);
-}, ['publicExams'], { revalidate: 600, tags: ['exams'] });
+}
+
+export const fetchPublicExams = unstable_cache(fetchFreshPublicExams, ['publicExams'], { revalidate: 600, tags: ['exams'] });
 
 /**
  * Resolve a website category URL key (ssc-academic …) to its real Public

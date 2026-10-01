@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import ExamCard from "@/components/ExamCard";
 import AutoUpdateBar from "@/components/AutoUpdateBar";
@@ -79,6 +79,21 @@ export default function PublicExamCategoryView({
   const [tab, setTab] = useState<ModeTab>("live");
   const [batch, setBatch] = useState("All Batches");
   const [subject, setSubject] = useState<string | null>(null);
+  // Server snapshot, replaced by DB-fresh data on manual/auto refresh.
+  const [freshExams, setFreshExams] = useState<PublicExam[] | null>(null);
+  const liveExams = freshExams ?? exams;
+  const refreshExams = useCallback(async () => {
+    const res = await fetch(
+      `/api/public-exams/list?category=${encodeURIComponent(categoryKey)}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) throw new Error("refresh failed");
+    const data = (await res.json()) as { exams?: PublicExam[] };
+    if (Array.isArray(data.exams)) {
+      setFreshExams(data.exams);
+      setNowMs(Date.now());
+    }
+  }, [categoryKey]);
   // Frozen at mount (+1m refresh) so the Upcoming → Live → Practice grouping
   // stays stable across re-renders. Remounted per category via `key`.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -134,12 +149,12 @@ export default function PublicExamCategoryView({
 
   const batchFiltered = useMemo(
     () =>
-      exams.filter(
+      liveExams.filter(
         (exam) =>
           exam.published &&
           (batch === "All Batches" || exam.batch === batch),
       ),
-    [exams, batch],
+    [liveExams, batch],
   );
 
   // Live Exam tab: ONLY static live-mode exams (examMode === "live";
@@ -298,7 +313,7 @@ export default function PublicExamCategoryView({
               </option>
             ))}
           </select>
-          <AutoUpdateBar />
+          <AutoUpdateBar onRefresh={refreshExams} />
         </div>
         <p className="text-sm font-medium text-neutral-400">
           {tab === "live" ? (

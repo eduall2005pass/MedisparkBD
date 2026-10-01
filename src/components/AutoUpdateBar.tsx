@@ -26,8 +26,10 @@ export default function AutoUpdateBar({
     try {
       if (onRefresh) await onRefresh();
       else router.refresh();
-    } finally {
       setLastUpdated(new Date());
+    } catch {
+      // Keep old data + timestamp on failure.
+    } finally {
       setRefreshing(false);
     }
   }, [onRefresh, router]);
