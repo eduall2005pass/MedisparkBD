@@ -48,24 +48,6 @@ export default function StudentControlPage() {
   } | null>(null);
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [groupCopied, setGroupCopied] = useState(false);
-
-  const GROUP_INVITE = "https://t.me/+4-KPFEz_qGMzNjhl";
-
-  async function copyGroupLink() {
-    try {
-      await navigator.clipboard.writeText(GROUP_INVITE);
-    } catch {
-      const area = document.createElement("textarea");
-      area.value = GROUP_INVITE;
-      document.body.appendChild(area);
-      area.select();
-      document.execCommand("copy");
-      document.body.removeChild(area);
-    }
-    setGroupCopied(true);
-    window.setTimeout(() => setGroupCopied(false), 2000);
-  }
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -421,28 +403,11 @@ export default function StudentControlPage() {
             <summary className="cursor-pointer font-bold text-sky-400">
               সবাইকে Telegram group এ add করবেন যেভাবে
             </summary>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg border border-sky-500/25 bg-sky-500/10 px-2.5 py-2">
-              <span className="font-bold text-sky-300">Group invite:</span>
-              <code className="min-w-0 flex-1 truncate font-mono text-sky-200">
-                https://t.me/+4-KPFEz_qGMzNjhl
-              </code>
-              <button
-                type="button"
-                onClick={() => void copyGroupLink()}
-                className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold text-sky-300 transition hover:bg-sky-500/20"
-              >
-                {groupCopied ? "Copied!" : "Copy"}
-              </button>
-              <a
-                href="https://t.me/+4-KPFEz_qGMzNjhl"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="rounded-lg border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold text-sky-300 transition hover:bg-sky-500/20"
-              >
-                Open ↗
-              </a>
-            </div>
             <ol className="mt-1.5 list-decimal space-y-1 pl-5">
+              <li>
+                Telegram থেকে group link copy করুন — group open করে নামে tap →
+                <span className="font-bold"> Invite Links → Copy Link</span>।
+              </li>
               <li>
                 উপরের <span className="font-bold">vCard (Telegram)</span> বাটনে সব নম্বর
                 ডাউনলোড করুন (tab + course filter অনুযায়ী)।
