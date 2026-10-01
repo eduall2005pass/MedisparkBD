@@ -72,16 +72,19 @@ export async function generateMetadata(): Promise<Metadata> {
   }
   const siteTitle = seo.siteTitle || DEFAULT_SITE_TITLE;
   const description = seo.metaDescription || DEFAULT_META_DESCRIPTION;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://medisparkbd.com";
+  // Non-canonical hosts (VM: app./vm.) must not be indexed — avoids
+  // duplicate-content penalty while Vercel stays the indexed canonical.
+  const noIndex = siteUrl.includes("app.") || siteUrl.includes("vm.");
   return {
-    metadataBase: new URL(
-      process.env.NEXT_PUBLIC_SITE_URL ?? "https://medisparkbd.com",
-    ),
+    metadataBase: new URL(siteUrl),
     title: {
       default: siteTitle,
       template: `%s | ${seo.siteTitle || "MediSpark"}`,
     },
     description,
     manifest: "/manifest.webmanifest",
+    robots: noIndex ? { index: false, follow: false } : undefined,
     themeColor: "#0b1220",
     appleWebApp: {
       capable: true,

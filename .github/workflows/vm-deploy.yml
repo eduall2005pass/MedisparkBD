@@ -1,0 +1,62 @@
+name: VM Deploy (build here, run on VM)
+
+# Build on GitHub runners (2-4GB RAM) — VM (832MB) only RUNS the prebuilt
+# standalone output, it never builds.
+# Required repo secrets: VM_HOST, VM_USER, VM_SSH_KEY (deploy target) +
+# NEXT_PUBLIC_FIREBASE_API_KEY, NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+# NEXT_PUBLIC_FIREBASE_PROJECT_ID, NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+# NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID, NEXT_PUBLIC_FIREBASE_APP_ID,
+# NEXT_PUBLIC_FIREBASE_VAPID_KEY (baked into client bundle at build time —
+# VM .env CANNOT change these later).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-ship:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build (with production client env)
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SITE_URL: https://medisparkbd.com
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_VAPID_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_VAPID_KEY }}
+      - name: Pack standalone
+        run: |
+          mkdir -p ship
+          cp -r .next/standalone/* ship/
+          mkdir -p ship/.next/static && cp -r .next/static/* ship/.next/static/
+          cp -r public ship/public
+          cp deploy/vm-ecosystem.config.cjs ship/ecosystem.config.cjs
+          tar -czf ship.tar.gz -C ship .
+      - name: Ship + restart on VM
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: ship.tar.gz
+          target: /home/${{ secrets.VM_USER }}/medispark-pkg
+      - name: Restart app
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            mkdir -p ~/medispark && tar -xzf ~/medispark-pkg/ship.tar.gz -C ~/medispark
+            cd ~/medispark && pm2 startOrRestart ecosystem.config.cjs
