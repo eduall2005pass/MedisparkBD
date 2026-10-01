@@ -151,7 +151,7 @@ export async function PUT(request: NextRequest) {
 
     // Live Website synchronization: bust cached SEO so new image appears immediately
     try {
-      revalidateTag("seo", "max");
+      revalidateTag("seo");
       revalidatePath("/", "layout");
       revalidatePath("/admin/website/seo");
       revalidatePath("/admin/website-information");
@@ -191,7 +191,7 @@ export async function DELETE(request: NextRequest) {
     const seo = await saveSeoSettings({ ...current, ogImageUrl: "" }, admin.uid);
     if (current.ogImageUrl) await removeFile(current.ogImageUrl);
     try {
-      revalidateTag("seo", "max");
+      revalidateTag("seo");
       revalidatePath("/", "layout");
       revalidatePath("/admin/website/seo");
       revalidatePath("/admin/website-information");

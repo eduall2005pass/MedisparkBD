@@ -53,9 +53,26 @@ function mapProfile(row: StudentRow): StudentProfile {
 }
 
 export async function GET(request: NextRequest) {
+  const header = request.headers.get("authorization");
+  const hasToken = header?.startsWith("Bearer ") && header.length > 10;
   const user = await getFirebaseUser(request);
-  if (!user || !isMysqlConfigured) {
+
+  if (!user) {
+    if (hasToken) {
+      // Client sent a token, but verification failed (likely missing Firebase Admin config)
+      return NextResponse.json(
+        { error: "Firebase Admin verification failed. Check FIREBASE_SERVICE_ACCOUNT_JSON env var on deployment." },
+        { status: 401 }
+      );
+    }
     return NextResponse.json({ profile: null }, { status: 200 });
+  }
+
+  if (!isMysqlConfigured) {
+    return NextResponse.json(
+      { error: "Database not configured. Check DB_HOST, DB_USER, etc. on deployment." },
+      { status: 500 }
+    );
   }
   try {
     let rows = await query<StudentRow[]>(

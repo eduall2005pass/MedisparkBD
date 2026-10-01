@@ -85,7 +85,7 @@ export async function PUT(request: NextRequest) {
       admin.uid,
     );
     try {
-      (revalidateTag as unknown as (tag: string, profile: string) => void)("navbar", "max");
+      revalidateTag("navbar");
       revalidatePath("/", "layout");
     } catch {
       // best-effort
