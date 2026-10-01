@@ -28,34 +28,33 @@ import PwaRegister from "@/components/pwa/PwaRegister";
 import { SWRConfig } from "swr";
 import "./globals.css";
 
-// Branding/settings change rarely — cache layout data for 60s so every page
-// render is fast. Admin edits appear within a minute.
-// Logo is critical for branding — use shorter cache (10s) so uploads appear immediately across devices.
-// Tags allow immediate invalidation via revalidateTag("logo") after upload.
+// Branding/settings change rarely — cache layout data long (30-60min) to
+// minimize Vercel Data Cache / ISR writes. Admin edits bust instantly via
+// revalidateTag (see /api/logo, /api/seo-settings), so long TTL is safe.
 const getCachedSeo = unstable_cache(fetchSeoSettings, ["layout-seo"], {
-  revalidate: 60,
+  revalidate: 1800,
   tags: ["seo"],
 });
 const getCachedActiveLogo = unstable_cache(getActiveLogo, ["layout-logo"], {
-  revalidate: 10,
+  revalidate: 3600,
   tags: ["logo", "layout-logo", "logo-theme"],
 });
 const getCachedThemeLogos = unstable_cache(fetchThemeLogos, ["layout-themelogos"], {
-  revalidate: 10,
+  revalidate: 3600,
   tags: ["logo", "layout-themelogos", "logo-theme"],
 });
 const getCachedWebsiteSettings = unstable_cache(
   getWebsiteSettingsWithFallback,
   ["layout-website-settings"],
-  { revalidate: 60 },
+  { revalidate: 1800 },
 );
 const getCachedNavbarConfig = unstable_cache(fetchNavbarConfig, ["layout-navbar"], {
-  revalidate: 60,
+  revalidate: 1800,
 });
 const getCachedThemeSettings = unstable_cache(
   fetchThemeSettings,
   ["layout-theme"],
-  { revalidate: 60 },
+  { revalidate: 1800 },
 );
 
 const DEFAULT_SITE_TITLE =

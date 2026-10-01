@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     "MediSpark BD — সব পরীক্ষার ফল এক জায়গায়। Student ID দিয়ে খুঁজুন, লিডারবোর্ড দেখুন, Excel ডাউনলোড করুন।",
 };
 
-export const revalidate = 60;
+export const revalidate = 300;
 
 export default function ResultPage() {
   return (

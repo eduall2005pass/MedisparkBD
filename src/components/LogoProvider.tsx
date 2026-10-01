@@ -72,12 +72,15 @@ export function LogoProvider({
     });
   }, [initialThemeLogos]);
 
+  // Explicit refresh only — called by admin LogoManager after upload/remove.
+  // No auto-refetch on mount/focus/visibility: SSR initialLogo is the source
+  // of truth (server cache busts instantly via revalidateTag on upload), so
+  // background refetching only spams /api/logo function invocations and
+  // causes logo flicker on every tab switch.
   const refresh = useCallback(async () => {
     try {
-      const response = await fetch(`/api/logo?v=${Date.now()}`, {
+      const response = await fetch(`/api/logo`, {
         cache: "no-store",
-        headers: { "Cache-Control": "no-cache" },
-        next: { revalidate: 0 } as never,
       });
       if (!response.ok) return;
       const data = (await response.json()) as {
@@ -93,21 +96,8 @@ export function LogoProvider({
     }
   }, []);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    refresh();
-    // Re-fetch when tab becomes visible so live site picks up admin changes
-    const onFocus = () => refresh();
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") refresh();
-    };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [refresh]);
+  // SSR props are the source of truth -- synced via the effects above.
+  // No background refetch here (fixes flicker + /api/logo spam on tab focus).
 
   const isCustom =
     active.fileName !== "default" || light !== null || dark !== null;

@@ -83,7 +83,7 @@ export const fetchPublicExams = unstable_cache(async (options: { categoryId?: st
   // list (kept in DB + Admin Panel). Practice exams are never hidden by time.
   const visible = exams.filter((exam) => !isPublicLiveHidden(exam));
   return visible.map(toPublicExam);
-}, ['publicExams'], { revalidate: 30, tags: ['exams'] });
+}, ['publicExams'], { revalidate: 600, tags: ['exams'] });
 
 /**
  * Resolve a website category URL key (ssc-academic …) to its real Public
@@ -134,7 +134,7 @@ async function fetchExamPageUncached(
 }
 
 const fetchExamPageCached = unstable_cache(fetchExamPageUncached, ["examPageById"], {
-  revalidate: 30,
+  revalidate: 600,
   tags: ["exams"],
 });
 
@@ -204,7 +204,7 @@ export const fetchPracticeExamCounts = unstable_cache(async (): Promise<Record<E
     // On DB errors return zero counts — cards still render.
   }
   return counts;
-}, ['practiceExamCounts'], { revalidate: 30, tags: ['exams'] });
+}, ['practiceExamCounts'], { revalidate: 600, tags: ['exams'] });
 
 /**
  * Live exam counts per Public Exam category — used by the 4 category cards
@@ -255,4 +255,4 @@ export const fetchLiveExamCounts = unstable_cache(async (): Promise<Record<ExamC
     // On DB errors return zero counts — cards still render.
   }
   return counts;
-}, ['liveExamCounts'], { revalidate: 30, tags: ['exams'] });
+}, ['liveExamCounts'], { revalidate: 600, tags: ['exams'] });

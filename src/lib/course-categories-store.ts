@@ -209,7 +209,7 @@ export const fetchActiveCourseCategories = unstable_cache(async (): Promise<Cour
   } catch {
     return DEFAULT_COURSE_CATEGORIES;
   }
-}, ['activeCourseCategories'], { revalidate: 30, tags: ['course-categories'] });
+}, ['activeCourseCategories'], { revalidate: 600, tags: ['course-categories'] });
 
 export async function createCourseCategory(input: {
   name: string;
