@@ -222,24 +222,24 @@ export default function AllStudentsPage() {
               </div>
 
               {/* 2-line info: line-1 name, line-2 number + WA/TG */}
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold text-[#0b1e3a] admin-dark:text-zinc-100">
+              <div className="w-full min-w-0 flex-1">
+                <p className="break-words text-sm font-bold leading-snug text-[#0b1e3a] admin-dark:text-zinc-100 sm:truncate">
                   {student.fullName}
                 </p>
-                <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                  <span className="min-w-0 truncate text-xs text-slate-500">
+                <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1">
+                  <span className="shrink-0 font-mono text-xs text-slate-500">
                     {student.contactNumber || student.studentId}
-                    {student.contactNumber ? (
-                      <span className="hidden text-slate-400 sm:inline">
-                        {" "}
-                        · {student.studentId}
-                      </span>
-                    ) : student.email ? (
-                      ` · ${student.email}`
-                    ) : (
-                      ""
-                    )}
                   </span>
+                  {student.contactNumber && (
+                    <span className="hidden min-w-0 truncate text-xs text-slate-400 sm:inline">
+                      · {student.studentId}
+                    </span>
+                  )}
+                  {!student.contactNumber && student.email && (
+                    <span className="min-w-0 truncate text-xs text-slate-400">
+                      · {student.email}
+                    </span>
+                  )}
                   <span className="shrink-0">
                     <StudentContactButtons phone={student.contactNumber} size="sm" />
                   </span>

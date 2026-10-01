@@ -446,51 +446,57 @@ export default function StudentControlPage() {
           {visible.map((student) => (
             <li
               key={student.uid}
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-[#dbeafe] bg-white shadow-sm shadow-[#0b1e3a]/5 admin-dark:border-[#1e3a65] admin-dark:bg-[#112544] px-4 py-3"
+              className="flex flex-col gap-3 rounded-xl border border-[#dbeafe] bg-white px-4 py-3 shadow-sm shadow-[#0b1e3a]/5 admin-dark:border-[#1e3a65] admin-dark:bg-[#112544] sm:flex-row sm:items-center"
             >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-heading">
+              {/* Left: flexible text — wraps on mobile so full names stay readable */}
+              <div className="w-full min-w-0 flex-1">
+                <p className="break-words text-sm font-semibold leading-snug text-heading sm:truncate">
                   {student.fullName || student.name || student.email || student.uid}
                 </p>
-                <p className="truncate text-[11px] text-neutral-500">
+                <p className="break-words text-[11px] leading-snug text-neutral-500 sm:truncate">
                   {[student.studentId, student.email, student.institution]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
                 {student.contactNumber?.trim() && (
-                  <p className="mt-0.5 flex items-center gap-2 text-[11px] text-neutral-500">
-                    <span className="font-mono">{student.contactNumber.trim()}</span>
-                    <StudentContactButtons phone={student.contactNumber} size="sm" />
+                  <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-neutral-500">
+                    <span className="shrink-0 font-mono">{student.contactNumber.trim()}</span>
+                    <span className="shrink-0">
+                      <StudentContactButtons phone={student.contactNumber} size="sm" />
+                    </span>
                   </p>
                 )}
               </div>
-              {courseSlug !== "" && activeMembers?.get(student.uid) && (
-                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
-                  {activeMembers.get(student.uid)}
-                </span>
-              )}
-              {courseSlug === "" && enrolledUids?.has(student.uid) && (
-                <span className="rounded-full border border-blue-500/30 bg-blue-600/10 px-2.5 py-1 text-[11px] font-bold text-blue-400">
-                  Enrolled
-                </span>
-              )}
-              <Link
-                href={`/admin/students/details/${encodeURIComponent(student.uid)}`}
-                className="rounded-lg border border-blue-500/40 bg-blue-600/10 px-3 py-1.5 text-xs font-bold text-blue-400 transition hover:bg-blue-600/20"
-              >
-                View Profile
-              </Link>
-              <button
-                type="button"
-                onClick={() => void setActive(student, student.isActive === false)}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
-                  student.isActive === false
-                    ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
-                    : "border-yellow-500/40 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20"
-                }`}
-              >
-                {student.isActive === false ? "Activate" : "Deactivate"}
-              </button>
+              {/* Right: actions stay grouped, wrap below text on mobile */}
+              <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
+                {courseSlug !== "" && activeMembers?.get(student.uid) && (
+                  <span className="shrink-0 whitespace-nowrap rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
+                    {activeMembers.get(student.uid)}
+                  </span>
+                )}
+                {courseSlug === "" && enrolledUids?.has(student.uid) && (
+                  <span className="shrink-0 whitespace-nowrap rounded-full border border-blue-500/30 bg-blue-600/10 px-2.5 py-1 text-[11px] font-bold text-blue-400">
+                    Enrolled
+                  </span>
+                )}
+                <Link
+                  href={`/admin/students/details/${encodeURIComponent(student.uid)}`}
+                  className="shrink-0 whitespace-nowrap rounded-lg border border-blue-500/40 bg-blue-600/10 px-3 py-1.5 text-xs font-bold text-blue-400 transition hover:bg-blue-600/20"
+                >
+                  View Profile
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void setActive(student, student.isActive === false)}
+                  className={`shrink-0 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
+                    student.isActive === false
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                      : "border-yellow-500/40 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20"
+                  }`}
+                >
+                  {student.isActive === false ? "Activate" : "Deactivate"}
+                </button>
+              </div>
             </li>
           ))}
         </ul>
