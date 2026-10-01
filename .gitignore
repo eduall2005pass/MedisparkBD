@@ -56,3 +56,6 @@ all.env
 
 # student phone export (PII — never commit/push)
 students-phones.txt
+
+# Agent Notes
+agent.md
