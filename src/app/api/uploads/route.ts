@@ -152,6 +152,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url });
   } catch (error) {
     console.error("Media upload failed:", error);
+    const msg = error instanceof Error ? error.message : "Upload failed.";
+    if (msg.includes("MEDIA_UPLOAD_TOKEN") || msg.includes("File exceeds")) {
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
     return NextResponse.json(
       { error: "Upload failed. Please try again." },
       { status: 500 },

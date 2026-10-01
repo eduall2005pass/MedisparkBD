@@ -108,18 +108,12 @@ export async function verifyFirebaseToken(
     return null;
   }
   if (!isFirebaseAdminConfigured) {
-    // Warn once: without server-side verification every logged-in user
-    // looks unregistered (app keeps asking them to register).
-    if (!adminMisconfigWarned) {
-      adminMisconfigWarned = true;
-      console.warn(
-        "Firebase Admin is not configured — authenticated API calls will fail." +
-          (parseError
-            ? ` FIREBASE_SERVICE_ACCOUNT_JSON is invalid (${parseError}).`
-            : " Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY."),
-      );
-    }
-    return null;
+    throw new Error(
+      "Firebase Admin is not configured. Server APIs cannot verify users. " +
+        (parseError
+          ? `FIREBASE_SERVICE_ACCOUNT_JSON is invalid: ${parseError}`
+          : "Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY."),
+    );
   }
   try {
     return await getFirebaseAdminAuth().verifyIdToken(token, true);

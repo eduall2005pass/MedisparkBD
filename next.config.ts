@@ -11,7 +11,6 @@ const nextConfig: NextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     remotePatterns: [
       { protocol: "https", hostname: "firebasestorage.googleapis.com" },
-      { protocol: "https", hostname: "medispark.duckdns.org" },
       { protocol: "https", hostname: "app.medisparkbd.com" },
     ],
     formats: ["image/avif", "image/webp"],
