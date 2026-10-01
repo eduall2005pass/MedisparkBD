@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { AccessLoading, AccessMessage } from "@/components/auth/AccessGuard";
 import { useAdminToast } from "@/components/admin/AdminToastProvider";
 import AdminConfirmDialog from "@/components/admin/AdminConfirmDialog";
+import StudentContactButtons from "@/components/admin/StudentContactButtons";
 import type { AdminStudent } from "@/lib/students-admin";
 
 type StatusFilter = "all" | "active" | "deactivated";
@@ -203,8 +204,8 @@ export default function AllStudentsPage() {
         )}
         {students?.map((student) => (
           <li key={student.uid} className={cardClass}>
-            <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
-              <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-[#f1f5f9] admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547]">
+            <div className="flex items-center gap-2.5 p-3 sm:gap-3 sm:p-5">
+              <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-neutral-200 bg-[#f1f5f9] admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] sm:h-11 sm:w-11">
                 {student.profilePictureUrl ? (
                   <Image
                     src={student.profilePictureUrl}
@@ -220,14 +221,29 @@ export default function AllStudentsPage() {
                 )}
               </div>
 
-              <div className="min-w-0 flex-1 text-left">
+              {/* 2-line info: line-1 name, line-2 number + WA/TG */}
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-[#0b1e3a] admin-dark:text-zinc-100">
                   {student.fullName}
                 </p>
-                <p className="truncate text-xs text-slate-500">
-                  {student.studentId}
-                  {student.email ? ` · ${student.email}` : ""}
-                </p>
+                <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                  <span className="min-w-0 truncate text-xs text-slate-500">
+                    {student.contactNumber || student.studentId}
+                    {student.contactNumber ? (
+                      <span className="hidden text-slate-400 sm:inline">
+                        {" "}
+                        · {student.studentId}
+                      </span>
+                    ) : student.email ? (
+                      ` · ${student.email}`
+                    ) : (
+                      ""
+                    )}
+                  </span>
+                  <span className="shrink-0">
+                    <StudentContactButtons phone={student.contactNumber} size="sm" />
+                  </span>
+                </div>
               </div>
 
               <div className="hidden text-right sm:block">
@@ -237,22 +253,25 @@ export default function AllStudentsPage() {
                 </p>
               </div>
 
-              <span
-                className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                  student.isActive
-                    ? "bg-emerald-500/10 text-emerald-600 admin-dark:text-emerald-400"
-                    : "bg-red-500/10 text-red-500 admin-dark:text-red-400"
-                }`}
-              >
-                {student.isActive ? "Active" : "Deactivated"}
-              </span>
+              <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-bold sm:px-2.5 sm:py-1 ${
+                    student.isActive
+                      ? "bg-emerald-500/10 text-emerald-600 admin-dark:text-emerald-400"
+                      : "bg-red-500/10 text-red-500 admin-dark:text-red-400"
+                  }`}
+                >
+                  {student.isActive ? "Active" : "Deactivated"}
+                </span>
 
-              <Link
-                href={`/admin/students/details/${encodeURIComponent(student.uid)}`}
-                className="shrink-0 rounded-lg border border-[#dbeafe] bg-[#eff6ff] px-3 py-1.5 text-xs font-bold text-[#1a3a78] transition hover:border-[#93c5fd] hover:bg-[#dbeafe] admin-dark:border-[#1e3a65] admin-dark:bg-[#132a4f] admin-dark:text-[#93c5fd] admin-dark:hover:border-[#2f5aa0] admin-dark:hover:bg-[#1e3a65]"
-              >
-                View Details →
-              </Link>
+                <Link
+                  href={`/admin/students/details/${encodeURIComponent(student.uid)}`}
+                  className="rounded-lg border border-[#dbeafe] bg-[#eff6ff] px-2.5 py-1.5 text-xs font-bold text-[#1a3a78] transition hover:border-[#93c5fd] hover:bg-[#dbeafe] admin-dark:border-[#1e3a65] admin-dark:bg-[#132a4f] admin-dark:text-[#93c5fd] admin-dark:hover:border-[#2f5aa0] admin-dark:hover:bg-[#1e3a65]"
+                >
+                  <span className="sm:hidden">Details</span>
+                  <span className="hidden sm:inline">View Details →</span>
+                </Link>
+              </div>
             </div>
           </li>
         ))}
