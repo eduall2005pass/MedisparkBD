@@ -36,6 +36,7 @@ jobs:
           cp -r .next/static/. ship/.next/static/
           cp -r public/. ship/public/
           cp deploy/vm-ecosystem.config.cjs ship/ecosystem.config.cjs
+          cp package-lock.json ship/package-lock.json
           tar -czf ship.tar.gz -C ship .
       - name: Ship + restart on VM
         uses: appleboy/scp-action@v0.1.7
@@ -58,6 +59,9 @@ jobs:
             tar -xzf ~/medispark-pkg/ship.tar.gz -C ~/medispark
             printf '%s\n' "$PROD_ENV" > ~/medispark/.env
             echo 'NEXT_PUBLIC_SITE_URL=https://app.medisparkbd.com' >> ~/medispark/.env
+            # Standalone trace misses server deps (firebase-admin, mysql2) —
+            # install prod deps on VM (download only, no build, low RAM safe).
+            cd ~/medispark && npm ci --omit=dev --no-audit --no-fund
             cd ~/medispark && pm2 startOrRestart ecosystem.config.cjs
         env:
           PROD_ENV: ${{ secrets.PROD_ENV }}
