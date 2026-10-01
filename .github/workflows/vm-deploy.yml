@@ -3,7 +3,7 @@ name: VM Deploy (build here, run on VM)
 # Build on GitHub runners (2-4GB RAM) — VM (832MB) only RUNS the prebuilt
 # standalone output, it never builds.
 # Required repo secrets (4 total):
-#   VM_HOST, VM_USER, VM_SSH_KEY (deploy target)
+#   VM_HOST, VM_USER, VM_PASSWORD (deploy target, password auth)
 #   PROD_ENV (multiline: paste full all.env content — all MYSQL/FIREBASE/
 #   MEDIA/NEXT_PUBLIC vars; baked at build time, VM .env CANNOT change
 #   NEXT_PUBLIC_* later).
@@ -42,7 +42,7 @@ jobs:
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          password: ${{ secrets.VM_PASSWORD }}
           source: ship.tar.gz
           target: /home/${{ secrets.VM_USER }}/medispark-pkg
       - name: Restart app
@@ -50,7 +50,7 @@ jobs:
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
+          password: ${{ secrets.VM_PASSWORD }}
           script: |
             mkdir -p ~/medispark && tar -xzf ~/medispark-pkg/ship.tar.gz -C ~/medispark
             cd ~/medispark && pm2 startOrRestart ecosystem.config.cjs
