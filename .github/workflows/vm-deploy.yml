@@ -51,6 +51,13 @@ jobs:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           password: ${{ secrets.VM_PASSWORD }}
+          envs: PROD_ENV
           script: |
-            mkdir -p ~/medispark && tar -xzf ~/medispark-pkg/ship.tar.gz -C ~/medispark
+            # Fresh dir every deploy — old standalone fully removed, no stale files.
+            rm -rf ~/medispark && mkdir -p ~/medispark
+            tar -xzf ~/medispark-pkg/ship.tar.gz -C ~/medispark
+            printf '%s\n' "$PROD_ENV" > ~/medispark/.env
+            echo 'NEXT_PUBLIC_SITE_URL=https://app.medisparkbd.com' >> ~/medispark/.env
             cd ~/medispark && pm2 startOrRestart ecosystem.config.cjs
+        env:
+          PROD_ENV: ${{ secrets.PROD_ENV }}
