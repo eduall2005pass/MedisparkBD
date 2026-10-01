@@ -46,15 +46,16 @@ const getCachedThemeLogos = unstable_cache(fetchThemeLogos, ["layout-themelogos"
 const getCachedWebsiteSettings = unstable_cache(
   getWebsiteSettingsWithFallback,
   ["layout-website-settings"],
-  { revalidate: 1800 },
+  { revalidate: 1800, tags: ["website-settings"] },
 );
 const getCachedNavbarConfig = unstable_cache(fetchNavbarConfig, ["layout-navbar"], {
   revalidate: 1800,
+  tags: ["navbar"],
 });
 const getCachedThemeSettings = unstable_cache(
   fetchThemeSettings,
   ["layout-theme"],
-  { revalidate: 1800 },
+  { revalidate: 1800, tags: ["theme"] },
 );
 
 const DEFAULT_SITE_TITLE =

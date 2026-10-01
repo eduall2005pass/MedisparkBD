@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requirePermission } from "@/lib/admin";
 import { fetchNavbarConfig, saveNavbarConfig } from "@/lib/navbar";
 import { DEFAULT_NAVBAR_ITEMS, type NavbarItem } from "@/lib/navbar-constants";
@@ -83,6 +84,12 @@ export async function PUT(request: NextRequest) {
       },
       admin.uid,
     );
+    try {
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("navbar", "max");
+      revalidatePath("/", "layout");
+    } catch {
+      // best-effort
+    }
     return NextResponse.json({ message: "Header settings saved successfully.", config });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to save header settings.";

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requirePermission } from "@/lib/admin";
 import {
   getWebsiteSettingsWithFallback,
@@ -276,6 +277,20 @@ export async function POST(request: NextRequest) {
       faviconFile,
       admin.uid,
     );
+    // Bust layout Data Cache instantly (it now has a long TTL to save ISR
+    // writes). Logo uploaded here goes through the central pipeline — bust
+    // logo tags too since this route bypasses /api/logo's own busting.
+    try {
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("website-settings", "max");
+      if (logoResult) {
+        for (const tag of ["logo", "logo-theme", "layout-logo", "layout-themelogos"]) {
+          (revalidateTag as unknown as (tag: string, profile: string) => void)(tag, "max");
+        }
+      }
+      revalidatePath("/", "layout");
+    } catch {
+      // best-effort
+    }
     return NextResponse.json({
       message: "Website settings updated successfully.",
       settings,
@@ -297,6 +312,12 @@ export async function DELETE(request: NextRequest) {
   if (target === "favicon") {
     try {
       const settings = await removeFavicon(admin.uid);
+      try {
+        (revalidateTag as unknown as (tag: string, profile: string) => void)("website-settings", "max");
+        revalidatePath("/", "layout");
+      } catch {
+        // best-effort
+      }
       return NextResponse.json({
         message: "Favicon removed.",
         settings,
