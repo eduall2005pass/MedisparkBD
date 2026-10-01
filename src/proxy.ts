@@ -5,7 +5,7 @@ const CANONICAL_HOSTS = new Set(["medisparkbd.com", "www.medisparkbd.com"]);
 // Any non-canonical host (app subdomain, previews, alternate domains) gets
 // X-Robots-Tag: noindex so Google never indexes duplicates.
 // Vercel (medisparkbd.com) stays indexed.
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const res = NextResponse.next();
   const host = req.headers.get("host")?.split(":")[0] ?? "";
   if (host && !CANONICAL_HOSTS.has(host)) {

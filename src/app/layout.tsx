@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Navbar from "@/components/Navbar";
 import BottomNav from "@/components/BottomNav";
 import Footer from "@/components/Footer";
@@ -63,6 +63,10 @@ const DEFAULT_SITE_TITLE =
 const DEFAULT_META_DESCRIPTION =
   "MediSpark is an HSC academic and medical admission preparation platform — courses, exams, and Q&A built for future medical students.";
 
+export const viewport: Viewport = {
+  themeColor: "#0b1220",
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   let seo = DEFAULT_SEO_SETTINGS;
   try {
@@ -85,7 +89,6 @@ export async function generateMetadata(): Promise<Metadata> {
     description,
     manifest: "/manifest.webmanifest",
     robots: noIndex ? { index: false, follow: false } : undefined,
-    themeColor: "#0b1220",
     appleWebApp: {
       capable: true,
       title: "MediSpark",
