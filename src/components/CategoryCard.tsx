@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 type CategoryCardProps = {
@@ -37,43 +37,45 @@ export default function CategoryCard({
 }: CategoryCardProps) {
   const [count, setCount] = useState<number | null>(initialCount ?? null);
 
+  const load = useCallback(async () => {
+    if (!categoryId && !categorySlug) return;
+    try {
+      const res = await fetch("/api/courses/category-counts", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        counts: Record<string, number>;
+        slugCounts: Record<string, number>;
+      };
+      let next: number | null = null;
+      if (categoryId && data.counts && data.counts[categoryId] !== undefined) {
+        next = data.counts[categoryId];
+      } else if (categorySlug && data.slugCounts && data.slugCounts[categorySlug.toLowerCase()] !== undefined) {
+        next = data.slugCounts[categorySlug.toLowerCase()];
+      } else if (categorySlug && data.slugCounts) {
+        // Fallback: try prefix match (e.g. "ssc" matches "ssc-academic")
+        const key = Object.keys(data.slugCounts).find((k) =>
+          categorySlug.toLowerCase().includes(k) || k.includes(categorySlug.toLowerCase()),
+        );
+        if (key) next = data.slugCounts[key];
+      }
+      if (next !== null) setCount(next);
+    } catch {
+      // Keep previous count on error.
+    }
+  }, [categoryId, categorySlug]);
+
   useEffect(() => {
     // If no category identifiers, nothing to fetch (e.g. static fallback cards).
     if (!categoryId && !categorySlug) return;
-    let cancelled = false;
-    async function load() {
-      try {
-        const res = await fetch("/api/courses/category-counts", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          counts: Record<string, number>;
-          slugCounts: Record<string, number>;
-        };
-        if (cancelled) return;
-        let next: number | null = null;
-        if (categoryId && data.counts && data.counts[categoryId] !== undefined) {
-          next = data.counts[categoryId];
-        } else if (categorySlug && data.slugCounts && data.slugCounts[categorySlug.toLowerCase()] !== undefined) {
-          next = data.slugCounts[categorySlug.toLowerCase()];
-        } else if (categorySlug && data.slugCounts) {
-          // Fallback: try prefix match (e.g. "ssc" matches "ssc-academic")
-          const key = Object.keys(data.slugCounts).find((k) =>
-            categorySlug.toLowerCase().includes(k) || k.includes(categorySlug.toLowerCase()),
-          );
-          if (key) next = data.slugCounts[key];
-        }
-        if (next !== null) setCount(next);
-      } catch {
-        // Keep previous count on error.
-      }
-    }
-    load();
-    const id = setInterval(load, 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
+    void load();
+    // No background polling at all — SSR initialCount + this mount fetch +
+    // refetch below on tab-focus is enough (counts change only on admin edit).
+    const onFocus = () => {
+      if (document.visibilityState === "visible") void load();
     };
-  }, [categoryId, categorySlug]);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [categoryId, categorySlug, load]);
 
   return (
     <Link

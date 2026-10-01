@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 /**
  * Compact auto-update pill — sits beside filter dropdowns (exam category
@@ -36,9 +37,10 @@ export default function AutoUpdateBar({
 
   useEffect(() => {
     setLastUpdated(new Date());
-    const id = setInterval(() => void doRefresh(), refreshMs);
-    return () => clearInterval(id);
-  }, [doRefresh, refreshMs]);
+  }, []);
+
+  // Visible tabs only — background tabs cost zero invocations.
+  useVisibleInterval(doRefresh, refreshMs);
 
   return (
     <div className="flex max-w-full items-center gap-2 rounded-full border border-primary-500/25 bg-primary-600/10 py-1.5 pl-3 pr-1.5">

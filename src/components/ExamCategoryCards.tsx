@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import ContextCard from "./ContextCard";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 import type { ExamCategory } from "@/lib/public-exams";
 
 function BookIcon() {
@@ -140,9 +141,10 @@ export default function ExamCategoryCards({
 
   useEffect(() => {
     void load();
-    const id = setInterval(() => void load(), AUTO_REFRESH_MS);
-    return () => clearInterval(id);
   }, [load]);
+
+  // Visible tabs only — background tabs cost zero invocations.
+  useVisibleInterval(load, AUTO_REFRESH_MS);
 
   return (
     <section className="mx-auto max-w-6xl px-4 py-4 sm:px-6">

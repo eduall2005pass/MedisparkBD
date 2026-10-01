@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
@@ -8,6 +8,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { loginHref } from "@/lib/nav-links";
 import { useAuth } from "@/lib/auth-context";
 import { useExamLock } from "@/components/exam/ExamLockContext";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 import {
   DEFAULT_NAVBAR_CONFIG,
   NAVBAR_SECTION_FALLBACKS,
@@ -60,26 +61,31 @@ export default function Navbar({ config }: { config?: NavbarConfig }) {
   }, []);
 
   const userUid = user?.uid ?? null;
+  const loadUnread = useCallback(async () => {
+    if (!user) return;
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/notifications?count=1", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const data = (await response.json().catch(() => null)) as {
+        unreadCount?: unknown;
+      } | null;
+      const count = Number(data?.unreadCount ?? 0) || 0;
+      setUnreadCount(count);
+    } catch {
+      // Keep the last known state — never flash a stale dot on errors.
+    }
+  }, [user]);
+
+  // Visible-tab only, every 10 min — notification dot stays fresh
+  // via the instant read-event + focus refetch below anyway.
+  useVisibleInterval(loadUnread, userUid ? 10 * 60 * 1000 : 0);
+
   useEffect(() => {
     if (!userUid || !user) return;
-    let cancelled = false;
-    async function loadUnread() {
-      try {
-        const token = await user!.getIdToken();
-        const response = await fetch("/api/notifications?count=1", {
-          headers: { Authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        if (!response.ok) return;
-        const data = (await response.json().catch(() => null)) as {
-          unreadCount?: unknown;
-        } | null;
-        const count = Number(data?.unreadCount ?? 0) || 0;
-        if (!cancelled) setUnreadCount(count);
-      } catch {
-        // Keep the last known state — never flash a stale dot on errors.
-      }
-    }
     void loadUnread();
     const onRead = (event: Event) => {
       const detail = (event as CustomEvent<{ unreadCount?: unknown }>).detail;
@@ -89,15 +95,14 @@ export default function Navbar({ config }: { config?: NavbarConfig }) {
         void loadUnread();
       }
     };
-    const onFocus = () => void loadUnread();
+    const onFocus = () => {
+      if (document.visibilityState === "visible") void loadUnread();
+    };
     window.addEventListener("medispark:notifications-read", onRead as EventListener);
     window.addEventListener("focus", onFocus);
-    const timer = window.setInterval(loadUnread, 60_000);
     return () => {
-      cancelled = true;
       window.removeEventListener("medispark:notifications-read", onRead as EventListener);
       window.removeEventListener("focus", onFocus);
-      window.clearInterval(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- user is stable per uid; refetch on account switch only
   }, [userUid]);

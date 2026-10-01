@@ -78,6 +78,38 @@ Manual costs/income, monthly + summary aggregates, audit trail, CSV export —
 all gated by `manageSystem`/`manageCourses`, 401 (unauthenticated) vs 403
 (no permission) split, soft deletes.
 
+### Student direct contact (Student Control)
+- Per-student WhatsApp (`wa.me`) + Telegram (`t.me/+`) deep-link buttons —
+BD numbers auto-normalized (`01…`/`+880…` → `880…`), greeting prefilled
+(`src/lib/student-contact.ts`, `src/components/admin/StudentContactButtons.tsx`).
+- Bulk Telegram onboarding: **vCard (`.vcf`) export** of the current view
+(tab + course filter, deduped) → import into phone contacts → Telegram
+contact-sync → group **Add Members**. The panel includes a Bangla step-by-step
+guide; group invite links are copied from Telegram itself (never hardcoded).
+
+## Vercel usage optimization (200K quota, ~100 students)
+
+Two cost types: **global/shared** (ISR/Data-Cache writes — same for 10 or 1000
+users) vs **per-tab** (function invocations — multiplies per open tab).
+All client polling follows one rule: **visible tabs only**
+(`src/lib/use-visible-interval.ts` — hidden tabs cost zero).
+
+| Area | Policy |
+|---|---|
+| Layout caches (logo 3600s, seo/settings/navbar/theme 1800s) | Long TTL + instant `revalidateTag` on admin save (`/api/logo`, `/api/seo-settings`, `/api/website-settings`, `/api/navbar-settings`, `/api/theme-settings`) |
+| Exam/category caches (`publicExams`, counts, categories) | 600s TTL, tag-busted on admin save |
+| Pages (`/`, `/exam`, category, `/result`) | `revalidate = 300` |
+| Homepage course cards | No polling — SSR count + mount fetch + tab-focus refetch |
+| Navbar unread dot | 10-min visible-only poll + instant read-event/focus refetch |
+| Result board | 5-min visible-only silent refresh + manual button (DB-direct, `no-store` both sides) |
+| Exam category pages | 10-min visible-only refresh via DB-direct `/api/public-exams/list` (`NO_CACHE`), filters/tabs preserved |
+| `LogoProvider` | No mount/focus auto-refetch (SSR props are truth); `refresh()` only after admin upload, with edge cache-buster |
+
+Budget math (100 students × 2 hr/day × 30 days = 6000 tab-hours):
+polling ≈ 50–60K invocations/month, leaving ~140K headroom for page
+views/API calls inside a 200K quota. Exam-day spikes are normal (average
+is what matters). Watch **Vercel → Usage → Function Invocations**.
+
 ## Repository / deploy flow
 
 - Single repo: `medisparkbd/MediSparkBD` — every push to `main` auto-deploys to Vercel (when linked) and runs against VM MariaDB `20.219.193.182:3306` (persistent, see `deploy/vm-mysql-migration.md`) + medispark.duckdns.org.

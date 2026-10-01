@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useVisibleInterval } from "@/lib/use-visible-interval";
 
 type BoardRow = {
   resultId: number;
@@ -176,13 +177,9 @@ export default function ResultBoard() {
     void load();
   }, [load]);
 
-  // Auto refresh every 5 minutes (silent — keeps filters & page intact).
-  useEffect(() => {
-    const id = setInterval(() => {
-      void load({ silent: true });
-    }, AUTO_REFRESH_MS);
-    return () => clearInterval(id);
-  }, [load]);
+  // Auto refresh every 5 minutes, visible tabs only (background tabs cost zero).
+  const silentReload = useCallback(() => void load({ silent: true }), [load]);
+  useVisibleInterval(silentReload, AUTO_REFRESH_MS);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
