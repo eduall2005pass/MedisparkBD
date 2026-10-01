@@ -201,7 +201,7 @@ async function probeStorage(): Promise<{
 }> {
   const base =
     process.env.MEDIA_FILES_BASE_URL ??
-    "https://medispark.duckdns.org/medifiles";
+    "https://app.medisparkbd.com/medifiles";
   try {
     const url = new URL(base);
     const started = Date.now();

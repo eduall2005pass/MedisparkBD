@@ -30,7 +30,7 @@ export default function Logo({ size = "default" }: { size?: "default" | "large" 
       ? `${active.url}${active.url.includes("?") ? "&" : "?"}v=${active.updatedAt}`
       : active.url;
 
-  const isMedifiles = displayUrl.includes("medispark.duckdns.org/medifiles");
+  const isMedifiles = displayUrl.includes("app.medisparkbd.com/medifiles");
   return (
     <span
       className="inline-flex select-none items-center"

@@ -163,7 +163,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <link rel="icon" href={initialSettings.faviconUrl} />
         )}
         {/* First-load performance: resource hints */}
-        <link rel="preconnect" href="https://medispark.duckdns.org" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://app.medisparkbd.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com" />
         <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
       </head>

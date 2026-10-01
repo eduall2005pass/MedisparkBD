@@ -11,11 +11,11 @@ import sharp from "sharp";
 export const UPLOADS_BASE_URL = "/api/files";
 
 const MEDIA_FILES_BASE_URL =
-  process.env.MEDIA_FILES_BASE_URL ?? "https://medispark.duckdns.org/medifiles";
+  process.env.MEDIA_FILES_BASE_URL ?? "https://app.medisparkbd.com/medifiles";
 const MEDIA_UPLOAD_URL =
-  process.env.MEDIA_UPLOAD_URL ?? "https://medispark.duckdns.org/medifiles-upload";
+  process.env.MEDIA_UPLOAD_URL ?? "https://app.medisparkbd.com/medifiles-upload";
 const MEDIA_DELETE_URL =
-  process.env.MEDIA_DELETE_URL ?? "https://medispark.duckdns.org/medifiles-delete";
+  process.env.MEDIA_DELETE_URL ?? "https://app.medisparkbd.com/medifiles-delete";
 
 function mediaToken(): string {
   const token = (process.env.MEDIA_UPLOAD_TOKEN ?? "").trim();

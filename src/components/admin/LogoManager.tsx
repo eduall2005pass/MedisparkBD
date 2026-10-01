@@ -228,7 +228,7 @@ function VariantManager({
             unoptimized={
               current.url.startsWith("/api/files/") ||
               current.url.startsWith("/uploads/") ||
-              current.url.includes("medispark.duckdns.org/medifiles") ||
+              current.url.includes("app.medisparkbd.com/medifiles") ||
               current.fileName.toLowerCase().endsWith(".svg")
             }
             className="max-h-32 w-auto object-contain"
@@ -418,7 +418,7 @@ function SharedLogoInfo() {
           unoptimized={
             logo.url.startsWith("/api/files/") ||
             logo.url.startsWith("/uploads/") ||
-            logo.url.includes("medispark.duckdns.org/medifiles") ||
+            logo.url.includes("app.medisparkbd.com/medifiles") ||
             logo.fileName.toLowerCase().endsWith(".svg")
           }
           className="max-h-24 w-auto object-contain"
