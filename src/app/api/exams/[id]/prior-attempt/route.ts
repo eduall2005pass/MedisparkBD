@@ -27,6 +27,32 @@ export async function GET(
 
   const hasPrior = await hasPriorExamAttempt(id, user.uid);
 
+  // Practice retake allowed? (mirrors startExamAttempt exemptions)
+  // Post-live / enrolled-archived / static-practice exams may be retaken
+  // unlimited times as unranked practice — the rules gate must offer that
+  // path instead of a dead-end "already appeared" wall.
+  let canPracticeRetake = false;
+  try {
+    const { fetchExamById } = await import("@/lib/exams-admin");
+    const adminExam = await fetchExamById(id);
+    if (adminExam) {
+      if (adminExam.kind === "enrolled") {
+        const { getEnrolledExamPhase, isEnrolledPracticePhase } = await import(
+          "@/lib/enrolled-exam-lifecycle"
+        );
+        canPracticeRetake = isEnrolledPracticePhase(getEnrolledExamPhase(adminExam));
+      } else {
+        const { isPublicPracticeExam, isPublicPostLivePractice } = await import(
+          "@/lib/exam-lifecycle"
+        );
+        canPracticeRetake =
+          isPublicPracticeExam(adminExam) || isPublicPostLivePractice(adminExam);
+      }
+    }
+  } catch {
+    // Best-effort — default stays false (strict one-attempt wall).
+  }
+
   return NextResponse.json({
     exam: {
       id: exam.id,
@@ -52,5 +78,6 @@ export async function GET(
       secondTimerDeduction: exam.secondTimerDeduction,
     },
     hasPriorAttempt: hasPrior,
+    canPracticeRetake,
   });
 }

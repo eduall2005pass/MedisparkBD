@@ -28,6 +28,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
   const [secondTimerEnabled, setSecondTimerEnabled] = useState(false);
   const [secondTimerDeduction, setSecondTimerDeduction] = useState<number>(3);
   const [alreadyAttempted, setAlreadyAttempted] = useState(false);
+  const [canPracticeRetake, setCanPracticeRetake] = useState(false);
   // Question Version — student must pick Bangla or English before starting.
   // Locked after Agree & Continue; cannot be switched during the exam.
   const [questionVersion, setQuestionVersion] = useState<"bangla" | "english" | null>(null);
@@ -89,9 +90,10 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           cache: "no-store",
         });
-        const priorData = (await priorRes.json().catch(() => null)) as { hasPriorAttempt?: boolean } | null;
+        const priorData = (await priorRes.json().catch(() => null)) as { hasPriorAttempt?: boolean; canPracticeRetake?: boolean } | null;
         if (!cancelled && priorRes.ok && priorData?.hasPriorAttempt) {
           setAlreadyAttempted(true);
+          setCanPracticeRetake(Boolean(priorData?.canPracticeRetake));
         }
       } catch {
         // ignore prior check failure
@@ -253,10 +255,29 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
       {!loading && !error && alreadyAttempted && (
         <div className="mt-6 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center">
           <p className="font-extrabold text-emerald-300">You have already appeared in this exam.</p>
-          <p className="mt-1 text-sm leading-relaxed text-neutral-400">
-            You have already appeared in this exam. You cannot start it again — view your existing result.
-          </p>
+          {canPracticeRetake ? (
+            <p className="mx-auto mt-2 max-w-md rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-xs font-semibold leading-relaxed text-violet-300">
+              Practice mode — যতবার খুশি আবার দিতে পারবে। Practice attempt leaderboard বা merit
+              position-এ কোনো effect ফেলবে না।
+            </p>
+          ) : (
+            <p className="mt-1 text-sm leading-relaxed text-neutral-400">
+              You have already appeared in this exam. You cannot start it again — view your existing result.
+            </p>
+          )}
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            {canPracticeRetake && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAgreed(false);
+                  setAlreadyAttempted(false);
+                }}
+                className="rounded-xl bg-violet-600 px-6 py-3 text-sm font-extrabold text-white shadow-lg shadow-violet-900/30 transition hover:bg-violet-700 active:scale-[0.98]"
+              >
+                Practice Again →
+              </button>
+            )}
             <button
               type="button"
               onClick={() => router.push(`/exam/${examId}/result`)}
