@@ -58,10 +58,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ profile: null }, { status: 200 });
   }
   try {
-    const rows = await query<StudentRow[]>(
+    let rows = await query<StudentRow[]>(
       "SELECT * FROM students WHERE uid = ? LIMIT 1",
       [user.uid],
     );
+
+    // Fallback: If UID doesn't match, check if they exist by email (e.g., from a different Firebase project)
+    if (rows.length === 0 && user.email) {
+      rows = await query<StudentRow[]>(
+        "SELECT * FROM students WHERE email = ? LIMIT 1",
+        [user.email],
+      );
+
+      // Auto-link their existing account to their new Firebase UID
+      if (rows.length > 0) {
+        await exec("UPDATE students SET uid = ? WHERE email = ?", [
+          user.uid,
+          user.email,
+        ]);
+        rows[0].uid = user.uid;
+      }
+    }
+
     const data = rows[0];
     return NextResponse.json({
       profile: data ? mapProfile(data) : null,
