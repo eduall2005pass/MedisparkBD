@@ -140,6 +140,10 @@ export default function ExamParticipationArea({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [exam, setExam] = useState<TakingExam | null>(null);
   const [questions, setQuestions] = useState<TakingQuestion[]>([]);
+  // Active question rows in the DB (pre-strip). Stays > 0 even when the
+  // preview gate strips question content — so a stripped preview never
+  // looks like a question-less exam. Null = not loaded yet.
+  const [totalQuestionCount, setTotalQuestionCount] = useState<number | null>(null);
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -418,6 +422,7 @@ export default function ExamParticipationArea({
         expiresAt?: string | null;
         serverNow?: string | null;
         storedAnswers?: Record<string, number> | null;
+        totalQuestionCount?: number | null;
         error?: string;
       };
       if (!response.ok) {
@@ -434,6 +439,9 @@ export default function ExamParticipationArea({
       // assigned Version/Set questions in randomized display order.
       if (Array.isArray(data.questions) && data.questions.length > 0) {
         setQuestions(data.questions);
+      }
+      if (typeof data.totalQuestionCount === "number") {
+        setTotalQuestionCount(data.totalQuestionCount);
       }
       if (data.questionVersion === "bangla" || data.questionVersion === "english") {
         setQuestionVersion(data.questionVersion);
@@ -487,6 +495,7 @@ export default function ExamParticipationArea({
           storedAnswers?: Record<string, number> | null;
           questionVersion?: "bangla" | "english" | null;
           abandonedOutcome?: SubmissionOutcome | null;
+          totalQuestionCount?: number | null;
           error?: string;
         };
         if (cancelled) return;
@@ -507,6 +516,9 @@ export default function ExamParticipationArea({
         }
         setExam(data.exam);
         setQuestions(data.questions ?? []);
+        if (typeof data.totalQuestionCount === "number") {
+          setTotalQuestionCount(data.totalQuestionCount);
+        }
         // Resume: an active attempt already exists (refresh / reopened tab /
         // reconnected). Restore it directly — same expires_at, same answers.
         // Skipped when autoBegin will start-or-resume below (it hydrates too).
@@ -533,10 +545,11 @@ export default function ExamParticipationArea({
         // Strict one-attempt: check if already has completed attempt for this public exam.
         // Post-live Practice phase is exempt — past the End Time every attempt
         // is an unranked practice attempt, so prior live attempts never block
-        // starting practice.
+        // starting practice. Same for enrolled-archived and static-practice
+        // exams (server allows unlimited practice retakes for both).
         try {
-          const priorData = (await priorRes.json().catch(() => ({}))) as { hasPriorAttempt?: boolean };
-          if (!cancelled && priorRes.ok && priorData.hasPriorAttempt && !data.exam.isPostLivePractice) {
+          const priorData = (await priorRes.json().catch(() => ({}))) as { hasPriorAttempt?: boolean; canPracticeRetake?: boolean };
+          if (!cancelled && priorRes.ok && priorData.hasPriorAttempt && !data.exam.isPostLivePractice && !priorData.canPracticeRetake) {
             // Already appeared — fetch existing result and show View Result instead of Start Exam
             setAlreadyAttempted(true);
             try {
@@ -568,7 +581,9 @@ export default function ExamParticipationArea({
         }
         // "Start Now" flow: rules were already accepted on the exam card,
         // so begin the attempt right away without showing them again.
-        if (autoBegin && (data.questions?.length ?? 0) > 0) {
+        // totalQuestionCount covers stripped previews — start fetches the
+        // real locked questions, so don't require preview content here.
+        if (autoBegin && ((data.questions?.length ?? 0) > 0 || (data.totalQuestionCount ?? 0) > 0)) {
           try {
             const authToken = await user.getIdToken();
             const startVersion = versionFromUrl ?? "bangla";
@@ -583,7 +598,7 @@ export default function ExamParticipationArea({
             );
             const startData = (await startResponse
               .json()
-              .catch(() => ({}))) as { sessionToken?: string | null; secondsLeft?: number | null; questions?: TakingQuestion[]; questionVersion?: "bangla" | "english" | null; expiresAt?: string | null; serverNow?: string | null; storedAnswers?: Record<string, number> | null; abandonedOutcome?: SubmissionOutcome | null; error?: string; alreadyAttempted?: boolean };
+              .catch(() => ({}))) as { sessionToken?: string | null; secondsLeft?: number | null; questions?: TakingQuestion[]; questionVersion?: "bangla" | "english" | null; expiresAt?: string | null; serverNow?: string | null; storedAnswers?: Record<string, number> | null; abandonedOutcome?: SubmissionOutcome | null; totalQuestionCount?: number | null; error?: string; alreadyAttempted?: boolean };
             if (cancelled) return;
             if (startData.abandonedOutcome && "score" in startData.abandonedOutcome) {
               submittedRef.current = true;
@@ -595,6 +610,9 @@ export default function ExamParticipationArea({
               // Locked server order replaces the preview list.
               if (Array.isArray(startData.questions) && startData.questions.length > 0) {
                 if (!cancelled) setQuestions(startData.questions);
+              }
+              if (typeof startData.totalQuestionCount === "number" && !cancelled) {
+                setTotalQuestionCount(startData.totalQuestionCount);
               }
               if (startData.questionVersion === "bangla" || startData.questionVersion === "english") {
                 if (!cancelled) setQuestionVersion(startData.questionVersion);
@@ -1257,8 +1275,10 @@ export default function ExamParticipationArea({
   }
 
   /* ── Exam Rules gate ─────────────────────────────────────────────────── */
+  // totalQuestionCount covers stripped previews: start fetches the locked
+  // questions, so the gate must show even when preview content was withheld.
 
-  if (exam && !begun && questions.length > 0) {
+  if (exam && !begun && (questions.length > 0 || (totalQuestionCount ?? 1) > 0)) {
     return (
       <div className="rounded-2xl border border-primary-600/30 bg-dark-900 p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1345,7 +1365,10 @@ export default function ExamParticipationArea({
     );
   }
 
-  if (!exam || questions.length === 0) {
+  // Truly question-less only when the server confirms zero active rows —
+  // a stripped preview (totalQuestionCount > 0) falls through to the begin
+  // gate above instead of this dead end.
+  if (!exam || (questions.length === 0 && totalQuestionCount === 0)) {
     return (
       <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-6 text-center">
         <p className="font-semibold text-yellow-300">

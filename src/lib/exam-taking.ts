@@ -1415,6 +1415,9 @@ export async function getExamForTaking(
   attemptStatus?: string | null;
   /** Previously saved answers keyed by questionId — restored on refresh. */
   storedAnswers?: Record<string, number>;
+  /** Active question rows in the DB (pre-strip). Lets the client tell a
+   *  stripped preview apart from a genuinely question-less exam. */
+  totalQuestionCount: number;
 } | null> {
   // Direct ID lookup — never via cached fetchExams list. Ensures the exact
   // published exam selected on Live Website is resolved, with no stale cache
@@ -1710,6 +1713,7 @@ export async function getExamForTaking(
     serverNow,
     attemptStatus,
     storedAnswers,
+    totalQuestionCount: baseRows.length,
   };
 }
 
