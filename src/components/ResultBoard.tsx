@@ -78,7 +78,10 @@ export default function ResultBoard() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [page, setPage] = useState(1);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const limit = 20;
+  const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
   // Searchable exam dropdown.
   const [examOpen, setExamOpen] = useState(false);
   const [examSearch, setExamSearch] = useState("");
@@ -136,8 +139,10 @@ export default function ResultBoard() {
     })();
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
     setLoadError(null);
     try {
       const sp = new URLSearchParams({
@@ -154,17 +159,29 @@ export default function ResultBoard() {
       };
       setRows(Array.isArray(data.results) ? data.results : []);
       setTotal(Number(data.total) || 0);
+      setLastUpdated(new Date());
     } catch {
-      setRows([]);
-      setTotal(0);
+      if (!silent) {
+        setRows([]);
+        setTotal(0);
+      }
       setLoadError("Could not load results. Please retry.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+      setRefreshing(false);
     }
   }, [examId, debouncedQ, page]);
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  // Auto refresh every 5 minutes (silent — keeps filters & page intact).
+  useEffect(() => {
+    const id = setInterval(() => {
+      void load({ silent: true });
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
   }, [load]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -288,6 +305,40 @@ export default function ResultBoard() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Live status */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary-500/25 bg-gradient-to-r from-primary-600/10 to-transparent px-4 py-2.5">
+        <div className="flex items-center gap-2.5">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+          </span>
+          <p className="text-xs font-semibold text-neutral-300">
+            {refreshing ? (
+              <span className="text-emerald-400">আপডেট হচ্ছে…</span>
+            ) : (
+              <>
+                অটো-আপডেট{" "}
+                <span className="font-bold text-emerald-400">৫ মিনিট পর পর</span>
+              </>
+            )}
+            {lastUpdated && (
+              <span className="ml-2 font-normal text-neutral-500">
+                · সর্বশেষ: {lastUpdated.toLocaleTimeString("en-GB", { timeZone: "Asia/Dhaka", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load({ silent: true })}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-ink/5 px-3 py-1.5 text-xs font-bold text-neutral-300 transition hover:border-primary-500/50 hover:text-primary-400 disabled:opacity-50"
+        >
+          <span className={refreshing ? "animate-spin" : ""}>⟳</span>
+          এখনই রিফ্রেশ
+        </button>
       </div>
 
       {/* Table */}
