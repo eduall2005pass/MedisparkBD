@@ -108,13 +108,11 @@ export default function ExamCategoryCards({
     "medical-admission": initialPracticeCounts?.["medical-admission"] ?? null,
     "varsity-admission": initialPracticeCounts?.["varsity-admission"] ?? null,
   });
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  // Exam page counts auto-refresh every 10 minutes.
+  // Counts stay fresh silently in the background (no status UI on this page —
+  // the auto-update pill lives on the exam category pages beside the batch filter).
   const AUTO_REFRESH_MS = 10 * 60 * 1000;
 
-  const load = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setRefreshing(true);
+  const load = useCallback(async () => {
     try {
       const res = await fetch("/api/public-exams/live-counts", { cache: "no-store" });
       if (!res.ok) return;
@@ -135,16 +133,13 @@ export default function ExamCategoryCards({
           "varsity-admission": data.practiceCounts["varsity-admission"] ?? 0,
         });
       }
-      setLastUpdated(new Date());
     } catch {
       // Keep previous counts on error.
-    } finally {
-      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    void load({ silent: true });
+    void load();
     const id = setInterval(() => void load(), AUTO_REFRESH_MS);
     return () => clearInterval(id);
   }, [load]);
@@ -155,45 +150,6 @@ export default function ExamCategoryCards({
         title="Explore Public Exams"
         instruction="তোমার পছন্দের পরীক্ষার ক্যাটাগরি নির্বাচন করো"
       />
-
-      {/* Live auto-update status */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary-500/25 bg-gradient-to-r from-primary-600/10 to-transparent px-4 py-2.5">
-        <div className="flex items-center gap-2.5">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          </span>
-          <p className="text-xs font-semibold text-neutral-300">
-            {refreshing ? (
-              <span className="text-emerald-400">আপডেট হচ্ছে…</span>
-            ) : (
-              <>
-                অটো-আপডেট{" "}
-                <span className="font-bold text-emerald-400">১০ মিনিট পর পর</span>
-              </>
-            )}
-            {lastUpdated && (
-              <span className="ml-2 font-normal text-neutral-500">
-                · সর্বশেষ:{" "}
-                {lastUpdated.toLocaleTimeString("en-GB", {
-                  timeZone: "Asia/Dhaka",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            )}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          disabled={refreshing}
-          className="flex items-center gap-1.5 rounded-lg border border-ink/10 bg-ink/5 px-3 py-1.5 text-xs font-bold text-neutral-300 transition hover:border-primary-500/50 hover:text-primary-400 disabled:opacity-50"
-        >
-          <span className={refreshing ? "animate-spin" : ""}>⟳</span>
-          এখনই রিফ্রেশ
-        </button>
-      </div>
 
       {/* 4 cards — same grid as Course Section: gap-6 sm:grid-cols-2 xl:grid-cols-4 */}
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">

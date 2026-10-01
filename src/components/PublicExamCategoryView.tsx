@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import ExamCard from "@/components/ExamCard";
+import AutoUpdateBar from "@/components/AutoUpdateBar";
 import {
   distinctSubjects,
   getPublicLivePhase,
@@ -282,19 +283,23 @@ export default function PublicExamCategoryView({
       </div>
 
       <div className="mb-6 mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <select
-          aria-label="Filter by batch"
-          value={batch}
-          onChange={(event) => setBatch(event.target.value)}
-          className={selectClass}
-        >
-          <option value="All Batches">All Batches</option>
-          {batches.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
+        {/* Batch filter + auto-update pill — side-by-side, wraps on mobile */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <select
+            aria-label="Filter by batch"
+            value={batch}
+            onChange={(event) => setBatch(event.target.value)}
+            className={selectClass}
+          >
+            <option value="All Batches">All Batches</option>
+            {batches.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <AutoUpdateBar />
+        </div>
         <p className="text-sm font-medium text-neutral-400">
           {tab === "live" ? (
             <>
