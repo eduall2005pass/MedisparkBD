@@ -270,7 +270,7 @@ function courseItemToPublicExam(item: Flow5ExamItem): PublicExam {
     endsAt: item.endsAt,
     examDate: toDhakaDateKey(scheduledIso),
     examTime: "",
-    status: item.phase === "upcoming" ? "Upcoming" : item.phase === "live" ? "Live" : item.phase === "practice" ? "Archived" : "Expired",
+    status: item.phase === "upcoming" ? "Upcoming" : item.phase === "live" || item.phase === "no-window" ? "Live" : item.phase === "practice" || item.phase === "archived" ? "Archived" : "Expired",
     published: true,
     secondTimerEnabled: item.secondTimerEnabled,
     secondTimerDeduction: item.secondTimerDeduction,
@@ -313,6 +313,11 @@ function Flow5ExamListContent({
   const isTopic = format === "topic-wise";
   const heading = isTopic && subjectKey ? flow5SubjectTitle(subjectKey) : (meta?.title ?? "Exams");
 
+  // Group by lifecycle: live (incl. no-window) → upcoming → practice (missed live).
+  const liveExams = exams.filter((exam) => exam.phase === "live" || exam.phase === "no-window");
+  const upcomingExams = exams.filter((exam) => exam.phase === "upcoming");
+  const practiceExams = exams.filter((exam) => exam.phase === "archived" || exam.phase === "practice");
+
   return (
     <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <InfoBox title={heading} className="mt-4">
@@ -324,10 +329,56 @@ function Flow5ExamListContent({
           hint={isTopic ? "No topic-wise exams have been published for this subject yet." : `No ${heading.toLowerCase()} have been published for this course yet.`}
         />
       ) : (
-        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {exams.map((exam) => (
-            <ExamCard key={exam.id} exam={courseItemToPublicExam(exam)} />
-          ))}
+        <div className="mt-6 space-y-8">
+          {liveExams.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                <h2 className="text-sm font-extrabold uppercase tracking-widest text-emerald-400">
+                  Live Now ({liveExams.length})
+                </h2>
+              </div>
+              <div className="mt-3 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {liveExams.map((exam) => (
+                  <ExamCard key={exam.id} exam={courseItemToPublicExam(exam)} />
+                ))}
+              </div>
+            </div>
+          )}
+          {upcomingExams.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
+                <h2 className="text-sm font-extrabold uppercase tracking-widest text-amber-400">
+                  Upcoming ({upcomingExams.length})
+                </h2>
+              </div>
+              <div className="mt-3 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {upcomingExams.map((exam) => (
+                  <ExamCard key={exam.id} exam={courseItemToPublicExam(exam)} />
+                ))}
+              </div>
+            </div>
+          )}
+          {practiceExams.length > 0 && (
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-violet-500" aria-hidden="true" />
+                <h2 className="text-sm font-extrabold uppercase tracking-widest text-violet-400">
+                  Practice — Missed Live ({practiceExams.length})
+                </h2>
+              </div>
+              <p className="mt-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-xs font-semibold leading-relaxed text-violet-300">
+                Live time শেষ হয়ে গেলেও এই exam গুলো practice হিসেবে দিতে পারবে — practice attempt
+                leaderboard বা merit position-এ কোনো effect ফেলবে না।
+              </p>
+              <div className="mt-3 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {practiceExams.map((exam) => (
+                  <ExamCard key={exam.id} exam={courseItemToPublicExam(exam)} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </section>

@@ -15,6 +15,8 @@ type MyExam = {
   questionCount?: number;
   negativeMarks?: number;
   scheduledAt: string | null;
+  endsAt?: string | null;
+  phase?: string;
   status: ExamStatus;
 };
 
@@ -41,7 +43,7 @@ function toPublicExam(exam: MyExam): PublicExam {
     negativeEnabled: neg > 0,
     negativePerWrong: neg,
     scheduledAt: exam.scheduledAt ?? null,
-    endsAt: null,
+    endsAt: exam.endsAt ?? null,
     examMode: "live",
     examDate: toDhakaDateKey(scheduledIso || null),
     examTime: hasValidSchedule
@@ -97,6 +99,12 @@ export default function MyEnrolledExams() {
 
   if (!exams || exams.length === 0) return null;
 
+  // Live/upcoming first, missed-live (practice) grouped below with a hint.
+  const practiceExams = exams.filter(
+    (exam) => exam.status === "Practice" || exam.status === "Archived" || exam.phase === "archived" || exam.phase === "practice",
+  );
+  const activeExams = exams.filter((exam) => !practiceExams.includes(exam));
+
   return (
     <section className="mx-auto max-w-6xl px-4 pt-12 sm:px-6">
       <h2 className="text-xl font-extrabold tracking-tight text-heading">
@@ -105,11 +113,29 @@ export default function MyEnrolledExams() {
       <p className="mt-1 text-sm text-neutral-400">
         Exams included with the courses you are enrolled in.
       </p>
-      <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {exams.map((exam) => (
-          <ExamCard key={exam.id} exam={toPublicExam(exam)} />
-        ))}
-      </div>
+      {activeExams.length > 0 && (
+        <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {activeExams.map((exam) => (
+            <ExamCard key={exam.id} exam={toPublicExam(exam)} />
+          ))}
+        </div>
+      )}
+      {practiceExams.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-sm font-extrabold uppercase tracking-widest text-violet-400">
+            Practice — Missed Live ({practiceExams.length})
+          </h3>
+          <p className="mt-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-xs font-semibold leading-relaxed text-violet-300">
+            Live time শেষ হয়ে গেলেও এই exam গুলো practice হিসেবে দিতে পারবে — practice attempt
+            leaderboard বা merit position-এ কোনো effect ফেলবে না।
+          </p>
+          <div className="mt-3 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {practiceExams.map((exam) => (
+              <ExamCard key={exam.id} exam={toPublicExam(exam)} />
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

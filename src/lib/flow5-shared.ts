@@ -70,6 +70,27 @@ export function isFlow5PracticePhase(phase: string | null | undefined): boolean 
   return phase === "archived" || phase === "practice";
 }
 
+/**
+ * Client-safe exam phase from scheduled/ends timestamps.
+ * Mirrors the server rule (getEnrolledExamPhase): no window → "no-window",
+ * before start → "upcoming", after end → "archived" (practice), else "live".
+ * Missing timestamps → "no-window" (always startable, no live window to miss).
+ */
+export function getClientExamPhase(
+  scheduledAt: string | null | undefined,
+  endsAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): "upcoming" | "live" | "archived" | "no-window" {
+  const start = scheduledAt ? new Date(scheduledAt).getTime() : NaN;
+  const end = endsAt ? new Date(endsAt).getTime() : NaN;
+  const hasStart = Number.isFinite(start);
+  const hasEnd = Number.isFinite(end);
+  if (!hasStart && !hasEnd) return "no-window";
+  if (hasStart && nowMs < start) return "upcoming";
+  if (hasEnd && nowMs > end) return "archived";
+  return "live";
+}
+
 export type Flow5ExamItem = {
   id: string;
   title: string;

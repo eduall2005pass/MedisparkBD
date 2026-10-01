@@ -17,6 +17,7 @@ import type {
 } from "@/lib/my-learning";
 import { isDirectContent } from "@/lib/course-content";
 import DirectContentView from "@/components/dashboard/CourseContentCards";
+import { getClientExamPhase } from "@/lib/flow5-shared";
 
 type LoadState = "loading" | "error" | "forbidden" | "ready";
 
@@ -898,8 +899,29 @@ function PaperChapterView({
                       <span className="block truncate text-sm font-semibold text-heading group-hover:text-primary-400">
                         {index + 1}. {exam.title}
                       </span>
-                      <span className="text-[11px] text-neutral-500">
-                        Exam · {exam.durationMinutes} min · {exam.totalMarks} marks
+                      <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-neutral-500">
+                        <span>
+                          Exam · {exam.durationMinutes} min · {exam.totalMarks} marks
+                        </span>
+                        {(() => {
+                          const phase = getClientExamPhase(exam.scheduledAt, exam.endsAt);
+                          if (phase === "no-window") return null;
+                          const style =
+                            phase === "live"
+                              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                              : phase === "upcoming"
+                                ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                                : "border-violet-500/40 bg-violet-500/10 text-violet-300";
+                          const label =
+                            phase === "live" ? "Live" : phase === "upcoming" ? "Upcoming" : "Practice — missed live";
+                          return (
+                            <span
+                              className={`shrink-0 rounded-full border px-1.5 py-px text-[10px] font-extrabold ${style}`}
+                            >
+                              {label}
+                            </span>
+                          );
+                        })()}
                       </span>
                     </span>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0 text-neutral-500 transition group-hover:translate-x-1 group-hover:text-primary-400">

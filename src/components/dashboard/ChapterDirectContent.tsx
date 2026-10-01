@@ -10,6 +10,7 @@ import {
 import type { ContentKind } from "@/components/dashboard/CourseContentCards";
 import { flatChapters } from "@/components/dashboard/CourseContentCards";
 import MaterialCard from "@/components/dashboard/MaterialCard";
+import { getClientExamPhase } from "@/lib/flow5-shared";
 
 const KIND_META: Record<ContentKind, { title: string; emptyLabel: string }> = {
   classes: { title: "Classes", emptyLabel: "classes" },
@@ -26,6 +27,32 @@ function EmptyNotice({ what }: { what: string }) {
         No {what} have been published in this chapter. Please check back later.
       </p>
     </div>
+  );
+}
+
+/** Compact Live / Upcoming / Practice pill for a chapter exam row. */
+function ExamPhaseBadge({
+  scheduledAt,
+  endsAt,
+}: {
+  scheduledAt: string | null;
+  endsAt: string | null;
+}) {
+  const phase = getClientExamPhase(scheduledAt, endsAt);
+  if (phase === "no-window") return null;
+  const style =
+    phase === "live"
+      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+      : phase === "upcoming"
+        ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
+        : "border-violet-500/40 bg-violet-500/10 text-violet-300";
+  const label = phase === "live" ? "Live" : phase === "upcoming" ? "Upcoming" : "Practice";
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${style}`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -125,32 +152,43 @@ export default function ChapterDirectContentView({
         (chapter.exams.length === 0 ? (
           <EmptyNotice what="exams" />
         ) : (
-          <ol className="mt-6 space-y-2">
-            {chapter.exams.map((exam, index) => (
-              <li key={exam.id}>
-                <Link
-                  href={`/exam/${encodeURIComponent(exam.id)}/rules`}
-                  onClick={() => recordRecentView(user, "exam", exam.id)}
-                  className="group flex items-center gap-3 rounded-xl border border-ink/10 bg-dark-900 px-3.5 py-3 transition hover:border-primary-600/50 hover:bg-ink/5"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-sm font-extrabold text-violet-400">
-                    {index + 1}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-heading group-hover:text-primary-400">
-                      {exam.title}
+          <>
+            {chapter.exams.some(
+              (exam) => getClientExamPhase(exam.scheduledAt, exam.endsAt) === "archived",
+            ) && (
+              <p className="mt-6 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-xs font-semibold leading-relaxed text-violet-300">
+                Missed the live? Live time শেষ হয়ে যাওয়া exam গুলো practice হিসেবে দিতে পারবে —
+                practice attempt leaderboard-এ effect ফেলবে না।
+              </p>
+            )}
+            <ol className="mt-6 space-y-2">
+              {chapter.exams.map((exam, index) => (
+                <li key={exam.id}>
+                  <Link
+                    href={`/exam/${encodeURIComponent(exam.id)}/rules`}
+                    onClick={() => recordRecentView(user, "exam", exam.id)}
+                    className="group flex items-center gap-3 rounded-xl border border-ink/10 bg-dark-900 px-3.5 py-3 transition hover:border-primary-600/50 hover:bg-ink/5"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-sm font-extrabold text-violet-400">
+                      {index + 1}
                     </span>
-                    <span className="text-[11px] text-neutral-500">
-                      Exam · {exam.durationMinutes} min · {exam.totalMarks} marks
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-heading group-hover:text-primary-400">
+                        {exam.title}
+                      </span>
+                      <span className="text-[11px] text-neutral-500">
+                        Exam · {exam.durationMinutes} min · {exam.totalMarks} marks
+                      </span>
                     </span>
-                  </span>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0 text-neutral-500 transition group-hover:translate-x-1 group-hover:text-primary-400">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
-                  </svg>
-                </Link>
-              </li>
-            ))}
-          </ol>
+                    <ExamPhaseBadge scheduledAt={exam.scheduledAt} endsAt={exam.endsAt} />
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" className="h-4 w-4 shrink-0 text-neutral-500 transition group-hover:translate-x-1 group-hover:text-primary-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" />
+                    </svg>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          </>
         ))}
 
       {/* ── Materials — clean minimal cards: Name + Question Count badge + View PDF ─ */}
@@ -221,9 +259,53 @@ export default function ChapterDirectContentView({
                 </Link>
               </li>
             ))}
-            {chapter.exams.length > 0 && (
-              <li className="pt-2 text-xs text-neutral-500">{chapter.exams.length} exam(s) archived in this chapter.</li>
-            )}
+            {(() => {
+              const archivedExams = chapter.exams.filter(
+                (exam) => getClientExamPhase(exam.scheduledAt, exam.endsAt) === "archived",
+              );
+              const undated = chapter.exams.length > 0 && chapter.exams.every(
+                (exam) => !exam.scheduledAt && !exam.endsAt,
+              );
+              if (archivedExams.length > 0) {
+                return (
+                  <li className="space-y-2 pt-2">
+                    <p className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-xs font-semibold leading-relaxed text-violet-300">
+                      Missed the live? এই exam গুলোর live time শেষ — এখন practice হিসেবে দিতে পারবে।
+                    </p>
+                    {archivedExams.map((exam) => (
+                      <Link
+                        key={`arch-exam-${exam.id}`}
+                        href={`/exam/${encodeURIComponent(exam.id)}/rules`}
+                        onClick={() => recordRecentView(user, "exam", exam.id)}
+                        className="group flex items-center gap-3 rounded-xl border border-violet-500/25 bg-dark-900 px-3.5 py-3 transition hover:border-violet-500/60 hover:bg-ink/5"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-sm font-extrabold text-violet-400">
+                          ✓
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-heading group-hover:text-primary-400">
+                            {exam.title}
+                          </span>
+                          <span className="text-[11px] text-neutral-500">
+                            Archived · Exam · {exam.durationMinutes} min · {exam.totalMarks} marks
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-full border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-violet-300">
+                          Practice
+                        </span>
+                      </Link>
+                    ))}
+                  </li>
+                );
+              }
+              // No date info (older DBs) — keep the legacy count-only line.
+              if (undated) {
+                return (
+                  <li className="pt-2 text-xs text-neutral-500">{chapter.exams.length} exam(s) archived in this chapter.</li>
+                );
+              }
+              return null;
+            })()}
           </ol>
         ))}
     </section>

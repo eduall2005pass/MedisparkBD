@@ -66,6 +66,8 @@ export type ChapterItem = {
     durationMinutes: number;
     totalMarks: number;
     isFavourite: boolean;
+    scheduledAt: string | null;
+    endsAt: string | null;
   }[];
 };
 
@@ -414,7 +416,19 @@ type ExamRow = {
   title: string;
   duration_minutes: number;
   total_marks: number;
+  scheduled_at?: string | Date | null;
+  ends_at?: string | Date | null;
 };
+
+function toIsoOrNull(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  } catch {
+    return null;
+  }
+}
 
 
 /**
@@ -589,14 +603,26 @@ export async function getCourseLearningData(
       ),
       safe<ExamRow[]>(
         "exams query",
-        () =>
-          query<ExamRow[]>(
-            `SELECT id, chapter_id, title, duration_minutes, total_marks
-               FROM exams
-              WHERE chapter_id IN (${chapterPlaceholders}) AND status = 'published'
-              ORDER BY sort_order ASC, scheduled_at DESC`,
-            chapterIds,
-          ),
+        async () => {
+          try {
+            return await query<ExamRow[]>(
+              `SELECT id, chapter_id, title, duration_minutes, total_marks, scheduled_at, ends_at
+                 FROM exams
+                WHERE chapter_id IN (${chapterPlaceholders}) AND status = 'published'
+                ORDER BY sort_order ASC, scheduled_at DESC`,
+              chapterIds,
+            );
+          } catch {
+            // scheduled_at/ends_at columns may not exist on older DBs.
+            return await query<ExamRow[]>(
+              `SELECT id, chapter_id, title, duration_minutes, total_marks
+                 FROM exams
+                WHERE chapter_id IN (${chapterPlaceholders}) AND status = 'published'
+                ORDER BY sort_order ASC`,
+              chapterIds,
+            );
+          }
+        },
         [],
       ),
     ]);
@@ -708,6 +734,8 @@ function buildCourseData(
       durationMinutes: toNumber(exam.duration_minutes),
       totalMarks: toNumber(exam.total_marks),
       isFavourite: favourites.has(`exam:${exam.id}`),
+      scheduledAt: toIsoOrNull(exam.scheduled_at),
+      endsAt: toIsoOrNull(exam.ends_at),
     });
   }
 
@@ -1019,14 +1047,26 @@ export async function getAdminCourseLearningData(
       ),
       safe<ExamRow[]>(
         "exams query",
-        () =>
-          query<ExamRow[]>(
-            `SELECT id, chapter_id, title, duration_minutes, total_marks
-               FROM exams
-              WHERE chapter_id IN (${chapterPlaceholders}) AND status = 'published'
-              ORDER BY sort_order ASC, scheduled_at DESC`,
-            chapterIds,
-          ),
+        async () => {
+          try {
+            return await query<ExamRow[]>(
+              `SELECT id, chapter_id, title, duration_minutes, total_marks, scheduled_at, ends_at
+                 FROM exams
+                WHERE chapter_id IN (${chapterPlaceholders}) AND status = 'published'
+                ORDER BY sort_order ASC, scheduled_at DESC`,
+              chapterIds,
+            );
+          } catch {
+            // scheduled_at/ends_at columns may not exist on older DBs.
+            return await query<ExamRow[]>(
+              `SELECT id, chapter_id, title, duration_minutes, total_marks
+                 FROM exams
+                WHERE chapter_id IN (${chapterPlaceholders}) AND status = 'published'
+                ORDER BY sort_order ASC`,
+              chapterIds,
+            );
+          }
+        },
         [],
       ),
     ]);
