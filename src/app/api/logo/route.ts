@@ -123,10 +123,10 @@ export async function POST(request: NextRequest) {
     const logo = await saveActiveLogo(freshFile, width, height, admin.uid, mode);
     // Bust CDN/edge cache immediately so new logo appears everywhere (persistent URL, survives refresh/logout)
     try {
-      revalidateTag("logo");
-      revalidateTag("logo-theme");
-      revalidateTag("layout-logo");
-      revalidateTag("layout-themelogos");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("logo", "max");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("logo-theme", "max");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("layout-logo", "max");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("layout-themelogos", "max");
       revalidatePath("/", "layout");
       revalidatePath("/admin/website/logo-favicon");
       revalidatePath("/admin/website-information");
@@ -158,10 +158,10 @@ export async function DELETE(request: NextRequest) {
   try {
     await removeActiveLogo(mode);
     try {
-      revalidateTag("logo");
-      revalidateTag("logo-theme");
-      revalidateTag("layout-logo");
-      revalidateTag("layout-themelogos");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("logo", "max");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("logo-theme", "max");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("layout-logo", "max");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("layout-themelogos", "max");
       revalidatePath("/", "layout");
       revalidatePath("/admin/website/logo-favicon");
       revalidatePath("/admin/website-information");

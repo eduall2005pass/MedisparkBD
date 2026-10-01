@@ -40,7 +40,7 @@ export async function PUT(request: NextRequest) {
     const normalized = normalizeThemeSettingsInput(body);
     const theme = await saveThemeSettings(normalized, admin.uid);
     try {
-      revalidateTag("theme");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("theme", "max");
       revalidatePath("/", "layout");
     } catch {
       // best-effort

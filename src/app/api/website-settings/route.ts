@@ -281,10 +281,10 @@ export async function POST(request: NextRequest) {
     // writes). Logo uploaded here goes through the central pipeline — bust
     // logo tags too since this route bypasses /api/logo's own busting.
     try {
-      revalidateTag("website-settings");
+      (revalidateTag as unknown as (tag: string, profile: string) => void)("website-settings", "max");
       if (logoResult) {
         for (const tag of ["logo", "logo-theme", "layout-logo", "layout-themelogos"]) {
-          revalidateTag(tag);
+          (revalidateTag as unknown as (tag: string, profile: string) => void)(tag, "max");
         }
       }
       revalidatePath("/", "layout");
@@ -313,7 +313,7 @@ export async function DELETE(request: NextRequest) {
     try {
       const settings = await removeFavicon(admin.uid);
       try {
-        revalidateTag("website-settings");
+        (revalidateTag as unknown as (tag: string, profile: string) => void)("website-settings", "max");
         revalidatePath("/", "layout");
       } catch {
         // best-effort
