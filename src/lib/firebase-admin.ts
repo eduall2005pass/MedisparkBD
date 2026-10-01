@@ -29,11 +29,15 @@ function getServiceAccount(): Record<string, string> | null {
       if (parsed.private_key) {
         parsed.private_key = normalizePrivateKey(parsed.private_key);
       }
+      parseError = null;
       return parsed;
     } catch (err) {
+      // Don't hard-fail here: fall through to the individual
+      // FIREBASE_PROJECT_ID / CLIENT_EMAIL / PRIVATE_KEY vars so one
+      // broken JSON paste can't silently disable server-side auth
+      // (which makes every logged-in user look unregistered).
       parseError =
         err instanceof Error ? err.message : String(err ?? "unknown error");
-      return null;
     }
   }
   const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -95,10 +99,26 @@ export function getFirebaseAdminAuth() {
  * Verifies a Firebase ID token and returns the decoded claims, or null
  * when the token is missing or invalid.
  */
+let adminMisconfigWarned = false;
+
 export async function verifyFirebaseToken(
   token: string | null | undefined,
 ): Promise<DecodedIdToken | null> {
-  if (!token || token.length === 0 || !isFirebaseAdminConfigured) {
+  if (!token || token.length === 0) {
+    return null;
+  }
+  if (!isFirebaseAdminConfigured) {
+    // Warn once: without server-side verification every logged-in user
+    // looks unregistered (app keeps asking them to register).
+    if (!adminMisconfigWarned) {
+      adminMisconfigWarned = true;
+      console.warn(
+        "Firebase Admin is not configured — authenticated API calls will fail." +
+          (parseError
+            ? ` FIREBASE_SERVICE_ACCOUNT_JSON is invalid (${parseError}).`
+            : " Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY."),
+      );
+    }
     return null;
   }
   try {
