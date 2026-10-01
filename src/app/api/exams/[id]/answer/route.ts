@@ -79,12 +79,7 @@ export async function POST(
     if (!examRow) {
       return NextResponse.json({ error: "Exam not found." }, { status: 404 });
     }
-    if (examRow.kind === "enrolled") {
-      return NextResponse.json(
-        { error: "This exam is only available through your enrolled courses." },
-        { status: 403 },
-      );
-    }
+
     if (examRow.status !== "published") {
       return NextResponse.json(
         {

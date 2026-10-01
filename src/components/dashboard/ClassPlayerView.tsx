@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { isActiveEnrollment } from "@/lib/enrollments";
 import PermissionGate, {
@@ -205,7 +205,7 @@ function ClassPlayerBody({
     }
   }, [authLoading, user, load]);
 
-  const found = (() => {
+  const found = useMemo(() => {
     if (!course) return null;
     for (const subject of course.subjects) {
       for (const chapter of subject.chapters) {
@@ -216,7 +216,7 @@ function ClassPlayerBody({
       }
     }
     return null;
-  })();
+  }, [course, classId]);
 
   // Opening the class records it in the student's Recently Viewed history.
   useEffect(() => {

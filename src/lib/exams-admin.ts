@@ -424,7 +424,7 @@ export async function ensureQuestionSlots(examId: string, count: number): Promis
           "",
           null,
           JSON.stringify(["", "", "", ""]),
-          0,
+          null,
           null,
           marksPerSlot,
           sortOrder,

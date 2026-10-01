@@ -143,15 +143,16 @@ export async function itemInEnrolledCourse(
         [uid, itemId],
       );
       if (rows.length === 0) {
-        // Course-level exams (chapter_id IS NULL) — allow if student has any active enrollment
-        const courseLevel = await query<{ found: number }[]>(
-          `SELECT 1 AS found FROM exams ex WHERE ex.id = ? AND ex.chapter_id IS NULL LIMIT 1`,
+        // Course-level exams (chapter_id IS NULL)
+        const courseLevel = await query<{ course_id: string }[]>(
+          `SELECT c.course_id FROM exams ex JOIN exam_courses c ON c.exam_id = ex.id WHERE ex.id = ? AND ex.chapter_id IS NULL LIMIT 1`,
           [itemId],
         );
         if (courseLevel.length > 0) {
+          const courseId = courseLevel[0].course_id;
           const enrolled = await query<{ found: number }[]>(
-            `SELECT 1 AS found FROM enrollments WHERE student_uid = ? AND enrollment_status = 'active' LIMIT 1`,
-            [uid],
+            `SELECT 1 AS found FROM enrollments WHERE student_uid = ? AND course_id = ? AND enrollment_status = 'active' LIMIT 1`,
+            [uid, courseId],
           );
           return enrolled.length > 0;
         }
@@ -168,9 +169,9 @@ export async function itemInEnrolledCourse(
         [itemId, uid, uid],
       );
       if (rows.length > 0) return true;
-      // Fallback: any active enrollment (paid students may favourite any Q&A)
+      // Fallback: any active paid enrollment (paid students may favourite any Q&A)
       const enrolled = await query<{ found: number }[]>(
-        `SELECT 1 AS found FROM enrollments WHERE student_uid = ? AND enrollment_status = 'active' LIMIT 1`,
+        `SELECT 1 AS found FROM enrollments WHERE student_uid = ? AND enrollment_status = 'active' AND course_kind = 'paid' LIMIT 1`,
         [uid],
       );
       return enrolled.length > 0;
