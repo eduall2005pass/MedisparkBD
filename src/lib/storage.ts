@@ -294,29 +294,76 @@ function validateMagic(buffer: Buffer, ext: string): void {
 export async function saveFile(
   directory: string,
   fileName: string,
-  data: ArrayBuffer | Buffer,
+  data: ArrayBuffer | Buffer | Blob | File | ReadableStream<Uint8Array>,
+  sizeOverride?: number,
+  extOverride?: string
 ): Promise<string> {
-  const rawBytes =
-    data instanceof ArrayBuffer ? Buffer.from(new Uint8Array(data)) : data;
-  if (rawBytes.length === 0) throw new Error("Empty file.");
-  if (rawBytes.length > MAX_SAVE_BYTES) throw new Error("File exceeds the size limit.");
   const safeDir = sanitizeDir(directory);
   const safeName = sanitizeFileName(fileName);
-  validateMagic(rawBytes, extOf(safeName));
-  const bytes = await compressFileIfNeeded(rawBytes, safeName);
+  const ext = extOverride ?? extOf(safeName);
+
+  let fetchBody: Uint8Array | ReadableStream<Uint8Array>;
+
+  if (typeof ReadableStream !== "undefined" && data instanceof ReadableStream) {
+    const size = sizeOverride || 0;
+    if (size === 0) throw new Error("Empty file.");
+    if (size > MAX_SAVE_BYTES) throw new Error("File exceeds the size limit.");
+    
+    const isCompressible = COMPRESSIBLE_IMAGE_EXTS.has(ext) || ext === ".svg";
+    
+    if (isCompressible && size <= 10 * 1024 * 1024) {
+      const response = new Response(data);
+      const fullBytes = Buffer.from(new Uint8Array(await response.arrayBuffer()));
+      validateMagic(fullBytes, ext);
+      const compressed = await compressFileIfNeeded(fullBytes, safeName);
+      fetchBody = new Uint8Array(compressed);
+    } else {
+      // Stream raw body directly, bypassing magic check to preserve zero RAM
+      fetchBody = data as ReadableStream<Uint8Array>;
+    }
+  } else if (typeof Blob !== "undefined" && data instanceof Blob) {
+    const fileSize = data.size;
+    if (fileSize === 0) throw new Error("Empty file.");
+    if (fileSize > MAX_SAVE_BYTES) throw new Error("File exceeds the size limit.");
+
+    const headSlice = data.slice(0, 2048);
+    const headBytes = Buffer.from(new Uint8Array(await headSlice.arrayBuffer()));
+    validateMagic(headBytes, ext);
+
+    if (COMPRESSIBLE_IMAGE_EXTS.has(ext) || ext === ".svg") {
+      const fullBytes = Buffer.from(new Uint8Array(await data.arrayBuffer()));
+      const compressed = await compressFileIfNeeded(fullBytes, safeName);
+      fetchBody = new Uint8Array(compressed);
+    } else {
+      fetchBody = data.stream() as unknown as ReadableStream<Uint8Array>;
+    }
+  } else {
+    const rawBytes = data instanceof ArrayBuffer ? Buffer.from(new Uint8Array(data)) : (data as Buffer);
+    if (rawBytes.length === 0) throw new Error("Empty file.");
+    if (rawBytes.length > MAX_SAVE_BYTES) throw new Error("File exceeds the size limit.");
+    validateMagic(rawBytes, ext);
+    const bytes = await compressFileIfNeeded(rawBytes, safeName);
+    fetchBody = new Uint8Array(bytes);
+  }
 
   const endpoint = new URL(MEDIA_UPLOAD_URL);
   endpoint.searchParams.set("dir", safeDir);
   endpoint.searchParams.set("name", safeName);
 
-  const response = await fetch(endpoint, {
+  const requestInit: RequestInit = {
     method: "POST",
     headers: {
       "Content-Type": detectMimeType(safeName),
       "X-Medifiles-Token": mediaToken(),
     },
-    body: new Uint8Array(bytes),
-  });
+    body: fetchBody as unknown as BodyInit,
+  };
+
+  if (typeof ReadableStream !== "undefined" && fetchBody instanceof ReadableStream) {
+    (requestInit as unknown as { duplex: string }).duplex = "half";
+  }
+
+  const response = await fetch(endpoint, requestInit);
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");

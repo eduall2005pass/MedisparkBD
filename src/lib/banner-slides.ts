@@ -76,5 +76,5 @@ async function fetchBannerSlidesRaw(): Promise<BannerSlide[]> {
 export const fetchBannerSlides = unstable_cache(
   fetchBannerSlidesRaw,
   ["banner-slides"],
-  { revalidate: 300, tags: ["banner-slides", "featured-courses", "exams", "jerseys"] },
+  { tags: ["banner-slides", "featured-courses", "exams", "jerseys"] },
 );

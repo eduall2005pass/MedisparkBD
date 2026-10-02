@@ -71,10 +71,12 @@ export default function PublicExamCategoryView({
   exams,
   batches,
   categoryKey,
+  serverNowMs = Date.now(),
 }: {
   exams: PublicExam[];
   batches: string[];
   categoryKey: ExamCategory;
+  serverNowMs?: number;
 }) {
   const [tab, setTab] = useState<ModeTab>("live");
   const [batch, setBatch] = useState("All Batches");
@@ -96,11 +98,13 @@ export default function PublicExamCategoryView({
   }, [categoryKey]);
   // Frozen at mount (+1m refresh) so the Upcoming → Live → Practice grouping
   // stays stable across re-renders. Remounted per category via `key`.
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [nowMs, setNowMs] = useState(serverNowMs);
   const { user } = useAuth();
   const [completedSet, setCompletedSet] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    // Immediately sync to true client time after hydration to avoid mismatch
+    setNowMs(Date.now());
     const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);

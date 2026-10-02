@@ -104,15 +104,16 @@ export function MediaUploadField({
         throw new Error(`Unsupported file type "${ext}". Use JPG, JPEG, PNG, WEBP, PDF, etc.`);
       }
       if (file.size > 512 * 1024 * 1024) throw new Error("File exceeds 512 MB limit.");
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("dir", directory);
-      if (value) formData.append("previousUrl", value);
+      const query = new URLSearchParams({ dir: directory, name: file.name });
+      if (value) query.append("previousUrl", value);
 
-      const response = await fetch("/api/uploads", {
+      const response = await fetch(`/api/uploads?${query.toString()}`, {
         method: "POST",
-        body: formData,
-        headers: { Authorization: `Bearer ${token}` },
+        body: file,
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": file.type || "application/octet-stream"
+        },
       });
       const data = (await response.json().catch(() => ({}))) as {
         url?: string;

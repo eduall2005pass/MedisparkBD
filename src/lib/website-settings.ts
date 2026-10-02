@@ -488,17 +488,28 @@ export async function saveWebsiteSettings(
 
 export async function removeFavicon(adminUid: string): Promise<WebsiteSettings> {
   let existingRow: (WebsiteSettingsRow & { favicon_storage_path?: string | null }) | null = null;
-  try {
-    const rows = await query<(WebsiteSettingsRow & { favicon_storage_path?: string | null })[]>(
-      `SELECT site_name, tagline, contact_email, contact_phone, facebook_url, youtube_url,
-              favicon_url, favicon_file_name, favicon_updated_at, updated_at, updated_by, favicon_storage_path
-       FROM website_settings WHERE id = ? LIMIT 1`,
-      [WEBSITE_SETTINGS_ID],
-    );
-    existingRow = rows[0] ?? null;
-  } catch {
-    existingRow = null;
-  }
+    try {
+      const rows = await query<(WebsiteSettingsRow & { favicon_storage_path?: string | null })[]>(
+        `SELECT site_name, tagline, contact_email, contact_phone, facebook_url, youtube_url,
+                favicon_url, favicon_file_name, favicon_updated_at, updated_at, updated_by, favicon_storage_path${FOOTER_COLUMNS}${CONTACT_COLUMNS}, base_student_count
+         FROM website_settings WHERE id = ? LIMIT 1`,
+        [WEBSITE_SETTINGS_ID],
+      );
+      existingRow = rows[0] ?? null;
+    } catch {
+      // Fallback if newer columns don't exist
+      try {
+        const rows = await query<(WebsiteSettingsRow & { favicon_storage_path?: string | null })[]>(
+          `SELECT site_name, tagline, contact_email, contact_phone, facebook_url, youtube_url,
+                  favicon_url, favicon_file_name, favicon_updated_at, updated_at, updated_by, favicon_storage_path
+           FROM website_settings WHERE id = ? LIMIT 1`,
+          [WEBSITE_SETTINGS_ID],
+        );
+        existingRow = rows[0] ?? null;
+      } catch {
+        existingRow = null;
+      }
+    }
 
   const storagePath = existingRow?.favicon_storage_path ?? existingRow?.favicon_url ?? null;
   try {

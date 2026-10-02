@@ -99,7 +99,7 @@ export function getFirebaseAdminAuth() {
  * Verifies a Firebase ID token and returns the decoded claims, or null
  * when the token is missing or invalid.
  */
-let adminMisconfigWarned = false;
+const adminMisconfigWarned = false;
 
 export async function verifyFirebaseToken(
   token: string | null | undefined,

@@ -401,12 +401,12 @@ export function paginateQuestions(
 
 /** Console report: available height, per-question heights, break decisions. */
 export function logPaginateDebug(debug: PaginateDebugInfo): void {
-  // eslint-disable-next-line no-console
+   
   console.groupCollapsed(
     `[pdf-paginate] page content ${debug.availablePageH}px − overhead ${debug.overheadH}px − title ${debug.titleReserveH}px`,
   );
   for (const p of debug.pages) {
-    // eslint-disable-next-line no-console
+     
     console.log(
       `page ${p.page}: capacity ${Math.round(p.capacityH)}px (col ${Math.round(p.columnBudgetH)}px each), ` +
         `used ${Math.round(p.usedH)}px [L ${Math.round(p.colUsedH[0])} / R ${Math.round(p.colUsedH[1])}], ` +
@@ -414,7 +414,7 @@ export function logPaginateDebug(debug: PaginateDebugInfo): void {
     );
   }
   if (debug.breaks.length > 0) {
-    // eslint-disable-next-line no-console
+     
     console.table(
       debug.breaks.map((b) => ({
         page: b.page,
@@ -427,7 +427,7 @@ export function logPaginateDebug(debug: PaginateDebugInfo): void {
       })),
     );
   }
-  // eslint-disable-next-line no-console
+   
   console.groupEnd();
 }
 

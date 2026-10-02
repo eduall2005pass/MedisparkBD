@@ -97,6 +97,9 @@ function readBody(req, limit) {
   });
 }
 
+import { pipeline } from "node:stream/promises";
+import { createWriteStream } from "node:fs";
+
 async function handleUpload(req, res) {
   if (!authorized(req)) return sendJson(res, 401, { error: "unauthorized" });
 
@@ -108,22 +111,40 @@ async function handleUpload(req, res) {
   const ext = safeExtension(originalName);
   if (!ext) return sendJson(res, 400, { error: "unsupported file extension" });
 
-  let body;
-  try {
-    body = await readBody(req, MAX_BODY_BYTES);
-  } catch {
-    return sendJson(res, 413, { error: "file too large" });
-  }
-  if (body.length === 0) return sendJson(res, 400, { error: "empty body" });
-
   const storedName = `${randomUUID()}${ext}`;
   await mkdir(directory, { recursive: true });
-  await writeFile(path.join(directory, storedName), body);
+  const filePath = path.join(directory, storedName);
+
+  let received = 0;
+  const limitChecker = new (require("node:stream").Transform)({
+    transform(chunk, encoding, callback) {
+      received += chunk.length;
+      if (received > MAX_BODY_BYTES) {
+        callback(new Error("file too large"));
+      } else {
+        callback(null, chunk);
+      }
+    }
+  });
+
+  try {
+    await pipeline(req, limitChecker, createWriteStream(filePath));
+    if (received === 0) {
+      await unlink(filePath).catch(() => {});
+      return sendJson(res, 400, { error: "empty body" });
+    }
+  } catch (err) {
+    await unlink(filePath).catch(() => {});
+    if (err.message === "file too large") {
+      return sendJson(res, 413, { error: "file too large" });
+    }
+    throw err;
+  }
 
   const relativeDir = path.relative(STORAGE_ROOT, directory).split(path.sep).join("/");
   return sendJson(res, 200, {
     url: `/medifiles/${relativeDir}/${storedName}`,
-    size: body.length,
+    size: received,
   });
 }
 

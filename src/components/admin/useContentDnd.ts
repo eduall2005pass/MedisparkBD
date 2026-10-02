@@ -48,7 +48,7 @@ export function useContentDnd<T>(options: {
 
   // Keep the dragged row glued to the pointer while siblings animate.
   // Runs every render on purpose (positions are read from the live DOM).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   useEffect(() => {
     if (dragIndex === null || !dragRef.current) return;
     const row = rowRefs.current.get(dragRef.current.key);

@@ -418,13 +418,14 @@ export default function CourseManager({
     try {
       const uploaded: string[] = [];
       for (const file of fileArray) {
-        const fd = new FormData();
-        fd.append("file", file);
-        fd.append("dir", "routines");
-        const res = await fetch("/api/uploads", {
+        const query = new URLSearchParams({ dir: "routines", name: file.name });
+        const res = await fetch(`/api/uploads?${query.toString()}`, {
           method: "POST",
-          body: fd,
-          headers: { Authorization: `Bearer ${gate.token}` },
+          body: file,
+          headers: { 
+            Authorization: `Bearer ${gate.token}`,
+            "Content-Type": file.type || "application/octet-stream"
+          },
         });
         const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
         if (!res.ok || !data.url) throw new Error(data.error || "Upload failed.");
@@ -446,15 +447,16 @@ export default function CourseManager({
     setRoutineError(null);
     setRoutineUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("dir", "routines");
+      const query = new URLSearchParams({ dir: "routines", name: file.name });
       const prevUrl = form.routineUrls[index];
-      if (prevUrl) fd.append("previousUrl", prevUrl);
-      const res = await fetch("/api/uploads", {
+      if (prevUrl) query.append("previousUrl", prevUrl);
+      const res = await fetch(`/api/uploads?${query.toString()}`, {
         method: "POST",
-        body: fd,
-        headers: { Authorization: `Bearer ${gate.token}` },
+        body: file,
+        headers: { 
+          Authorization: `Bearer ${gate.token}`,
+          "Content-Type": file.type || "application/octet-stream"
+        },
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok || !data.url) throw new Error(data.error || "Upload failed.");

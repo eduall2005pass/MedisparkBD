@@ -58,13 +58,14 @@ export default function MediaLibraryPage() {
     try {
       const urls: string[] = [];
       for (const file of Array.from(files)) {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("dir", "media-library");
-        const response = await fetch("/api/uploads", {
+        const query = new URLSearchParams({ dir: "media-library", name: file.name });
+        const response = await fetch(`/api/uploads?${query.toString()}`, {
           method: "POST",
-          headers: gate.headers,
-          body: formData,
+          headers: { 
+            ...gate.headers,
+            "Content-Type": file.type || "application/octet-stream" 
+          },
+          body: file,
         });
         const data = (await response.json().catch(() => null)) as { error?: string; url?: string } | null;
         if (!response.ok || !data?.url) {

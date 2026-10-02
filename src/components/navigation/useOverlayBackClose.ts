@@ -16,7 +16,9 @@ import { useEffect, useRef } from "react";
  */
 export function useOverlayBackClose(open: boolean, onClose: () => void) {
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   const pushedRef = useRef(false);
   const closingViaBackRef = useRef(false);
   const pushedUrlRef = useRef<string | null>(null);

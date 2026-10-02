@@ -143,7 +143,7 @@ export async function POST(request: NextRequest) {
     let usedModel = "";
     // Sequential (free-tier friendly, low RAM) — client shows Page x/y progress.
     for (const url of dataUrls) {
-      // eslint-disable-next-line no-await-in-loop
+       
       const r = await transcribeImage(url, apiKey);
       texts.push(r.text);
       usedModel = r.model;

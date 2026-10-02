@@ -166,7 +166,7 @@ export function useAdminGate(): AdminGate {
     // New user (login switch): drop stale state, resolve below.
     if (lastUidRef.current !== null && lastUidRef.current !== uid) {
       clearMemoryGate(lastUidRef.current);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setIsAdmin(null);
       setRole(null);
       setPermissions([]);
@@ -251,7 +251,7 @@ export function useAdminGate(): AdminGate {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [user, authLoading]);
 
   // Signed out: drop any previous user's gate state so a stale `ready`

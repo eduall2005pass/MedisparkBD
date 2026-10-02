@@ -275,7 +275,7 @@ export default function CourseRoutineViewer({ routineUrls, courseName }: Props) 
                   }`}
                   aria-label={`Go to page ${idx + 1}`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   {isPdf(u) ? (
                     <span className="flex h-16 w-16 items-center justify-center bg-red-500/10 text-[10px] font-bold text-red-400">
                       PDF {idx + 1}

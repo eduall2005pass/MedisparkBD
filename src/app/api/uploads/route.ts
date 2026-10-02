@@ -95,23 +95,47 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const formData = await request.formData().catch(() => null);
-  if (!formData) {
-    return NextResponse.json({ error: "Invalid form data." }, { status: 400 });
+  const contentType = request.headers.get("content-type") || "";
+  const isMultipart = contentType.includes("multipart/form-data");
+  
+  let dir = "misc";
+  let safeName = "file";
+  let previousUrl: string | null = null;
+  let fileData: File | Blob | ArrayBuffer | ReadableStream<Uint8Array> | null = null;
+  let size = 0;
+  
+  if (isMultipart) {
+    const formData = await request.formData().catch(() => null);
+    if (!formData) {
+      return NextResponse.json({ error: "Invalid form data." }, { status: 400 });
+    }
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      return NextResponse.json({ error: "No file provided." }, { status: 400 });
+    }
+    fileData = file;
+    size = file.size;
+    const rawDir = formData.get("dir");
+    dir = typeof rawDir === "string" && rawDir.trim().length > 0 ? rawDir.trim().replace(/[^A-Za-z0-9/_-]/g, "") : "misc";
+    safeName = safeUploadName(file.name);
+    previousUrl = formData.get("previousUrl") as string | null;
+  } else {
+    // RAW binary streaming mode (zero RAM pressure)
+    const rawDir = request.nextUrl.searchParams.get("dir");
+    dir = typeof rawDir === "string" && rawDir.trim().length > 0 ? rawDir.trim().replace(/[^A-Za-z0-9/_-]/g, "") : "misc";
+    safeName = safeUploadName(request.nextUrl.searchParams.get("name") || "file");
+    previousUrl = request.nextUrl.searchParams.get("previousUrl") || null;
+    size = Number(request.headers.get("content-length") || 0);
+    fileData = request.body;
+    if (!fileData || size === 0) {
+      return NextResponse.json({ error: "No file provided." }, { status: 400 });
+    }
   }
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: "No file provided." }, { status: 400 });
-  }
-  if (file.size > MAX_FILE_BYTES) {
-    return NextResponse.json(
-      { error: "File exceeds the 512 MB limit." },
-      { status: 413 },
-    );
+  if (size > MAX_FILE_BYTES) {
+    return NextResponse.json({ error: "File exceeds the 512 MB limit." }, { status: 413 });
   }
 
-  const safeName = safeUploadName(file.name);
   const dot = safeName.lastIndexOf(".");
   const extension = dot === -1 ? "" : safeName.slice(dot).toLowerCase();
   if (!ALLOWED_EXTENSIONS.includes(extension)) {
@@ -120,31 +144,24 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
+
   // Tighter cap for image kinds (512MB blanket only for audio/pdf).
-  // safeName normalizes "evil.svg.png" (real ext .png) and trailing dots.
   const cap = IMAGE_EXTS.has(extension) ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
-  if (file.size > cap) {
+  if (size > cap) {
     return NextResponse.json(
       { error: `File exceeds the ${cap === MAX_IMAGE_BYTES ? "10 MB" : "512 MB"} limit.` },
       { status: 413 },
     );
   }
 
-  const rawDir = formData.get("dir");
-  const dir =
-    typeof rawDir === "string" && rawDir.trim().length > 0
-      ? rawDir.trim().replace(/[^A-Za-z0-9/_-]/g, "")
-      : "misc";
   if (!ALLOWED_UPLOAD_DIRS.has(dir)) {
     return NextResponse.json({ error: "Invalid upload directory." }, { status: 400 });
   }
 
   try {
-    const url = await saveFile(dir, safeName, await file.arrayBuffer());
+    const url = await saveFile(dir, safeName, fileData as File | Blob | ArrayBuffer | ReadableStream<Uint8Array>, size, extension);
 
-    // Best-effort cleanup of the previously managed file being replaced.
-    // Only delete files under our own local upload prefix.
-    const safePrevious = canonicalPreviousUrl(formData.get("previousUrl"));
+    const safePrevious = canonicalPreviousUrl(previousUrl);
     if (safePrevious && safePrevious !== url) {
       await removeFile(safePrevious).catch(() => undefined);
     }

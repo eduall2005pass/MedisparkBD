@@ -144,18 +144,19 @@ export async function itemInEnrolledCourse(
       );
       if (rows.length === 0) {
         // Course-level exams (chapter_id IS NULL)
-        const courseLevel = await query<{ course_id: string }[]>(
-          `SELECT c.course_id FROM exams ex JOIN exam_courses c ON c.exam_id = ex.id WHERE ex.id = ? AND ex.chapter_id IS NULL LIMIT 1`,
-          [itemId],
+        const enrolled = await query<{ found: number }[]>(
+          `SELECT 1 AS found 
+             FROM exams ex 
+             JOIN exam_courses c ON c.exam_id = ex.id 
+             JOIN enrollments e ON e.course_id = c.course_id 
+            WHERE ex.id = ? 
+              AND ex.chapter_id IS NULL 
+              AND e.student_uid = ? 
+              AND e.enrollment_status = 'active' 
+            LIMIT 1`,
+          [itemId, uid],
         );
-        if (courseLevel.length > 0) {
-          const courseId = courseLevel[0].course_id;
-          const enrolled = await query<{ found: number }[]>(
-            `SELECT 1 AS found FROM enrollments WHERE student_uid = ? AND course_id = ? AND enrollment_status = 'active' LIMIT 1`,
-            [uid, courseId],
-          );
-          return enrolled.length > 0;
-        }
+        return enrolled.length > 0;
       }
     } else if (itemType === "qa") {
       // QA questions: allow if the student owns the question OR the question's subject/course

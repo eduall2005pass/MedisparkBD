@@ -145,14 +145,28 @@ export async function fetchStudents(
   } catch {
     // is_active column may not be migrated yet — retry without status filter columns.
     try {
+      const fallbackConditions: string[] = [];
+      const fallbackParams: unknown[] = [];
+      if (options.search && options.search.trim().length > 0) {
+        const term = `%${options.search.trim()}%`;
+        fallbackConditions.push(
+          "(s.full_name LIKE ? OR s.student_id LIKE ? OR s.email LIKE ? OR s.contact_number LIKE ?)",
+        );
+        fallbackParams.push(term, term, term, term);
+      }
+      const fallbackWhere =
+        fallbackConditions.length > 0 ? `WHERE ${fallbackConditions.join(" AND ")}` : "";
+
       const rows = await query<StudentRow[]>(
         `SELECT s.uid, s.student_id, s.full_name, s.gender, s.institution, s.hsc_batch,
                 s.contact_number, s.email, s.facebook_url, s.profile_picture_url,
                 s.provider, s.created_at,
                 (SELECT COUNT(*) FROM enrollments e WHERE e.student_uid = s.uid) AS enrollment_count
          FROM students s
+         ${fallbackWhere}
          ORDER BY (SELECT MAX(e2.enrollment_date) FROM enrollments e2 WHERE e2.student_uid = s.uid) DESC, s.created_at DESC
          LIMIT 500`,
+         fallbackParams,
       );
       return rows.map(mapStudent);
     } catch {
@@ -168,7 +182,7 @@ export async function fetchStudentDetail(uid: string): Promise<{
   progress: StudentProgressSummary[];
 } | null> {
   try {
-    // student_level may not be migrated yet on older DBs — retry without it.
+    // student_level and is_active may not be migrated yet on older DBs — retry gracefully.
     let rows: StudentRow[];
     try {
       rows = await query<StudentRow[]>(
@@ -179,13 +193,23 @@ export async function fetchStudentDetail(uid: string): Promise<{
         [uid],
       );
     } catch {
-      rows = await query<StudentRow[]>(
-        `SELECT uid, student_id, full_name, gender, institution, hsc_batch,
-                contact_number, email, facebook_url, profile_picture_url,
-                provider, is_active, created_at
-         FROM students WHERE uid = ? LIMIT 1`,
-        [uid],
-      );
+      try {
+        rows = await query<StudentRow[]>(
+          `SELECT uid, student_id, full_name, gender, institution, hsc_batch,
+                  contact_number, email, facebook_url, profile_picture_url,
+                  provider, is_active, created_at
+           FROM students WHERE uid = ? LIMIT 1`,
+          [uid],
+        );
+      } catch {
+        rows = await query<StudentRow[]>(
+          `SELECT uid, student_id, full_name, gender, institution, hsc_batch,
+                  contact_number, email, facebook_url, profile_picture_url,
+                  provider, created_at
+           FROM students WHERE uid = ? LIMIT 1`,
+          [uid],
+        );
+      }
     }
     if (!rows[0]) return null;
 

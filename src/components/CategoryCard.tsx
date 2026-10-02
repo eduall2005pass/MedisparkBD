@@ -37,45 +37,43 @@ export default function CategoryCard({
 }: CategoryCardProps) {
   const [count, setCount] = useState<number | null>(initialCount ?? null);
 
-  const load = useCallback(async () => {
-    if (!categoryId && !categorySlug) return;
-    try {
-      const res = await fetch("/api/courses/category-counts", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        counts: Record<string, number>;
-        slugCounts: Record<string, number>;
-      };
-      let next: number | null = null;
-      if (categoryId && data.counts && data.counts[categoryId] !== undefined) {
-        next = data.counts[categoryId];
-      } else if (categorySlug && data.slugCounts && data.slugCounts[categorySlug.toLowerCase()] !== undefined) {
-        next = data.slugCounts[categorySlug.toLowerCase()];
-      } else if (categorySlug && data.slugCounts) {
-        // Fallback: try prefix match (e.g. "ssc" matches "ssc-academic")
-        const key = Object.keys(data.slugCounts).find((k) =>
-          categorySlug.toLowerCase().includes(k) || k.includes(categorySlug.toLowerCase()),
-        );
-        if (key) next = data.slugCounts[key];
-      }
-      if (next !== null) setCount(next);
-    } catch {
-      // Keep previous count on error.
-    }
-  }, [categoryId, categorySlug]);
-
   useEffect(() => {
     // If no category identifiers, nothing to fetch (e.g. static fallback cards).
     if (!categoryId && !categorySlug) return;
-    void load();
-    // No background polling at all — SSR initialCount + this mount fetch +
-    // refetch below on tab-focus is enough (counts change only on admin edit).
+    
+    const loadCount = async () => {
+      try {
+        const res = await fetch("/api/courses/category-counts", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          counts: Record<string, number>;
+          slugCounts: Record<string, number>;
+        };
+        let next: number | null = null;
+        if (categoryId && data.counts && data.counts[categoryId] !== undefined) {
+          next = data.counts[categoryId];
+        } else if (categorySlug && data.slugCounts && data.slugCounts[categorySlug.toLowerCase()] !== undefined) {
+          next = data.slugCounts[categorySlug.toLowerCase()];
+        } else if (categorySlug && data.slugCounts) {
+          const key = Object.keys(data.slugCounts).find((k) =>
+            categorySlug.toLowerCase().includes(k) || k.includes(categorySlug.toLowerCase()),
+          );
+          if (key) next = data.slugCounts[key];
+        }
+        if (next !== null) setCount(next);
+      } catch {
+        // Keep previous count on error.
+      }
+    };
+
+    // No background polling at all — SSR initialCount is the primary source.
+    // Refetch ONLY on tab-focus to catch changes if the user left the tab open.
     const onFocus = () => {
-      if (document.visibilityState === "visible") void load();
+      if (document.visibilityState === "visible") void loadCount();
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [categoryId, categorySlug, load]);
+  }, [categoryId, categorySlug]);
 
   return (
     <Link

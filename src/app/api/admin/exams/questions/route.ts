@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
             ? explicitId
             : (byOrder.get(order) ?? 0);
           if (!questionId && Number.isInteger(order) && order > 0) {
-            // eslint-disable-next-line no-await-in-loop
+             
             questionId = await resolveOrCreateSlot(examId, order);
           }
           if (!questionId) {
@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
             errors.push({ index: idx, error: "Invalid correctIndex." });
             continue;
           }
-          // eslint-disable-next-line no-await-in-loop
+           
           await saveVariant({
             questionId,
             version: bodyVersion,

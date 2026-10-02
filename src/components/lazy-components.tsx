@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Suspense } from "react";
+
 import MediSparkLoader from "@/components/MediSparkLoader";
 
 // Heavy PDF libraries - only load when user clicks Generate/Download

@@ -32,7 +32,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useExamLock } from "@/components/exam/ExamLockContext";
 import {
   explicitParentFor,
@@ -76,7 +76,7 @@ function currentFullUrl(): string {
 }
 
 /**
- * Mount ONCE near the root (inside ExamLockProvider). Tracks pathname
+ * Mount ONCE near the root (inside ExamLockProvider). Tracks full URL
  * changes: true back steps pop, forward steps push, replaces/duplicates
  * are ignored — the stack always mirrors the logical in-app trail.
  * Additionally enforces explicit-parent Back for registered child pages
@@ -84,11 +84,19 @@ function currentFullUrl(): string {
  */
 export function NavHistoryProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { isLocked } = useExamLock();
   const isLockedRef = useRef(isLocked);
   const stackRef = useRef<string[]>([]);
   const [depth, setDepth] = useState(0);
+
+  const currentUrl = useMemo(() => {
+    if (!pathname) return "";
+    const search = searchParams?.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  }, [pathname, searchParams]);
+
   // Full current URL (path + search), refreshed after EVERY render so the
   // popstate guard always knows which page Back started from. Read from
   // window.location directly (client-only effect) so no Suspense boundary
@@ -105,18 +113,18 @@ export function NavHistoryProvider({ children }: { children: React.ReactNode }) 
   });
 
   useEffect(() => {
-    if (!pathname) return;
+    if (!currentUrl) return;
     const stack = stackRef.current;
     const top = stack[stack.length - 1];
-    if (top === pathname) return; // replace / same-page: ignore
-    if (stack.length >= 2 && stack[stack.length - 2] === pathname) {
+    if (top === currentUrl) return; // replace / same-page: ignore
+    if (stack.length >= 2 && stack[stack.length - 2] === currentUrl) {
       stack.pop(); // true back step: pop
     } else {
-      stack.push(pathname); // forward step: push
+      stack.push(currentUrl); // forward step: push
       if (stack.length > MAX_ENTRIES) stack.splice(0, stack.length - MAX_ENTRIES);
     }
     setDepth(stack.length);
-  }, [pathname]);
+  }, [currentUrl]);
 
   // Browser Back / Android system Back enforcement for explicit-child pages.
   // Native pops that already land on the explicit parent (or start from a

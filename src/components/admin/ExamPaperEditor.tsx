@@ -246,7 +246,7 @@ export default function ExamPaperEditor({
     setAnswerKeyOcrBusy(null);
     setAddKeyNum("");
     // NOTE: bulkTexts / answerKeyTexts / answerKeyMaps persist per workspace tab.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [activeTab]);
 
   const totalSlots = useMemo(() => {
@@ -309,7 +309,7 @@ export default function ExamPaperEditor({
       }
       return merged;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [questions, totalSlots]);
 
   // Number of slots with unsaved changes (powers the Save button label).
@@ -482,11 +482,11 @@ export default function ExamPaperEditor({
     const collected: string[] = [];
     try {
       for (let i = 0; i < valid.length; i += 1) {
-        // eslint-disable-next-line no-await-in-loop
+         
         setAnswerKeyOcrBusy(`Processing questions… Page ${i + 1}/${valid.length}`);
         const fd = new FormData();
         fd.append("images", valid[i]);
-        // eslint-disable-next-line no-await-in-loop
+         
         const res = await fetch("/api/admin/exams/answer-key-ocr", {
           method: "POST",
           headers: { ...authHeaders },
@@ -741,7 +741,7 @@ export default function ExamPaperEditor({
       let saved = 0;
       for (let start = 0; start < items.length; start += 200) {
         const chunk = items.slice(start, start + 200);
-        // eslint-disable-next-line no-await-in-loop
+         
         const res = await fetch("/api/admin/exams/questions", {
           method: "POST",
           headers: { "Content-Type": "application/json", ...authHeaders },
@@ -846,7 +846,7 @@ export default function ExamPaperEditor({
       let networkError: unknown = null;
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          // eslint-disable-next-line no-await-in-loop
+           
           res = await fetch(url, { cache: "no-store", headers: authHeaders });
           networkError = null;
           break;
@@ -860,7 +860,7 @@ export default function ExamPaperEditor({
         // Read the server's message for the debug log (never blank the UI).
         const errBody = (await res.json().catch(() => null)) as { error?: string } | null;
         const detail = `Refresh GET ${url} → HTTP ${res.status}${errBody?.error ? `: ${errBody.error}` : ""}`;
-        // eslint-disable-next-line no-console
+         
         console.error("[ExamPaperEditor]", detail);
         if (res.status === 401 || res.status === 403) {
           throw new Error("SESSION_EXPIRED");
@@ -869,7 +869,7 @@ export default function ExamPaperEditor({
       }
       const data = (await res.json().catch(() => null)) as { questions?: unknown } | null;
       if (!data || !Array.isArray(data.questions)) {
-        // eslint-disable-next-line no-console
+         
         console.error("[ExamPaperEditor]", `Refresh GET ${url} → unexpected response shape`, data);
         throw new Error("BAD_RESPONSE");
       }
@@ -888,7 +888,7 @@ export default function ExamPaperEditor({
       void loadCoverage();
     } catch (e) {
       // Keep everything visible — report what actually happened.
-      // eslint-disable-next-line no-console
+       
       console.error("[ExamPaperEditor] refresh failed:", e);
       if (e instanceof Error && e.message === "SESSION_EXPIRED") {
         setError("Session expired — please reload the page and sign in again, then retry Refresh.");
@@ -925,13 +925,14 @@ export default function ExamPaperEditor({
     setImageUploadingSlot(slotIndex);
     setError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("dir", "exams");
-      const res = await fetch("/api/uploads", {
+      const query = new URLSearchParams({ dir: "exams", name: file.name });
+      const res = await fetch(`/api/uploads?${query.toString()}`, {
         method: "POST",
-        headers: { Authorization: bearer as string },
-        body: fd,
+        headers: { 
+          Authorization: bearer as string,
+          "Content-Type": file.type || "application/octet-stream"
+        },
+        body: file,
       });
       const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
       if (!res.ok || !data.url) throw new Error(data.error || "Upload failed.");

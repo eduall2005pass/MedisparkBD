@@ -25,42 +25,14 @@ export default function BannerSlider({ initialSlides = [] }: { initialSlides?: S
 
   // SSR props can arrive stale (300s ISR) or change on client navigation —
   // sync them so a deleted course/banner disappears instead of sticking.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+   
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSlides(initialSlides);
     setActiveIndex((prev) =>
       initialSlides.length === 0 ? 0 : Math.min(prev, initialSlides.length - 1),
     );
   }, [initialSlides]);
-
-  // Background refresh: slow-network users first see the SSR snapshot, then
-  // this replaces it with live data (deleted slides drop out). Failure keeps
-  // the SSR snapshot — never blanks the banner.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/featured-slides", { cache: "no-store" });
-        if (!res.ok || cancelled) return;
-        const data = (await res.json().catch(() => null)) as { slides?: Slide[] } | null;
-        if (cancelled || !Array.isArray(data?.slides)) return;
-        const fresh = data.slides as Slide[];
-        setSlides((prev) => {
-          const prevIds = prev.map((s) => s.id).join("|");
-          const freshIds = fresh.map((s) => s.id).join("|");
-          return prevIds === freshIds ? prev : fresh;
-        });
-        setActiveIndex((prev) =>
-          fresh.length === 0 ? 0 : Math.min(prev, fresh.length - 1),
-        );
-      } catch {
-        // Network slow/offline — keep SSR snapshot.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const goTo = useCallback(
     (index: number) => {

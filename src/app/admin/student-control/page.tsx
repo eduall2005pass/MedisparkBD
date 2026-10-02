@@ -38,13 +38,16 @@ export default function StudentControlPage() {
   const { user, authLoading } = useAuth();
   const [tab, setTab] = useState<Tab>("all");
   const [students, setStudents] = useState<Student[] | null>(null);
-  const [enrolledUids, setEnrolledUids] = useState<Set<string> | null>(null);
+  const [enrolledUids, setEnrolledUids] = useState<Map<string, number> | null>(
+    null,
+  );
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [courseSlug, setCourseSlug] = useState("");
   // Members keyed by course slug — avoids sync setState in effects.
   const [courseData, setCourseData] = useState<{
     slug: string;
     members: Map<string, string>;
+    enrolledAt: Map<string, number>;
   } | null>(null);
   const [error, setError] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -64,11 +67,18 @@ export default function StudentControlPage() {
       setStudents(Array.isArray(data.students) ? data.students : []);
       if (enrollmentsRes.ok) {
         const data = (await enrollmentsRes.json()) as {
-          enrollments?: Array<{ studentUid: string }>;
+          enrollments?: Array<{ studentUid: string; enrolledAt?: number | null }>;
         };
-        setEnrolledUids(
-          new Set((data.enrollments ?? []).map((item) => item.studentUid)),
-        );
+        const latest = new Map<string, number>();
+        for (const item of data.enrollments ?? []) {
+          if (!item.studentUid) continue;
+          const time =
+            typeof item.enrolledAt === "number" ? item.enrolledAt : 0;
+          if (!latest.has(item.studentUid) || time > (latest.get(item.studentUid) ?? 0)) {
+            latest.set(item.studentUid, time);
+          }
+        }
+        setEnrolledUids(latest);
       }
       if (coursesRes.ok) {
         const data = (await coursesRes.json()) as { courses?: CourseOption[] };
@@ -99,18 +109,28 @@ export default function StudentControlPage() {
         }),
       )
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { enrollments?: Array<{ studentUid: string; status: string }> } | null) => {
+      .then((data: { enrollments?: Array<{ studentUid: string; status: string; enrolledAt?: number | null }> } | null) => {
         if (cancelled) return;
         const members = new Map<string, string>();
+        const enrolledAt = new Map<string, number>();
         for (const item of data?.enrollments ?? []) {
           if (item.studentUid && !members.has(item.studentUid)) {
             members.set(item.studentUid, item.status);
           }
+          const time =
+            typeof item.enrolledAt === "number" ? item.enrolledAt : 0;
+          if (
+            item.studentUid &&
+            (!enrolledAt.has(item.studentUid) ||
+              time > (enrolledAt.get(item.studentUid) ?? 0))
+          ) {
+            enrolledAt.set(item.studentUid, time);
+          }
         }
-        setCourseData({ slug, members });
+        setCourseData({ slug, members, enrolledAt });
       })
       .catch(() => {
-        if (!cancelled) setCourseData({ slug, members: new Map() });
+        if (!cancelled) setCourseData({ slug, members: new Map(), enrolledAt: new Map() });
       });
     return () => {
       cancelled = true;
@@ -156,17 +176,35 @@ export default function StudentControlPage() {
     }
     switch (tab) {
       case "active":
-        return list.filter((student) => student.isActive !== false);
+        list = list.filter((student) => student.isActive !== false);
+        break;
       case "inactive":
-        return list.filter((student) => student.isActive === false);
+        list = list.filter((student) => student.isActive === false);
+        break;
       case "enrolled":
-        return list.filter(
+        list = list.filter(
           (student) => enrolledUids?.has(student.uid) ?? false,
         );
+        break;
       default:
-        return list;
+        break;
     }
-  }, [students, tab, enrolledUids, courseSlug, activeMembers]);
+    // Latest enrolled first: Enrolled tab or any course-wise view is sorted
+    // by latest enrollment time (DESC). All/Active/Inactive already come
+    // from the API ordered by MAX(enrollment_date) DESC, so keep that order.
+    const shouldSortByEnrollment =
+      tab === "enrolled" || courseSlug !== "";
+    if (shouldSortByEnrollment) {
+      const timeFor = (uid: string): number => {
+        if (courseSlug !== "" && courseData?.slug === courseSlug) {
+          return courseData.enrolledAt.get(uid) ?? 0;
+        }
+        return enrolledUids?.get(uid) ?? 0;
+      };
+      list = [...list].sort((a, b) => timeFor(b.uid) - timeFor(a.uid));
+    }
+    return list;
+  }, [students, tab, enrolledUids, courseSlug, activeMembers, courseData]);
 
   // Phone-number list derived from the current view (tab + course filter).
   const phoneRows = useMemo(() => {
@@ -443,14 +481,20 @@ export default function StudentControlPage() {
         </p>
       ) : (
         <ul className="mt-5 space-y-2">
-          {visible.map((student) => (
+          {visible.map((student, index) => (
             <li
               key={student.uid}
               className="flex flex-col gap-3 rounded-xl border border-[#dbeafe] bg-white px-4 py-3 shadow-sm shadow-[#0b1e3a]/5 admin-dark:border-[#1e3a65] admin-dark:bg-[#112544] sm:flex-row sm:items-center"
             >
+              <span className="hidden w-7 shrink-0 text-center text-xs font-extrabold tabular-nums text-neutral-500 sm:block">
+                {index + 1}
+              </span>
               {/* Left: flexible text — wraps on mobile so full names stay readable */}
               <div className="w-full min-w-0 flex-1">
                 <p className="break-words text-sm font-semibold leading-snug text-heading sm:truncate">
+                  <span className="mr-1.5 font-extrabold tabular-nums text-neutral-500 sm:hidden">
+                    {index + 1}.
+                  </span>
                   {student.fullName || student.name || student.email || student.uid}
                 </p>
                 <p className="break-words text-[11px] leading-snug text-neutral-500 sm:truncate">

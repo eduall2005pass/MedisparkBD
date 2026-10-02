@@ -133,6 +133,7 @@ export default function InstallAppButton() {
   const [guideTab, setGuideTab] = useState<BrowserKey>(() => detectBrowser());
   const [portalMounted, setPortalMounted] = useState(false);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPortalMounted(true);
     return () => setPortalMounted(false);
   }, []);

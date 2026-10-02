@@ -1232,7 +1232,7 @@ export async function saveExam(
           const placeholders = missing.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
           const values: unknown[] = [];
           for (const order of missing) {
-            values.push(id, "", "", null, JSON.stringify(["", "", "", ""]), 0, null, marksPerSlot, order, 1);
+            values.push(id, "", "", null, JSON.stringify(["", "", "", ""]), null, null, marksPerSlot, order, 1);
           }
           await conn.query(
             `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active)

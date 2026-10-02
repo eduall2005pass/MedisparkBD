@@ -11,11 +11,9 @@ import {
   resolveExamCategoryId,
 } from "@/lib/public-exams-server";
 
-export const revalidate = 300;
 
-export async function generateStaticParams() {
-  return examCategories.map((item) => ({ category: item.key }));
-}
+
+export const dynamic = "force-dynamic";
 
 const categoryMeta: Record<
   ExamCategory,
@@ -74,6 +72,7 @@ export default async function ExamCategoryPage({ params }: CategoryPageProps) {
         exams={exams}
         batches={batches}
         categoryKey={valid.key}
+        serverNowMs={Date.now()}
       />
     </main>
   );
