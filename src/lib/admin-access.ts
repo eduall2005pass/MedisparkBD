@@ -137,6 +137,9 @@ export const ADMIN_CONTROL_PERMISSIONS: Record<
   // Central rule templates (Admin → Exam Rules). Mirrors the API pair
   // requireAnyPermission(["manageExams", "managePublicExam"]).
   "/admin/exam-rules": ["managePublicExam", "manageExams"],
+  // Exam Paste Format guide (admin-only, no public URL). Same grant as
+  // Exam Rules — exam managers and teachers with exam access.
+  "/admin/exam-paste-format": ["managePublicExam", "manageExams"],
   // Enrolled-exam lists are course-assigned; course managers keep access.
   "/admin/exams/enrolled": ["managePublicExam", "manageExams", "manageCourses"],
   "/admin/qa-control": ["manageQa", "manageContent"],

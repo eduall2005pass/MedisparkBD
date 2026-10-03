@@ -23,6 +23,7 @@ const SEARCH_INDEX: SearchEntry[] = [
   { label: "Material PDF Generator", href: "/admin/material-pdf", section: "Courses" },
   { label: "Public Exam Control", href: "/admin/public-exam-control", section: "Exams" },
   { label: "Exam Rules", href: "/admin/exam-rules", section: "Exams" },
+  { label: "Paste Format", href: "/admin/exam-paste-format", section: "Exams" },
   { label: "Question Bank", href: "/admin/exams/question-bank", section: "Exams" },
   { label: "Answer Keys", href: "/admin/exams/answer-keys", section: "Exams" },
   { label: "Exam Results", href: "/admin/exams/results", section: "Exams" },

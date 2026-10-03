@@ -119,6 +119,7 @@ export const adminCategories: AdminCategory[] = [
       { label: "Public Exams", href: "/admin/exams/public" },
       { label: "Enrolled Exams", href: "/admin/exams/enrolled" },
       { label: "Exam Rules", href: "/admin/exam-rules" },
+      { label: "Paste Format", href: "/admin/exam-paste-format" },
       { label: "Question Bank", href: "/admin/exams/question-bank" },
       { label: "Answer Keys", href: "/admin/exams/answer-keys" },
       { label: "Results", href: "/admin/exams/results" },
