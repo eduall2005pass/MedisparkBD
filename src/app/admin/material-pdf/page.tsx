@@ -56,6 +56,7 @@ function mapParserToQuestions(parsed: ReturnType<typeof parsePastedMcqs>, topic 
 import {
   splitPasteByTopic,
   sanitizeQuestions,
+  questionsToPasteText,
 } from "@/lib/material-pdf-utils";
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -343,14 +344,20 @@ export default function MaterialPdfGeneratorPage() {
       const merged = sanitizeQuestions([...questions, ...loaded]);
       setQuestions(merged);
       setDetection({ total: merged.filter((q) => !q.isStandaloneImage).length });
+      // Keep the paste box in sync so the appended exam text stays copy-able.
+      const appendedText = questionsToPasteText(loaded);
+      if (appendedText) {
+        setPasteText((prev) => [prev.trim(), appendedText].filter(Boolean).join("\n\n"));
+      }
       setToast(`${loaded.length} questions appended from "${examTitle}"`);
     } else {
-      // Replace: exam becomes the source of truth — drop stale paste text so
-      // Detect & Format can't resurrect old content, and always adopt the
+      // Replace: exam becomes the source of truth — the paste box is synced
+      // to the loaded exam text (instead of cleared) so it stays copy-able,
+      // and Detect & Format round-trips the same questions. Always adopt the
       // exam title (user can still rename it afterwards).
       setQuestions(loaded);
       setDetection({ total: loaded.filter((q) => !q.isStandaloneImage).length });
-      setPasteText("");
+      setPasteText(questionsToPasteText(loaded));
       if (examTitle.trim()) setMaterialName(examTitle.trim());
       setToast(`${loaded.length} questions loaded from "${examTitle}" — edit & Generate PDF`);
     }

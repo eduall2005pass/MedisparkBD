@@ -110,3 +110,34 @@ export function sanitizeQuestions(questions: PdfMaterialQuestion[]): PdfMaterial
     return { ...q, qNumber: counter, originalNumber: q.originalNumber ?? null };
   });
 }
+
+/**
+ * Serialize questions back to paste-box text (`Topic:` / `1.` / `A.` /
+ * `Answer:` lines that `parsePastedMcqs` + `splitPasteByTopic` understand),
+ * so an exam loaded from an uploaded exam also stays copy-able from the
+ * paste box. Standalone image blocks carry no text and are skipped.
+ */
+export function questionsToPasteText(questions: PdfMaterialQuestion[]): string {
+  const out: string[] = [];
+  const letters = ["A", "B", "C", "D"];
+  let lastTopic = "";
+  let n = 0;
+  for (const q of questions) {
+    if (q.isStandaloneImage) continue;
+    const topic = (q.topic ?? "").trim();
+    if (topic && topic !== lastTopic) {
+      if (out.length > 0) out.push("");
+      out.push(`Topic: ${topic}`);
+      out.push("");
+      lastTopic = topic;
+    }
+    n += 1;
+    out.push(`${n}. ${(q.question || "").trim()}`);
+    q.options.forEach((opt, i) => {
+      out.push(`${letters[i]}. ${(opt || "").trim()}`);
+    });
+    if (q.answer?.trim()) out.push(`Answer: ${q.answer.trim().toUpperCase()}`);
+    out.push("");
+  }
+  return out.join("\n").trim();
+}
