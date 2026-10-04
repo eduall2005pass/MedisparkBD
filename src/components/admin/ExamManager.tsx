@@ -16,6 +16,7 @@ import {
   type Notice,
 } from "@/components/admin/admin-ui";
 import ExamPaperEditor from "@/components/admin/ExamPaperEditor";
+import ExamSetAutoSync from "@/components/admin/ExamSetAutoSync";
 import ExamRulesEditor from "@/components/admin/ExamRulesEditor";
 import { URL_MESSAGE, isValidHttpUrl } from "@/lib/form-validation";
 import Link from "next/link";
@@ -235,6 +236,7 @@ export default function ExamManager({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [questionsExam, setQuestionsExam] = useState<Exam | null>(null);
+  const [syncExam, setSyncExam] = useState<Exam | null>(null);
   const [modeFilter, setModeFilter] = useState<"all" | "live" | "practice">(
     // Public Exam Control structure defaults to the Live Exam tab.
     fixedCategory ? "live" : "all",
@@ -963,6 +965,7 @@ export default function ExamManager({
             const adminControls = (
               <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-ink/10 pt-3">
                 <button type="button" onClick={() => setQuestionsExam(exam)} className={`${buttonPrimaryClass} min-w-[88px] shrink-0 px-4 py-2 text-xs`} title="Open Question Management">Questions</button>
+                <button type="button" onClick={() => setSyncExam(exam)} className={`${buttonSecondaryClass} min-w-[88px] shrink-0 px-4 py-2 text-xs`} title="Bilingual Set A/B auto-sync (Bangla master)">Sets BN/EN</button>
                 <button type="button" onClick={() => startEdit(exam)} className={`${buttonSecondaryClass} min-w-[80px] shrink-0 px-4 py-2 text-xs`} title="Edit exam information">Manage</button>
                 <button type="button" disabled={busy} onClick={() => void toggleFeatured(exam)} className={`${exam.featured ? buttonPrimaryClass : buttonSecondaryClass} min-w-[88px] shrink-0 px-4 py-2 text-xs`} title={exam.featured ? "Featured — click to unfeature" : "Not featured — click to feature"}>{exam.featured ? "Featured" : "Feature"}</button>
                 <button type="button" disabled={busy} onClick={() => void toggleStatus(exam)} className={`${buttonSecondaryClass} min-w-[96px] shrink-0 px-4 py-2 text-xs`} title={exam.status === "published" ? "Unpublish exam" : "Publish exam"}>{exam.status === "published" ? "Unpublished" : "Publish"}</button>
@@ -1531,6 +1534,14 @@ export default function ExamManager({
           authHeaders={gate.headers}
           onClose={() => setQuestionsExam(null)}
           onChanged={() => void load()}
+        />
+      )}
+
+      {syncExam && (
+        <ExamSetAutoSync
+          exam={{ id: syncExam.id, title: syncExam.title }}
+          authHeaders={gate.headers}
+          onClose={() => setSyncExam(null)}
         />
       )}
 
