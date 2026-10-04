@@ -18,6 +18,7 @@ import {
 } from "@/components/admin/admin-ui";
 import AdminCenterLoader from "@/components/admin/AdminCenterLoader";
 import ExamPaperEditor from "@/components/admin/ExamPaperEditor";
+import ExamSetAutoSync from "@/components/admin/ExamSetAutoSync";
 import ExamRulesEditor from "@/components/admin/ExamRulesEditor";
 import { MediaUploadField } from "@/components/admin/MediaUploadField";
 import { examCategoryLabel, toDhakaInputValue } from "@/lib/public-exams";
@@ -473,6 +474,7 @@ export default function ExamManageClient({ examId }: { examId: string }) {
   const [exam, setExam] = useState<Exam | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [autoSyncOpen, setAutoSyncOpen] = useState(false);
 
   const setTab = useCallback((key: TabKey) => {
     setActive(key);
@@ -607,8 +609,11 @@ export default function ExamManageClient({ examId }: { examId: string }) {
         {active === "info" && <InfoTab exam={exam} gateHeaders={gate.headers} onSaved={setExam} />}
         {active === "questions" && (
           <div className="space-y-3">
-            <div className={`${cardClass} p-3 sm:p-4`}>
+            <div className={`${cardClass} flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4`}>
               <h3 className="text-xs font-extrabold uppercase tracking-widest text-[#0b1e3a] admin-dark:text-white">Question Management</h3>
+              <button type="button" onClick={() => setAutoSyncOpen(true)} className={buttonPrimaryClass}>
+                Exam Set Auto-Sync · Bangla Master
+              </button>
             </div>
             <ExamPaperEditor
               exam={{
@@ -627,6 +632,13 @@ export default function ExamManageClient({ examId }: { examId: string }) {
               onChanged={() => void loadExam()}
               embedded
             />
+            {autoSyncOpen && (
+              <ExamSetAutoSync
+                exam={{ id: exam.id, title: exam.title }}
+                authHeaders={gate.headers}
+                onClose={() => { setAutoSyncOpen(false); void loadExam(); }}
+              />
+            )}
           </div>
         )}
         {active === "rules" && <RulesTab exam={exam} headers={gate.headers} />}
