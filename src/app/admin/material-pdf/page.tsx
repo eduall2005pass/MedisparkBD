@@ -833,6 +833,31 @@ export default function MaterialPdfGeneratorPage() {
     }
   };
 
+  const handleCopyPaste = async () => {
+    if (!pasteText.trim()) {
+      setToast("Nothing to copy.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(pasteText);
+      setToast("Paste text copied");
+    } catch {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = pasteText;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        setToast("Paste text copied");
+      } catch {
+        setToast("Copy failed — select the text manually.");
+      }
+    }
+  };
+
   const handleClear = () => {
     setQuestions([]);
     setPasteText("");
@@ -1162,6 +1187,13 @@ D. 150 দিন
               className="rounded-xl border border-[#cbd5e1] bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
             >
               Clear
+            </button>
+            <button
+              onClick={handleCopyPaste}
+              disabled={!pasteText.trim()}
+              className="rounded-xl border border-[#cbd5e1] bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 admin-dark:border-[#1e3a65] admin-dark:bg-[#0f2547] admin-dark:text-white"
+            >
+              Copy
             </button>
             <span className="ml-auto self-center text-xs text-slate-500 admin-dark:text-slate-400">
               {pasteText.length} chars • Auto renumber 1..N • Detects Ans: / উত্তর: / Correct Answer:
