@@ -1048,7 +1048,7 @@ export default function ExamParticipationArea({
             </button>
           </div>
 
-          <ol className="space-y-4">
+          <ol className="exam-questions list-none space-y-4">
             {script.questions.map((item, index) => {
               // An unknown correct answer (null) can never match — the old
               // `65 + null` fallback rendered it as "A"; now it shows "—".
@@ -1446,7 +1446,7 @@ export default function ExamParticipationArea({
       <div className="rounded-2xl border border-ink/10 bg-dark-900 p-4 sm:p-6">
 
         {/* Questions list */}
-        <ol className="mt-6 space-y-6">
+        <ol className="exam-questions mt-6 list-none space-y-6">
           {questions.map((q, idx) => {
             // ── Per-question answer lock ──────────────────────────
             // The ONLY lock signal is THIS question's own id in the answers

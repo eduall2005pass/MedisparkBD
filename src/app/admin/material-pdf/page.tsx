@@ -915,7 +915,7 @@ export default function MaterialPdfGeneratorPage() {
 
   return (
     <div className="min-h-screen bg-[#f1f5f9] admin-dark:bg-[#0a162e]">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&family=Noto+Sans+Bengali:wght@400;600;700&display=swap'); .bangla{font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif} .a4-page *{font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif} .a4-page{break-inside:avoid;page-break-inside:avoid} .a4-page .keep-together{break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid} @media print{.a4-page{break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid}}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&family=Noto+Sans+Bengali:wght@400;600;700&display=swap'); .bangla{font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif} .a4-page *{font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif} .a4-page{break-inside:avoid;page-break-inside:avoid} .a4-page .keep-together{break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid} .a4-page ol,.a4-page ul{list-style-type:none !important;list-style:none !important;margin-left:0 !important;padding-left:0 !important} .a4-page li::marker{content:none !important} @media print{.a4-page{break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid} .a4-page h1,.a4-page h2,.a4-page .keep-together{overflow:visible !important;height:auto !important;max-height:none !important;white-space:normal !important;text-overflow:clip !important} .a4-page h1,.a4-page h2{line-height:1.5 !important}}`}</style>
 
       <div className="mx-auto max-w-[1280px] px-3 py-6 sm:px-6 sm:py-8">
         {/* Top Title */}
@@ -1321,9 +1321,10 @@ D. 150 দিন
                   style={{ breakInside: "avoid", pageBreakInside: "avoid" } as React.CSSProperties}>
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     <span
-                      className="bangla cursor-text truncate text-[11px] font-extrabold text-[#0b1e3a] outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-1"
+                      className="bangla cursor-text min-w-0 break-words text-[11px] font-extrabold text-[#0b1e3a] outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-1"
                       contentEditable
                       suppressContentEditableWarning
+                      style={{ overflow: "visible", whiteSpace: "normal", textOverflow: "clip", lineHeight: 1.5 } as React.CSSProperties}
                       onBlur={(e) => {
                         const txt = (e.currentTarget.innerText || "").trim();
                         if (txt) setMaterialName(txt);
@@ -1407,9 +1408,10 @@ D. 150 দিন
                                 TOPIC:
                               </span>
                               <span
-                                className="cursor-text text-[11px] font-extrabold truncate outline-none focus:bg-white/20 focus:ring-1 focus:ring-white/50 rounded px-1"
+                                className="cursor-text text-[11px] font-extrabold min-w-0 break-words outline-none focus:bg-white/20 focus:ring-1 focus:ring-white/50 rounded px-1"
                                 contentEditable
                                 suppressContentEditableWarning
+                                style={{ overflow: "visible", whiteSpace: "normal", textOverflow: "clip", lineHeight: 1.5 } as React.CSSProperties}
                                 onBlur={(e) => {
                                   const txt = (e.currentTarget.innerText || "").trim();
                                   if (txt && txt !== q.topic) handleRenameTopic(q.topic ?? "", txt);

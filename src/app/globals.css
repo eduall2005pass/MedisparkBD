@@ -549,3 +549,53 @@ html[data-exam-locked="true"] body {
 html[data-exam-result="true"] .exam-page-info {
   display: none !important;
 }
+
+/* ============ Exam / PDF print fixes ============
+   The PDF generators capture the `.a4-page` preview with html2canvas, and
+   the exam portal can also be printed via the browser. The web preview
+   looks fine but print/PDF rendering has three classic failure modes,
+   guarded against here (scoped so static guides keep their own markers):
+   1. Double numbering — question <li>s already render a hardcoded number
+      badge/prefix, so native <ol> markers must stay off (else "1. ১.").
+   2. Split blocks — question containers and headers must never break
+      across pages (else bottom banners / top headers slice in half).
+   3. Cropped text — headers must not clip (no fixed height, no hidden
+      overflow, roomy line-height for Bengali glyphs). */
+@media print {
+  .a4-page ol,
+  .a4-page ul,
+  .exam-questions ol,
+  .exam-questions ul {
+    list-style-type: none !important;
+    list-style: none !important;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+  .a4-page li::marker,
+  .exam-questions li::marker {
+    content: none !important;
+  }
+  .a4-page,
+  .a4-page .keep-together,
+  .exam-questions > li {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+  .a4-page {
+    break-after: page;
+    page-break-after: always;
+  }
+  .a4-page h1,
+  .a4-page h2,
+  .a4-page .keep-together {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+  }
+  .a4-page h1,
+  .a4-page h2 {
+    line-height: 1.5 !important;
+  }
+}
