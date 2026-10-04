@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { sanitizeClonedColorsForHtml2Canvas } from "./pdf-capture";
 
 /**
  * CQ PDF Generator — Creative Questions (সৃজনশীল).
@@ -421,46 +422,10 @@ export default function CqPdfGenerator({ onBack }: { onBack: () => void }) {
           const style = clonedDoc.createElement("style");
           style.textContent = `@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&family=Noto+Sans+Bengali:wght@400;600;700&display=swap');`;
           clonedDoc.head.appendChild(style);
-          // Fix: html2canvas 1.4.1 cannot parse oklch() (Tailwind v4 default).
+          // html2canvas 1.4.1 cannot parse Tailwind v4 modern colors
+          // (oklch/oklab/color-mix). Rewrite them to sRGB so capture never throws.
           try {
-            const fixStyle = clonedDoc.createElement("style");
-            fixStyle.textContent = `.a4-page, .a4-page * { color-scheme: light !important; } .a4-page { background-color: #ffffff !important; }`;
-            clonedDoc.head.appendChild(fixStyle);
-            const all = clonedDoc.querySelectorAll(".a4-page, .a4-page *");
-            const c = clonedDoc.createElement("canvas") as HTMLCanvasElement;
-            c.width = 1;
-            c.height = 1;
-            const ctx = c.getContext("2d");
-            const props = ["color", "background-color", "border-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "outline-color", "text-decoration-color", "column-rule-color", "background"];
-            const win = clonedDoc.defaultView;
-            if (win && ctx) {
-              all.forEach((node) => {
-                const htmlEl = node as HTMLElement;
-                const cs = win.getComputedStyle(htmlEl);
-                props.forEach((prop) => {
-                  const val = cs.getPropertyValue(prop);
-                  if (val && val.includes("oklch")) {
-                    let rgb = "";
-                    try {
-                      ctx.fillStyle = "#ffffff";
-                      ctx.fillStyle = val;
-                      rgb = ctx.fillStyle;
-                    } catch {}
-                    if (!rgb || rgb.includes("oklch")) {
-                      if (prop.includes("background")) rgb = "#ffffff";
-                      else if (prop.includes("border") || prop.includes("column")) rgb = "#cbd5e1";
-                      else if (prop === "color") rgb = "#0f172a";
-                      else rgb = "#ffffff";
-                    }
-                    htmlEl.style.setProperty(prop, rgb, "important");
-                  }
-                });
-                const bs = cs.getPropertyValue("box-shadow");
-                if (bs && bs.includes("oklch")) htmlEl.style.setProperty("box-shadow", "none", "important");
-                const bgImg = cs.getPropertyValue("background-image");
-                if (bgImg && bgImg.includes("oklch")) htmlEl.style.setProperty("background-image", "none", "important");
-              });
-            }
+            sanitizeClonedColorsForHtml2Canvas(clonedDoc);
           } catch {}
         },
       });
@@ -581,7 +546,7 @@ export default function CqPdfGenerator({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="min-h-screen bg-[#f1f5f9] admin-dark:bg-[#0a162e]">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&family=Noto+Sans+Bengali:wght@400;600;700&display=swap'); .bangla{font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif} .a4-page *{font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;600;700&family=Noto+Sans+Bengali:wght@400;600;700&display=swap'); .bangla{font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif} .a4-page *{font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif} .a4-page{break-inside:avoid;page-break-inside:avoid} .a4-page .keep-together{break-inside:avoid;page-break-inside:avoid;-webkit-column-break-inside:avoid} @media print{.a4-page{break-after:page;page-break-after:always;break-inside:avoid;page-break-inside:avoid}}`}</style>
 
       <div className="mx-auto max-w-[1280px] px-3 py-6 sm:px-6 sm:py-8">
         {/* Top Title */}
@@ -796,17 +761,19 @@ Example:
                     crossOrigin="anonymous"
                   />
                 )}
-                {/* Top Header — fixed every page */}
-                <div className="flex items-center gap-2 text-[9px] font-semibold tracking-wide text-slate-700">
+                {/* Top Header — fixed every page. Keep together, never split. */}
+                <div className="keep-together flex items-center gap-2 text-[9px] font-semibold tracking-wide text-slate-700"
+                  style={{ breakInside: "avoid", pageBreakInside: "avoid" } as React.CSSProperties}>
                   <span className="shrink-0 font-bold text-[#0b1e3a]">MediSpark Academic and Admission Care</span>
                   <span className="flex-1 border-b border-dotted border-slate-400 opacity-70" style={{ borderBottomStyle: "dotted", height: 1, marginTop: 6 }} />
                   <span className="shrink-0 font-bold text-[#0b1e3a]">Page {String(page.pageNumber).padStart(2, "0")}</span>
                 </div>
                 <div className="mt-1 border-b border-dotted border-slate-300" style={{ borderBottomStyle: "dotted" }} />
 
-                {/* Material Name Title if exists — editable */}
+                {/* Material Name Title if exists — editable. Keep together. */}
                 {materialName.trim() && (
-                  <div className="mt-3 text-center">
+                  <div className="keep-together mt-3 text-center"
+                    style={{ breakInside: "avoid", pageBreakInside: "avoid" } as React.CSSProperties}>
                     <h2
                       className="bangla cursor-text text-[13px] font-extrabold leading-tight text-[#0b1e3a] outline-none focus:bg-yellow-50 focus:ring-1 focus:ring-amber-300 rounded px-1"
                       contentEditable
