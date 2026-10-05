@@ -1445,7 +1445,7 @@ D. 150 দিন
                             style={{ breakInside: "avoid", pageBreakInside: "avoid", WebkitColumnBreakInside: "avoid", backgroundColor: "#0b1e3a", borderColor: "#24365a", color: "#ffffff", boxShadow: "0 1px 2px rgba(11,30,58,0.25)" } as React.CSSProperties}
                           >
                             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <span className="text-[9px] font-black uppercase tracking-wider shrink-0"
+                              <span className="flex shrink-0 items-center text-[9px] font-black uppercase leading-none tracking-wider"
                                 style={{ color: "#fcd34d" }}>
                                 TOPIC:
                               </span>
@@ -1757,7 +1757,7 @@ D. 150 দিন
                 <div className="keep-together mt-2 pt-2 border-t border-slate-200"
                   style={{ breakInside: "avoid", pageBreakInside: "avoid" } as React.CSSProperties}>
                   <div className="flex items-center gap-3">
-                    <div className="rounded px-2.5 py-1 text-[9px] font-black tracking-wider text-white shrink-0"
+                    <div className="flex shrink-0 items-center justify-center rounded px-3 py-1.5 text-center text-[9px] font-black leading-none tracking-wider text-white"
                       style={{ backgroundColor: "#0b1e3a" }}>
                       MEDISPARK ACADEMIC &amp; ADMISSION CARE
                     </div>
