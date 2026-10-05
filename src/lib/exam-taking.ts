@@ -550,8 +550,10 @@ async function startExamAttempt(
     // If exam lookup fails, fall through to normal handling
   }
   // Max attempts enforcement: check exam_settings.maxAttempts if the table exists (for enrolled / fallback)
-  // Enrolled Exam Practice is exempt — after Live ends, enrolled students may
-  // retake for practice even when maxAttempts would otherwise block (spec §6).
+  // Practice phases are exempt — enrolled-archived AND public practice
+  // (static practice-mode + post-live Practice) allow unlimited unranked
+  // retakes even when maxAttempts would otherwise block (spec §6). Without
+  // this, max_attempts=1 blocks "Practice Again" right after the 1st attempt.
   let bypassMaxAttempts = false;
   try {
     const { getEnrolledExamPhase, isEnrolledExam, isEnrolledPracticePhase } = await import("@/lib/enrolled-exam-lifecycle");
@@ -559,6 +561,9 @@ async function startExamAttempt(
     const examForPhase = await fetchExamById(examId);
     if (examForPhase && (await isEnrolledExam(examId))) {
       if (isEnrolledPracticePhase(getEnrolledExamPhase(examForPhase))) bypassMaxAttempts = true;
+    } else if (examForPhase) {
+      const { isPublicPracticeExam, isPublicPostLivePractice } = await import("@/lib/exam-lifecycle");
+      if (isPublicPracticeExam(examForPhase) || isPublicPostLivePractice(examForPhase)) bypassMaxAttempts = true;
     }
   } catch {
     // Best-effort — keep default enforcement.
