@@ -43,7 +43,7 @@ export default function CourseCard({ course }: { course: Course }) {
           </span>
         )}
         {batchLabel && (
-          <span className="absolute right-3 top-3 rounded-lg border border-ink/15 bg-dark-950/80 px-2.5 py-1 text-[11px] font-bold text-neutral-200 backdrop-blur">
+          <span className="absolute right-3 top-3 rounded-lg border border-ink/15 bg-dark-950/80 px-2.5 py-1 text-[11px] font-bold text-neutral-300 backdrop-blur">
             {batchLabel}
           </span>
         )}

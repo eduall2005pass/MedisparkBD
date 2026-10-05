@@ -101,7 +101,7 @@ export default async  function HomepageCourses({
         </div>
 
         {activeCards.length === 0 && (
-          <p className="mt-8 text-center text-xs text-neutral-600">
+          <p className="mt-8 text-center text-xs text-neutral-400">
             All courses are currently hidden. Enable them from Admin Panel → Homepage Courses.
           </p>
         )}

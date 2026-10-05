@@ -352,7 +352,7 @@ export default function CourseRoutineViewer({ routineUrls, courseName }: Props) 
               <div className="space-y-3 p-3">
                 {urls.map((u, idx) => (
                   <div key={u + idx} className="overflow-hidden rounded-lg border border-ink/10 bg-white">
-                    <div className="bg-ink/5 px-3 py-1.5 text-xs font-bold text-neutral-600">Page {idx + 1}</div>
+                    <div className="bg-ink/5 px-3 py-1.5 text-xs font-bold text-neutral-400">Page {idx + 1}</div>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={u} alt={`Routine page ${idx + 1}`} className="w-full object-contain" />
                   </div>

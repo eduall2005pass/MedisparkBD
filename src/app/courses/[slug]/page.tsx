@@ -86,7 +86,7 @@ export default async function CourseDetailsPage({
               </span>
             )}
             {batchLabel && (
-              <span className="absolute right-4 top-4 rounded-lg border border-ink/15 bg-dark-950/80 px-3 py-1.5 text-xs font-bold text-neutral-200 backdrop-blur">
+              <span className="absolute right-4 top-4 rounded-lg border border-ink/15 bg-dark-950/80 px-3 py-1.5 text-xs font-bold text-neutral-300 backdrop-blur">
                 {batchLabel}
               </span>
             )}

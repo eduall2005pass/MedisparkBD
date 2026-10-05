@@ -497,7 +497,7 @@ export default function EnrollModal({
                     onChange={(event) => setCouponInput(event.target.value.toUpperCase())}
                     placeholder={paymentCard?.couponPlaceholder || "COUPON CODE"}
                     disabled={Boolean(appliedCoupon)}
-                    className="min-w-0 flex-1 rounded-xl border border-ink/15 bg-dark-900 px-3 py-2.5 text-sm text-heading placeholder:text-neutral-600 outline-none transition focus:border-primary-500/70 disabled:opacity-60"
+                    className="min-w-0 flex-1 rounded-xl border border-ink/15 bg-dark-900 px-3 py-2.5 text-sm text-heading placeholder:text-neutral-400 outline-none transition focus:border-primary-500/70 disabled:opacity-60"
                   />
                   {appliedCoupon ? (
                     <button
@@ -625,7 +625,7 @@ export default function EnrollModal({
                     onChange={(event) => setTransactionId(event.target.value)}
                     placeholder={paymentCard?.txPlaceholder || "e.g. 8N7DQK2XLM"}
                     autoComplete="off"
-                    className={`mt-1 w-full truncate rounded-xl border bg-dark-900 px-2 py-2 text-xs uppercase tracking-wide text-heading placeholder:normal-case placeholder:tracking-normal placeholder:text-neutral-600 outline-none transition focus:border-primary-500/70 sm:px-3 sm:py-2.5 sm:text-sm ${
+                    className={`mt-1 w-full truncate rounded-xl border bg-dark-900 px-2 py-2 text-xs uppercase tracking-wide text-heading placeholder:normal-case placeholder:tracking-normal placeholder:text-neutral-400 outline-none transition focus:border-primary-500/70 sm:px-3 sm:py-2.5 sm:text-sm ${
                       fieldErrors.transactionId ? "border-red-500/60" : "border-ink/15"
                     }`}
                   />
@@ -652,7 +652,7 @@ export default function EnrollModal({
                     onChange={(event) => setSenderMobile(event.target.value)}
                     placeholder={paymentCard?.senderPlaceholder || "+8801XXXXXXXXX"}
                     maxLength={14}
-                    className={`mt-1 w-full truncate rounded-xl border bg-dark-900 px-2 py-2 text-xs text-heading placeholder:text-neutral-600 outline-none transition focus:border-primary-500/70 sm:px-3 sm:py-2.5 sm:text-sm ${
+                    className={`mt-1 w-full truncate rounded-xl border bg-dark-900 px-2 py-2 text-xs text-heading placeholder:text-neutral-400 outline-none transition focus:border-primary-500/70 sm:px-3 sm:py-2.5 sm:text-sm ${
                       fieldErrors.senderMobile ? "border-red-500/60" : "border-ink/15"
                     }`}
                   />

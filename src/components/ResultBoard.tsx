@@ -207,7 +207,7 @@ export default function ResultBoard() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="যেমন: MS-AB12CD34, Rahim, Dhaka College…"
-              className="w-full rounded-xl border border-ink/10 bg-dark-950 px-4 py-2.5 text-sm text-heading outline-none transition placeholder:text-neutral-600 focus:border-primary-500/60"
+              className="w-full rounded-xl border border-ink/10 bg-dark-950 px-4 py-2.5 text-sm text-heading outline-none transition placeholder:text-neutral-400 focus:border-primary-500/60"
             />
           </div>
           <div ref={examBoxRef} className="relative">
@@ -228,7 +228,7 @@ export default function ResultBoard() {
                 }}
                 placeholder={`পরীক্ষা খুঁজুন… (${exams.length}টি)`}
                 autoComplete="off"
-                className="w-full rounded-xl border border-ink/10 bg-dark-950 px-4 py-2.5 pr-16 text-sm text-heading outline-none transition placeholder:text-neutral-600 focus:border-primary-500/60"
+                className="w-full rounded-xl border border-ink/10 bg-dark-950 px-4 py-2.5 pr-16 text-sm text-heading outline-none transition placeholder:text-neutral-400 focus:border-primary-500/60"
               />
               {examId && (
                 <button
@@ -403,9 +403,9 @@ export default function ResultBoard() {
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-xs">
                     <span className="text-emerald-400">{r.correctCount ?? "—"}</span>
-                    <span className="text-neutral-600">/</span>
+                    <span className="text-neutral-400">/</span>
                     <span className="text-red-400">{r.wrongCount ?? "—"}</span>
-                    <span className="text-neutral-600">/</span>
+                    <span className="text-neutral-400">/</span>
                     <span className="text-neutral-400">{r.skippedCount ?? "—"}</span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-neutral-300">
