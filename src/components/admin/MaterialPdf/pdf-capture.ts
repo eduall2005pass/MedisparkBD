@@ -54,6 +54,44 @@ function fallbackFor(prop: string): string {
 }
 
 /**
+ * Preview-faithful PDF placement for a captured `.a4-page` element.
+ *
+ * The capture is drawn at full A4 width. When its aspect matches A4
+ * (the normal case) it fills the page edge-to-edge — pixel-identical to
+ * the on-screen preview. When content overflows 297mm (the char-count
+ * pagination estimate drifts, e.g. wider Bangla glyphs wrap more lines),
+ * the capture is uniformly scaled to fit the page height and centered
+ * horizontally, anchored at the top so the headline stays exactly where
+ * the preview shows it.
+ *
+ * Nothing is ever non-uniformly stretched (which shifted text down) or
+ * clipped (which cut headlines/footers/sub-headings). Pure function —
+ * callers keep their own `pdf.addImage` call with the returned rect.
+ */
+export function capturePageRect(
+  canvasWidth: number,
+  canvasHeight: number,
+  pageW: number,
+  pageH: number,
+): { x: number; y: number; w: number; h: number } {
+  if (!canvasWidth || !canvasHeight || !pageW || !pageH) {
+    return { x: 0, y: 0, w: pageW, h: pageH };
+  }
+  const imgH = (canvasHeight * pageW) / canvasWidth;
+  // Within 1mm of A4 (rounding): full-bleed, identical to preview.
+  if (Math.abs(imgH - pageH) <= 1) {
+    return { x: 0, y: 0, w: pageW, h: pageH };
+  }
+  if (imgH < pageH) {
+    // Shorter than A4: fit width, top-anchored like the preview.
+    return { x: 0, y: 0, w: pageW, h: imgH };
+  }
+  // Taller (overflow): uniform shrink-to-fit height, centered horizontally.
+  const w = (pageW * pageH) / imgH;
+  return { x: (pageW - w) / 2, y: 0, w, h: pageH };
+}
+
+/**
  * Rewrite every unsupported computed color inside `.a4-page` in `clonedDoc`
  * to an html2canvas-safe sRGB value. Safe to call multiple times; no-ops
  * when nothing modern is found. Never throws — wrapped by callers in

@@ -15,7 +15,7 @@ import {
 } from "@/components/admin/MaterialPdf/pagination";
 import CqPdfGenerator from "@/components/admin/MaterialPdf/CqPdfGenerator";
 import ExamSourcePicker from "@/components/admin/MaterialPdf/ExamSourcePicker";
-import { sanitizeClonedColorsForHtml2Canvas } from "@/components/admin/MaterialPdf/pdf-capture";
+import { capturePageRect, sanitizeClonedColorsForHtml2Canvas } from "@/components/admin/MaterialPdf/pdf-capture";
 import { useAdminGate } from "@/components/admin/admin-ui";
 
 type Step = "paste" | "preview";
@@ -714,7 +714,10 @@ export default function MaterialPdfGeneratorPage() {
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
       if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, "JPEG", 0, 0, pageW, pageH, undefined, "FAST");
+      // Preview-faithful placement: exact-A4 fills edge-to-edge; overflow
+      // captures shrink uniformly (never stretched, never clipped).
+      const rect = capturePageRect(canvas.width, canvas.height, pageW, pageH);
+      pdf.addImage(imgData, "JPEG", rect.x, rect.y, rect.w, rect.h, undefined, "FAST");
     }
     const blob: Blob = pdf.output("blob");
     if (!blob || blob.size === 0) throw new Error("Generated PDF is empty — please try again.");

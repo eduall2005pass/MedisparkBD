@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { sanitizeClonedColorsForHtml2Canvas } from "./pdf-capture";
+import { capturePageRect, sanitizeClonedColorsForHtml2Canvas } from "./pdf-capture";
 
 /**
  * CQ PDF Generator — Creative Questions (সৃজনশীল).
@@ -458,7 +458,10 @@ export default function CqPdfGenerator({ onBack }: { onBack: () => void }) {
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
       if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, "JPEG", 0, 0, pageW, pageH, undefined, "FAST");
+      // Preview-faithful placement: exact-A4 fills edge-to-edge; overflow
+      // captures shrink uniformly (never stretched, never clipped).
+      const rect = capturePageRect(canvas.width, canvas.height, pageW, pageH);
+      pdf.addImage(imgData, "JPEG", rect.x, rect.y, rect.w, rect.h, undefined, "FAST");
     }
     const blob: Blob = pdf.output("blob");
     if (!blob || blob.size === 0) throw new Error("Generated PDF is empty — please try again.");
