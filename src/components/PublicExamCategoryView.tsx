@@ -268,8 +268,8 @@ export default function PublicExamCategoryView({
   const tabButtonClass = (active: boolean) =>
     `rounded-xl px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide touch-manipulation select-none transform-gpu transition-colors duration-75 ease-out active:scale-[0.97] sm:text-sm ${
       active
-        ? "bg-white text-[#0b1e3a] shadow"
-        : "text-neutral-300 hover:bg-white/5 hover:text-white"
+        ? "bg-ink text-dark-950 shadow"
+        : "text-neutral-300 hover:bg-ink/5 hover:text-heading"
     }`;
 
   return (

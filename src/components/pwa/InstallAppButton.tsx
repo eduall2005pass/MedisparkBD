@@ -300,7 +300,7 @@ export default function InstallAppButton() {
                   onClick={() => setMinimized(true)}
                   aria-label="Minimize install guide"
                   title="Minimize"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/15 bg-dark-800 text-lg font-bold leading-none text-neutral-200 transition hover:border-primary-500/60 hover:text-heading"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/15 bg-dark-800 text-lg font-bold leading-none text-neutral-300 transition hover:border-primary-500/60 hover:text-heading"
                 >
                   —
                 </button>
@@ -309,7 +309,7 @@ export default function InstallAppButton() {
                   onClick={() => { setGuideOpen(false); setMinimized(false); }}
                   aria-label="Close install guide"
                   title="Close"
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/15 bg-dark-800 text-sm font-bold leading-none text-neutral-200 transition hover:border-primary-500/60 hover:text-heading"
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-ink/15 bg-dark-800 text-sm font-bold leading-none text-neutral-300 transition hover:border-primary-500/60 hover:text-heading"
                 >
                   ✕
                 </button>

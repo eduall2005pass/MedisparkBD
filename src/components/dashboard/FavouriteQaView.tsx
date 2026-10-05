@@ -43,7 +43,7 @@ export default function FavouriteQaView() {
                   )}
                   <span className="ml-auto text-[11px] text-neutral-500">{item.created_at ? new Date(item.created_at).toLocaleDateString() : ""}</span>
                 </div>
-                <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-neutral-200">{item.text}</p>
+                <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-neutral-300">{item.text}</p>
                 {item.has_picture ? <p className="mt-2 text-xs font-semibold text-sky-400">Has picture</p> : null}
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link href="/qa" className="inline-flex flex-1 items-center justify-center gap-1 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-amber-700">

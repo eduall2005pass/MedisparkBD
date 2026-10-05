@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
@@ -51,6 +51,9 @@ export default function NotificationsList() {
   const [error, setError] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
   const [markingAll, setMarkingAll] = useState(false);
+  // View-marks-seen guard (StrictMode-safe): the inbox auto-marks visible
+  // notifications read at most once per mount.
+  const autoMarkedRef = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -70,11 +73,36 @@ export default function NotificationsList() {
         if (cancelled) return;
         const items = Array.isArray(data.notifications) ? data.notifications : [];
         setNotifications(items);
+        const loadedUnread = items.filter((item) => !item.isRead).length;
         broadcastUnreadCount(
-          typeof data.unreadCount === "number"
-            ? data.unreadCount
-            : items.filter((item) => !item.isRead).length,
+          typeof data.unreadCount === "number" ? data.unreadCount : loadedUnread,
         );
+        // View marks seen (same pattern as the admin bell): opening the inbox
+        // clears the header badge — otherwise merely viewing leaves the count
+        // stuck even though the student has checked everything.
+        if (loadedUnread > 0 && !autoMarkedRef.current) {
+          autoMarkedRef.current = true;
+          try {
+            const seenResponse = await fetch("/api/notifications", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ all: true }),
+              keepalive: true,
+            });
+            const seenData = (await seenResponse.json().catch(() => null)) as {
+              unreadCount?: unknown;
+            } | null;
+            if (!cancelled && seenResponse.ok) {
+              setNotifications(items.map((item) => ({ ...item, isRead: true })));
+              broadcastUnreadCount(Number(seenData?.unreadCount ?? 0) || 0);
+            }
+          } catch {
+            // Keep the loaded read state — badge refetches on focus.
+          }
+        }
       } catch {
         if (!cancelled) {
           setNotifications([]);
@@ -106,6 +134,8 @@ export default function NotificationsList() {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ id }),
+          // Survives tap-to-open navigation (external links unload the page).
+          keepalive: true,
         });
         const data = (await response.json().catch(() => null)) as {
           unreadCount?: unknown;
@@ -151,6 +181,7 @@ export default function NotificationsList() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ all: true }),
+        keepalive: true,
       });
       const data = (await response.json().catch(() => null)) as {
         unreadCount?: unknown;

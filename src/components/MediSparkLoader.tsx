@@ -115,7 +115,7 @@ function LoaderCore({
         <span className="absolute inset-[10px] rounded-full bg-white/5 backdrop-blur" />
         {/* center percentage — perfectly centered, big and readable */}
         <span
-          className={`relative font-extrabold tabular-nums text-white ${cfg.percentText}`}
+          className={`relative font-extrabold tabular-nums text-heading ${cfg.percentText}`}
           aria-hidden="true"
         >
           {percent}%
@@ -124,7 +124,7 @@ function LoaderCore({
 
       {showBranding && (
         <>
-          <p className="mt-5 text-sm font-extrabold tracking-tight text-white">
+          <p className="mt-5 text-sm font-extrabold tracking-tight text-heading">
             MediSpark <span className="font-semibold text-primary-400">BD</span>
           </p>
           <p className="mt-1 text-xs font-medium tracking-wide text-neutral-400">
@@ -134,7 +134,7 @@ function LoaderCore({
       )}
 
       {label ? (
-        <p className="mt-3 text-sm text-slate-500 admin-dark:text-slate-400 text-center max-w-xs">
+        <p className="mt-3 text-sm text-neutral-400 text-center max-w-xs">
           {label}
         </p>
       ) : null}

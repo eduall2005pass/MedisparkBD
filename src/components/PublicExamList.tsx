@@ -137,8 +137,8 @@ export default function PublicExamList({
   const modeButtonClass = (active: boolean) =>
     `shrink-0 select-none touch-manipulation rounded-full px-4 py-2 text-xs font-extrabold uppercase tracking-wide transform-gpu will-change-transform transition-colors duration-75 ease-out active:scale-[0.97] ${
       active
-        ? "bg-white text-[#0b1e3a] shadow"
-        : "bg-dark-800 text-neutral-300 ring-1 ring-white/10 hover:bg-dark-700 hover:text-white"
+        ? "bg-ink text-dark-950 shadow"
+        : "bg-dark-800 text-neutral-300 ring-1 ring-ink/10 hover:bg-dark-700 hover:text-heading"
     }`;
 
   return (
