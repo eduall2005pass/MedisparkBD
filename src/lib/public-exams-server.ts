@@ -3,13 +3,14 @@ import {
   fetchPublishedPublicExams,
   type Exam,
 } from "@/lib/exams-admin";
-import { fetchActiveCourseCategories } from "@/lib/course-categories-store";
+import { DEFAULT_COURSE_CATEGORIES, fetchActiveCourseCategories } from "@/lib/course-categories-store";
+import { query } from "@/lib/mysql";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import type { Eligibility } from "@/lib/eligibility";
 import {
   batchLabel,
-  categorizeExam,
+
   deriveStatus,
   examCategories,
   examCategorySlugs,
@@ -161,102 +162,98 @@ export async function fetchAdminPublicExams(): Promise<PublicExam[]> {
     }));
 }
 
-/**
- * Practice exam counts per Public Exam category — used by the 4 category cards
- * on /exam and /admin/exams/public. Counts ONLY static Practice exams
- * (published + examMode === "practice", incl. legacy `kind = "practice"` rows
- * normalized server-side). Live-mode exams are NEVER counted here — not even
- * ones past their End Time (post-live Practice phase). Returns 0 for
- * categories with no practice exams.
- */
-export const fetchPracticeExamCounts = unstable_cache(async (): Promise<Record<ExamCategory, number>> => {
-  const counts = {} as Record<ExamCategory, number>;
-  for (const category of examCategories) counts[category.key] = 0;
+type ExamCounts = Record<ExamCategory, number>;
 
-  try {
-    const categories = await fetchActiveCourseCategories();
-    const idToKey = new Map<string, ExamCategory>();
-    for (const item of examCategories) {
-      const slug = examCategorySlugs[item.key];
-      const match = categories.find(
-        (category) =>
-          category.slug.toLowerCase() === slug ||
-          category.slug.toLowerCase().startsWith(slug),
-      );
-      if (match) idToKey.set(match.id, item.key);
-    }
+type CountCategoryRow = {
+  id: string;
+  slug: string;
+  is_active: number | boolean;
+  sort_order: number;
+};
 
-    const exams = await fetchPublicExams();
-    for (const exam of exams) {
-      // Practice Exam counts only — live-mode exams belong to Live Exam.
-      if ((exam.examMode ?? "live") !== "practice") continue;
-      if (!exam.published) continue;
-      let key: ExamCategory | undefined;
-      if (exam.categoryId && idToKey.has(exam.categoryId)) {
-        key = idToKey.get(exam.categoryId);
-      } else {
-        // Legacy exam without category_id — infer via heuristic (same 4 categories as resolveExamCategoryId).
-        try {
-          key = categorizeExam(exam);
-        } catch {
-          key = undefined;
-        }
-      }
-      if (key && counts[key] !== undefined) counts[key] += 1;
-    }
-  } catch {
-    // On DB errors return zero counts — cards still render.
-  }
-  return counts;
-}, ['practiceExamCounts'], { revalidate: 600, tags: ['exams'] });
+type ExamCountRow = {
+  category_id: string | null;
+  live_count: number | string;
+  practice_count: number | string;
+};
 
 /**
- * Live exam counts per Public Exam category — used by the 4 category cards
- * on /exam and /admin/exams/public. Counts ONLY currently Live exams
- * (published + deriveStatus === "Live") that belong to each category via
- * category_id. Falls back to heuristic categorizeExam for legacy exams that
- * have no category_id. Returns 0 for categories with no live exams.
+ * Fresh category-card inventory, using the same category relationship and
+ * published PUBLIC scope as fetchPublishedPublicExams. Static practice (also
+ * legacy kind=practice) is always available; published live exams become
+ * practice at End Time, after Start Time, just like getPublicLiveState.
+ * Bypass every persistent cache, including mysql.query's default SELECT cache.
  */
-export const fetchLiveExamCounts = unstable_cache(async (): Promise<Record<ExamCategory, number>> => {
-  const counts = {} as Record<ExamCategory, number>;
-  for (const category of examCategories) counts[category.key] = 0;
+export async function fetchPublicExamCounts(): Promise<{
+  counts: ExamCounts;
+  practiceCounts: ExamCounts;
+}> {
+  const now = new Date().toISOString().slice(0, 23).replace("T", " ");
+  const [categoryRows, rows] = await Promise.all([
+    query<CountCategoryRow[]>(
+      `SELECT id, slug, is_active, sort_order FROM course_categories
+       ORDER BY sort_order ASC, created_at ASC`,
+      [],
+      { cache: false },
+    ),
+    query<ExamCountRow[]>(
+      `SELECT category_id,
+         SUM(CASE WHEN kind = 'public' AND COALESCE(exam_mode, 'live') <> 'practice'
+           AND (scheduled_at IS NULL OR scheduled_at <= ?)
+           AND (ends_at IS NULL OR ends_at > ?)
+           THEN 1 ELSE 0 END) AS live_count,
+         SUM(CASE WHEN exam_mode = 'practice' OR kind = 'practice'
+           OR (kind = 'public' AND COALESCE(exam_mode, 'live') <> 'practice'
+             AND (scheduled_at IS NULL OR scheduled_at <= ?)
+             AND ends_at IS NOT NULL AND ends_at <= ?)
+           THEN 1 ELSE 0 END) AS practice_count
+       FROM exams
+       WHERE kind IN ('public', 'practice') AND status = 'published'
+         AND COALESCE(archived, 0) = 0
+       GROUP BY category_id`,
+      [now, now, now, now],
+      { cache: false },
+    ),
+  ]);
 
-  try {
-    const categories = await fetchActiveCourseCategories();
-    const idToKey = new Map<string, ExamCategory>();
-    for (const item of examCategories) {
-      const slug = examCategorySlugs[item.key];
-      const match = categories.find(
-        (category) =>
-          category.slug.toLowerCase() === slug ||
-          category.slug.toLowerCase().startsWith(slug),
-      );
-      if (match) idToKey.set(match.id, item.key);
-    }
-
-    const exams = await fetchPublicExams();
-    for (const exam of exams) {
-      if (exam.status !== "Live") continue;
-      // Live Exam counts only — practice-mode exams belong to Practice Exam.
-      if ((exam.examMode ?? "live") === "practice") continue;
-      // Must be published (fetchPublicExams already filters drafts, but
-      // double-check for the admin variant path).
-      if (!exam.published) continue;
-      let key: ExamCategory | undefined;
-      if (exam.categoryId && idToKey.has(exam.categoryId)) {
-        key = idToKey.get(exam.categoryId);
-      } else {
-        // Legacy exam without category_id — infer via heuristic (same 4 categories as resolveExamCategoryId).
-        try {
-          key = categorizeExam(exam);
-        } catch {
-          key = undefined;
-        }
-      }
-      if (key && counts[key] !== undefined) counts[key] += 1;
-    }
-  } catch {
-    // On DB errors return zero counts — cards still render.
+  // Preserve fetchActiveCourseCategories' missing canonical-category fallback
+  // and ordering, but read activation/slug changes directly from the database.
+  const missingDefaults = DEFAULT_COURSE_CATEGORIES
+    .filter((fallback) => !categoryRows.some((category) => category.slug === fallback.slug))
+    .map((category) => ({
+      id: category.id,
+      slug: category.slug,
+      is_active: category.isActive,
+      sort_order: category.sortOrder,
+    }));
+  const categories = [...categoryRows, ...missingDefaults]
+    .filter((category) => Boolean(category.is_active))
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const byId = new Map(rows.map((row) => [row.category_id, row]));
+  const counts = {} as ExamCounts;
+  const practiceCounts = {} as ExamCounts;
+  for (const { key } of examCategories) {
+    const slug = examCategorySlugs[key];
+    const category = categories.find((item) =>
+      item.slug.toLowerCase() === slug || item.slug.toLowerCase().startsWith(slug),
+    );
+    // No heuristic fallback: category pages use WHERE category_id = ?, so
+    // unassigned, unrelated and disabled-category exams must not inflate cards.
+    const row = category ? byId.get(category.id) : undefined;
+    counts[key] = Number(row?.live_count ?? 0);
+    practiceCounts[key] = Number(row?.practice_count ?? 0);
   }
-  return counts;
-}, ['liveExamCounts'], { revalidate: 600, tags: ['exams'] });
+  return { counts, practiceCounts };
+}
+
+// Deduplicate the two initial-count props within an RSC request only, never
+// across requests. The API calls the fresh combined loader directly.
+const fetchRequestExamCounts = cache(fetchPublicExamCounts);
+
+export async function fetchPracticeExamCounts(): Promise<ExamCounts> {
+  return (await fetchRequestExamCounts()).practiceCounts;
+}
+
+export async function fetchLiveExamCounts(): Promise<ExamCounts> {
+  return (await fetchRequestExamCounts()).counts;
+}

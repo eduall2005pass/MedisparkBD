@@ -139,14 +139,17 @@ export async function getFlow5Exams(
             SELECT 1 FROM course_chapters ch
               JOIN course_subject_assignments a ON a.subject_id = ch.subject_id
              WHERE ch.id = ex.chapter_id AND a.course_slug = ?
+               AND ch.is_active = 1
+               AND (COALESCE(ch.course_slug, '') = '' OR ch.course_slug = a.course_slug)
           )
           OR EXISTS (
             SELECT 1 FROM course_chapters ch2
-             WHERE ch2.id = ex.chapter_id AND ch2.course_slug = ?
+             WHERE ch2.id = ex.chapter_id AND ch2.course_slug = ? AND ch2.is_active = 1
           )
         )
       ORDER BY ex.sort_order ASC, ex.scheduled_at DESC, ex.created_at DESC`,
     params,
+    { cache: false },
   );
   // Live totals from the same question rows the grader uses (never stale).
   const liveTotals = new Map<string, { total: number; cnt: number }>();
@@ -157,6 +160,7 @@ export async function getFlow5Exams(
       const totals = await query<{ exam_id: string; total: string | number | null; cnt: number }[]>(
         `SELECT exam_id, SUM(marks) AS total, COUNT(*) AS cnt FROM exam_questions WHERE exam_id IN (${ph}) AND is_active = 1 GROUP BY exam_id`,
         ids,
+        { cache: false },
       );
       for (const t of totals) {
         liveTotals.set(t.exam_id, {
@@ -241,14 +245,17 @@ export async function getFlow5Counts(courseSlug: string): Promise<{
               SELECT 1 FROM course_chapters ch
                 JOIN course_subject_assignments a ON a.subject_id = ch.subject_id
                WHERE ch.id = ex.chapter_id AND a.course_slug = ?
+                 AND ch.is_active = 1
+                 AND (COALESCE(ch.course_slug, '') = '' OR ch.course_slug = a.course_slug)
             )
             OR EXISTS (
               SELECT 1 FROM course_chapters ch2
-               WHERE ch2.id = ex.chapter_id AND ch2.course_slug = ?
+               WHERE ch2.id = ex.chapter_id AND ch2.course_slug = ? AND ch2.is_active = 1
             )
           )
         GROUP BY ex.exam_format, ex.topic_subject`,
       [courseSlug, courseSlug, courseSlug],
+      { cache: false },
     );
     for (const row of rows) {
       const n = Number(row.cnt ?? 0) || 0;

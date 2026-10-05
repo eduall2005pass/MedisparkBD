@@ -1,29 +1,14 @@
-import { fetchLiveExamCounts, fetchPracticeExamCounts } from "@/lib/public-exams-server";
+import { fetchPublicExamCounts } from "@/lib/public-exams-server";
 import { cachedJson } from "@/lib/api-cache";
 
 export const dynamic = "force-dynamic";
 
-const ZERO = {
-  "ssc-academic": 0,
-  "hsc-academic": 0,
-  "medical-admission": 0,
-  "varsity-admission": 0,
-};
 
 export async function GET() {
   try {
-    const [counts, practiceCounts] = await Promise.all([
-      fetchLiveExamCounts(),
-      fetchPracticeExamCounts(),
-    ]);
-    return cachedJson({ counts, practiceCounts }, "API_MEDIUM");
+    return cachedJson(await fetchPublicExamCounts(), "NO_CACHE");
   } catch {
-    return cachedJson(
-      {
-        counts: { ...ZERO },
-        practiceCounts: { ...ZERO },
-      },
-      "API_MEDIUM"
-    );
+    // A failed query is not an empty catalog; let clients keep their last counts.
+    return cachedJson({ error: "Failed to load exam counts." }, "NO_CACHE", { status: 503 });
   }
 }

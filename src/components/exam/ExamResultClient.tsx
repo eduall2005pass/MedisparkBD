@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { AccessLoading, AccessMessage } from "@/components/auth/AccessGuard";
 import { answerIndexToLetter } from "@/lib/paste-mcq-parser";
+import { examResultApiPath } from "@/lib/exam-result-language";
 import {
   cacheExamResult,
   getCachedExamResult,
@@ -21,6 +22,7 @@ type ScriptQuestion = {
   obtained: number;
   explanation: string | null;
   questionImage?: string | null;
+  contentFallback?: "base" | "unavailable" | null;
 };
 
 type ResultScript = {
@@ -34,15 +36,18 @@ type ResultScript = {
   negativeDeduction: number;
   timerPenalty: number;
   secondTimer: boolean;
+  questionVersion?: "bangla" | "english" | null;
   questions: ScriptQuestion[];
 };
 
 export default function ExamResultClient({
   examId,
   examName,
+  questionVersion = null,
 }: {
   examId: string;
   examName: string;
+  questionVersion?: "bangla" | "english" | null;
 }) {
   const { user, profile, authLoading, profileLoading } = useAuth();
   const [script, setScript] = useState<ResultScript | null>(null);
@@ -60,13 +65,15 @@ export default function ExamResultClient({
       setLoading(true);
       setError(null);
       setOfflineCached(false);
+      let allowCachedResult = true;
       try {
         const token = await user!.getIdToken();
-        const res = await fetch(`/api/exams/${encodeURIComponent(examId)}/result`, {
+        const res = await fetch(examResultApiPath(examId, questionVersion), {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           cache: "no-store",
         });
         if (!res.ok) {
+          allowCachedResult = res.status >= 500;
           const data = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(data.error ?? "No submitted result found for this exam yet.");
         }
@@ -78,7 +85,7 @@ export default function ExamResultClient({
         // Offline (or fetch failed): fall back to the locally cached result
         // of this participated exam so it stays viewable without data.
         const cached = getCachedExamResult<ResultScript>(uid, examId);
-        if (!cancelled && cached) {
+        if (!cancelled && allowCachedResult && cached && (!questionVersion || cached.questionVersion === questionVersion)) {
           setScript(cached);
           setOfflineCached(true);
         } else if (!cancelled) {
@@ -96,7 +103,7 @@ export default function ExamResultClient({
       cancelled = true;
       window.removeEventListener("online", onOnline);
     };
-  }, [authLoading, profileLoading, user, examId]);
+  }, [authLoading, profileLoading, user, examId, questionVersion]);
 
   if (authLoading || profileLoading) return <AccessLoading label="Loading result…" />;
   if (!user) {
@@ -148,7 +155,9 @@ export default function ExamResultClient({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="text-lg font-extrabold text-heading">Answer Sheet</h3>
-            <p className="text-xs text-neutral-400">{script.examName}</p>
+            <p className="text-xs text-neutral-400">
+              {script.examName}{script.questionVersion ? ` · ${script.questionVersion === "english" ? "English" : "Bangla"} Version` : ""}
+            </p>
           </div>
           <button
             type="button"
@@ -195,6 +204,9 @@ export default function ExamResultClient({
                     {status}
                   </span>
                 </div>
+                {item.contentFallback === "base" && (
+                  <p className="mt-2 text-xs text-amber-300">Showing original content; the translation for this version is unavailable.</p>
+                )}
                 {item.questionImage ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

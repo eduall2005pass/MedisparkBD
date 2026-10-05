@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { fetchExamPageById } from "@/lib/public-exams-server";
 import ExamResultClient from "@/components/exam/ExamResultClient";
+import { parseExamVersion } from "@/lib/exam-result-language";
 
 export const dynamic = "force-dynamic";
 
 type ResultPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ exam_version?: string | string[] }>;
 };
 
 export async function generateMetadata({ params }: ResultPageProps): Promise<Metadata> {
@@ -26,15 +28,16 @@ export async function generateMetadata({ params }: ResultPageProps): Promise<Met
  * all from the common scoring service (exam_results + exam_questions).
  * Also provides View Answer Sheet via getExamResultScript.
  */
-export default async function ExamResultPage({ params }: ResultPageProps) {
+export default async function ExamResultPage({ params, searchParams }: ResultPageProps) {
   const { id } = await params;
+  const questionVersion = parseExamVersion((await searchParams).exam_version);
   const exam = await fetchExamPageById(id);
   if (!exam) notFound();
   return (
     <main className="flex-1 bg-dark-950">
       <section className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="mt-4">
-          <ExamResultClient examId={exam.id} examName={exam.name} />
+          <ExamResultClient examId={exam.id} examName={exam.name} questionVersion={questionVersion} />
         </div>
       </section>
     </main>

@@ -122,6 +122,7 @@ export async function getFlow4Subjects(courseSlug: string): Promise<Flow4Subject
       WHERE a.course_slug = ? AND s.is_active = 1
       ORDER BY COALESCE(a.sort_order, 0) ASC, s.sort_order ASC, s.name ASC`,
     [courseSlug],
+    { cache: false },
   );
   return rows.map((r) => ({ id: r.id, name: r.name, sortOrder: Number(r.sort_order ?? 0) }));
 }
@@ -180,6 +181,7 @@ export async function getFlow4DirectContents(courseSlug: string, subjectId: stri
     `SELECT id, course_slug, subject_id, title, content_type, video_url, file_url, duration_minutes, sort_order, is_active
        FROM subject_contents WHERE course_slug = ? AND subject_id = ? AND is_active = 1 ORDER BY sort_order ASC, created_at ASC`,
     [courseSlug, subjectId],
+    { cache: false },
   );
   return rows.map((r) => ({
     id: r.id,
@@ -304,6 +306,7 @@ export async function getFlow4Chapters(courseSlug: string, subjectId: string): P
       WHERE subject_id = ? AND is_active = 1 AND course_slug = ?
       ORDER BY sort_order ASC, name ASC`,
     [subjectId, slug],
+    { cache: false },
   );
   return rows.map((r) => ({ id: r.id, subjectId: r.subject_id, name: r.name, sortOrder: Number(r.sort_order ?? 0) }));
 }
@@ -355,6 +358,7 @@ export async function getFlow4Contents(chapterId: string): Promise<Flow4Content[
     `SELECT id, chapter_id, title, content_type, video_url, file_url, duration_minutes, sort_order, is_active
        FROM chapter_contents WHERE chapter_id = ? AND is_active = 1 ORDER BY sort_order ASC, created_at ASC`,
     [chapterId],
+    { cache: false },
   );
   if (unified.length > 0) {
     return unified.map((r) => ({
@@ -375,6 +379,7 @@ export async function getFlow4Contents(chapterId: string): Promise<Flow4Content[
     const classes = await query<Array<{ id: string; chapter_id: string; title: string; video_url: string | null; note_url: string | null; duration_minutes: number; sort_order: number }>>(
       `SELECT id, chapter_id, title, video_url, note_url, duration_minutes, sort_order FROM course_classes WHERE chapter_id = ? AND is_active = 1 ORDER BY sort_order ASC`,
       [chapterId],
+      { cache: false },
     );
     legacy.push(
       ...classes.map((c) => ({
@@ -394,6 +399,7 @@ export async function getFlow4Contents(chapterId: string): Promise<Flow4Content[
     const mats = await query<Array<{ id: number; chapter_id: string; title: string; file_url: string; material_type: string; sort_order: number }>>(
       `SELECT id, chapter_id, title, file_url, material_type, sort_order FROM course_materials WHERE chapter_id = ? AND is_active = 1 ORDER BY sort_order ASC`,
       [chapterId],
+      { cache: false },
     );
     legacy.push(
       ...mats.map((m) => ({
@@ -413,6 +419,7 @@ export async function getFlow4Contents(chapterId: string): Promise<Flow4Content[
     const exams = await query<Array<{ id: string; chapter_id: string; title: string; duration_minutes: number; sort_order: number }>>(
       `SELECT id, chapter_id, title, duration_minutes, sort_order FROM exams WHERE chapter_id = ? AND status='published' ORDER BY sort_order ASC`,
       [chapterId],
+      { cache: false },
     );
     legacy.push(
       ...exams.map((e) => ({

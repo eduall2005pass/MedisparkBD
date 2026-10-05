@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import ContextCard from "./ContextCard";
+import EnrolledExamShortcut from "@/components/EnrolledExamShortcut";
 import { useVisibleInterval } from "@/lib/use-visible-interval";
 import type { ExamCategory } from "@/lib/public-exams";
 
@@ -73,9 +74,7 @@ function formatLiveText(count: number): string {
 
 function formatPracticeText(count: number): string {
   if (count === 0) return "No Practice Exams Available";
-  return count === 1
-    ? "1 Practice Exam Is Available"
-    : `${count} Practice Exams Are Available`;
+  return `${count} Practice Exams Available`;
 }
 
 /**
@@ -111,7 +110,7 @@ export default function ExamCategoryCards({
   });
   // Counts stay fresh silently in the background (no status UI on this page —
   // the auto-update pill lives on the exam category pages beside the batch filter).
-  const AUTO_REFRESH_MS = 10 * 60 * 1000;
+  const AUTO_REFRESH_MS = 60 * 1000;
 
   const load = useCallback(async () => {
     try {
@@ -140,7 +139,17 @@ export default function ExamCategoryCards({
   }, []);
 
   useEffect(() => {
-    void load();
+    const initialLoad = window.setTimeout(() => void load(), 0);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   // Visible tabs only — background tabs cost zero invocations.
@@ -152,6 +161,8 @@ export default function ExamCategoryCards({
         title="Explore Public Exams"
         instruction="তোমার পছন্দের পরীক্ষার ক্যাটাগরি নির্বাচন করো"
       />
+
+      {basePath === "/exam/category" && <EnrolledExamShortcut />}
 
       {/* 4 cards — same grid as Course Section: gap-6 sm:grid-cols-2 xl:grid-cols-4 */}
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">

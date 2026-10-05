@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AccessLoading, AccessMessage } from "@/components/auth/AccessGuard";
+import EnrolledExamCardSettingsEditor from "@/components/admin/EnrolledExamCardSettings";
 import {
   useAdminGate,
   noticeClass,
@@ -121,6 +122,7 @@ export default function ExamSettingsPage() {
       </div>
 
       {notice && <p role="status" className={noticeClass(notice)}>{notice.text}</p>}
+      <EnrolledExamCardSettingsEditor headers={gate.headers} />
     </section>
   );
 }

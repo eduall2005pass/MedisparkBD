@@ -1,25 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseUser } from "@/lib/auth-api";
 import { isMysqlConfigured } from "@/lib/mysql";
-import { hasActiveEnrollment } from "@/lib/my-learning";
-import { getFlow4CourseData, getFlow4DirectContents, getFlow4DirectCourseData, getFlow4Subjects } from "@/lib/flow4";
+import { hasFreshActiveEnrollment } from "@/lib/enrolled-exams-server";
+import { getFlow4CourseData, getFlow4DirectContents, getFlow4DirectCourseData } from "@/lib/flow4";
 
 export const dynamic = "force-dynamic";
+const headers = { "Cache-Control": "no-store" };
 
 // Student Flow 4 read — enrollment-gated
 // GET ?course=slug → { subjects: [...] } with chapters & contents (legacy) OR direct when &direct=1
 // GET ?course=slug&subject=id&direct=1 → { contents: [...] } direct per-subject contents (NEW spec Flow 4)
 // GET ?course=slug&subject=id → legacy chapter list (kept for existing Flow 4 data)
 export async function GET(request: NextRequest) {
-  const user = await getFirebaseUser(request);
-  if (!user || !isMysqlConfigured) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  const slug = request.nextUrl.searchParams.get("course") ?? "";
-  if (!slug) return NextResponse.json({ error: "Missing course." }, { status: 400 });
-  const subject = request.nextUrl.searchParams.get("subject") ?? "";
-  const direct = request.nextUrl.searchParams.get("direct") === "1";
-  const enrolled = await hasActiveEnrollment(user.uid, slug);
-  if (!enrolled) return NextResponse.json({ error: "Not enrolled." }, { status: 403 });
   try {
+    const user = await getFirebaseUser(request);
+    if (!user || !isMysqlConfigured) return NextResponse.json({ error: "Unauthorized." }, { status: 401, headers });
+    const slug = request.nextUrl.searchParams.get("course") ?? "";
+    if (!slug) return NextResponse.json({ error: "Missing course." }, { status: 400, headers });
+    const subject = request.nextUrl.searchParams.get("subject") ?? "";
+    const direct = request.nextUrl.searchParams.get("direct") === "1";
+    const enrolled = await hasFreshActiveEnrollment(user.uid, slug);
+    if (!enrolled) return NextResponse.json({ error: "Not enrolled." }, { status: 403, headers });
     if (subject && direct) {
       const contents = await getFlow4DirectContents(slug, subject);
       return NextResponse.json({ contents }, { headers: { "Cache-Control": "no-store" } });
@@ -43,6 +44,6 @@ export async function GET(request: NextRequest) {
     const data = await getFlow4CourseData(slug);
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
   } catch {
-    return NextResponse.json({ error: "Failed to load course content." }, { status: 500 });
+    return NextResponse.json({ error: "Failed to load course content." }, { status: 500, headers });
   }
 }

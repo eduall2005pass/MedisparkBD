@@ -11,6 +11,7 @@ import {
   type ExamRulesData,
 } from "@/components/ExamRules";
 import { answerIndexToLetter } from "@/lib/paste-mcq-parser";
+import { examResultApiPath } from "@/lib/exam-result-language";
 
 type TakingExam = ExamRulesData & {
   id: string;
@@ -43,6 +44,7 @@ type SubmissionOutcome = {
   timeTakenSeconds?: number | null;
   highestMark?: number | null;
   examName?: string;
+  questionVersion?: "bangla" | "english" | null;
 };
 
 type ScriptQuestion = {
@@ -56,6 +58,7 @@ type ScriptQuestion = {
   obtained: number;
   explanation?: string | null;
   questionImage?: string | null;
+  contentFallback?: "base" | "unavailable" | null;
 };
 
 type ResultScript = {
@@ -64,6 +67,7 @@ type ResultScript = {
   totalMarks: number;
   timeTakenSeconds: number | null;
   meritPosition: number | null;
+  questionVersion?: "bangla" | "english" | null;
   questions: ScriptQuestion[];
 };
 
@@ -995,7 +999,7 @@ export default function ExamParticipationArea({
       if (!user) return;
       const token = await user.getIdToken();
       const response = await fetch(
-        `/api/exams/${encodeURIComponent(examId)}/result`,
+        examResultApiPath(examId, outcome?.questionVersion ?? questionVersion),
         {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
           cache: "no-store",
@@ -1068,7 +1072,9 @@ export default function ExamParticipationArea({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-extrabold text-heading">Answer Script</h3>
-              <p className="text-xs text-neutral-400">{script.examName}</p>
+              <p className="text-xs text-neutral-400">
+                {script.examName}{script.questionVersion ? ` · ${script.questionVersion === "english" ? "English" : "Bangla"} Version` : ""}
+              </p>
             </div>
             <button
               type="button"
@@ -1119,6 +1125,9 @@ export default function ExamParticipationArea({
                     </span>
                   </div>
 
+                  {item.contentFallback === "base" && (
+                    <p className="mt-2 text-xs text-amber-300">Showing original content; the translation for this version is unavailable.</p>
+                  )}
                   {item.questionImage ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

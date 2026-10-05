@@ -16,6 +16,7 @@ import {
 } from "@/lib/exam-variants";
 import type { RowDataPacket } from "mysql2/promise";
 import { normalizeStoredAnswerIndex } from "@/lib/paste-mcq-parser";
+import { resolveResultQuestionContent } from "@/lib/exam-result-language";
 
 // Student-facing exam taking. MediSpark exam rules enforced here:
 //  - answers are stored server-side and locked after the first selection
@@ -131,6 +132,7 @@ export type SubmissionOutcome = {
   /** Best score achieved by any student on this exam. */
   highestMark?: number | null;
   examName?: string;
+  questionVersion?: QuestionVersion | null;
   autoSubmitted?: boolean;
 };
 
@@ -1164,51 +1166,54 @@ async function finalizeAttempt(
       ],
     );
   } catch {
-    // Column missing or insertion failed — retry without version/set/order snapshot.
+    // Some deployed schemas use ENUM('live','practice'), not 'scheduled'.
+    // Let their default official attempt type apply, but KEEP the paper snapshot.
     try {
       await exec(
         `INSERT INTO exam_results
            (exam_id, student_uid, student_name, score, total_marks, answers,
             details, time_taken_seconds, negative_deduction, timer_penalty,
-            is_second_timer, attempt_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            is_second_timer, question_version, assigned_set, question_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          examId,
-          uid,
-          studentName,
-          finalScore,
-          graded.totalMarks,
-          JSON.stringify(merged),
-          JSON.stringify(graded.details),
-          timeTakenSeconds,
-          graded.negativeDeduction ?? 0,
-          timerPenalty,
-          isSecondTimer ? 1 : 0,
-          attemptType,
+          examId, uid, studentName, finalScore, graded.totalMarks,
+          JSON.stringify(merged), JSON.stringify(graded.details),
+          timeTakenSeconds, graded.negativeDeduction ?? 0, timerPenalty,
+          isSecondTimer ? 1 : 0, lockVersion, lockSet, lockOrderJson,
         ],
       );
     } catch {
-      // Column missing or insertion failed — retry without attempt_type (legacy).
-      await exec(
-        `INSERT INTO exam_results
-           (exam_id, student_uid, student_name, score, total_marks, answers,
-            details, time_taken_seconds, negative_deduction, timer_penalty,
-            is_second_timer)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          examId,
-          uid,
-          studentName,
-          finalScore,
-          graded.totalMarks,
-          JSON.stringify(merged),
-          JSON.stringify(graded.details),
-          timeTakenSeconds,
-          graded.negativeDeduction ?? 0,
-          timerPenalty,
-          isSecondTimer ? 1 : 0,
-        ],
-      );
+      // Legacy DBs without snapshot columns retain the existing fallback.
+      try {
+        await exec(
+          `INSERT INTO exam_results
+             (exam_id, student_uid, student_name, score, total_marks, answers,
+              details, time_taken_seconds, negative_deduction, timer_penalty,
+              is_second_timer, attempt_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            examId, uid, studentName, finalScore, graded.totalMarks,
+            JSON.stringify(merged), JSON.stringify(graded.details),
+            timeTakenSeconds, graded.negativeDeduction ?? 0, timerPenalty,
+            isSecondTimer ? 1 : 0, attemptType,
+          ],
+        );
+      } catch {
+        // Column missing or insertion failed — retry without attempt_type (legacy).
+        await exec(
+          `INSERT INTO exam_results
+             (exam_id, student_uid, student_name, score, total_marks, answers,
+              details, time_taken_seconds, negative_deduction, timer_penalty,
+              is_second_timer)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            examId, uid, studentName, finalScore, graded.totalMarks,
+            JSON.stringify(merged), JSON.stringify(graded.details),
+            timeTakenSeconds, graded.negativeDeduction ?? 0, timerPenalty,
+            isSecondTimer ? 1 : 0,
+          ],
+        );
+      }
     }
   }
   await updateMeritPositions(examId);
@@ -1238,6 +1243,7 @@ async function finalizeAttempt(
     meritPosition,
     timeTakenSeconds,
     examName: found.title,
+    questionVersion: lockVersion,
     highestMark: await highestMarkFor(examId),
   };
 }
@@ -1367,6 +1373,7 @@ async function latestOutcome(
     timerPenalty,
     secondTimer: (row.is_second_timer ?? 0) === 1,
     examName: found?.title ?? undefined,
+    questionVersion: normalizeVersion(resultRows[0]?.question_version),
     meritPosition: row.merit_position ?? null,
     timeTakenSeconds: row.time_taken_seconds ?? null,
     highestMark: await highestMarkFor(examId),
@@ -1913,6 +1920,7 @@ export type AnswerScriptQuestion = {
   explanation: string | null;
   /** Optional per-question image (question_image column / variant cell). */
   questionImage?: string | null;
+  contentFallback?: "base" | "unavailable" | null;
 };
 
 export type ExamResultScript = {
@@ -1939,6 +1947,7 @@ export type ExamResultScript = {
 export async function getExamResultScript(
   examId: string,
   uid: string,
+  requestedVersion: QuestionVersion | null = null,
 ): Promise<ExamResultScript | null> {
   const resultRows = await query<
     {
@@ -1958,56 +1967,13 @@ export async function getExamResultScript(
       question_order?: string | null;
     }[]
   >(
-    `SELECT student_name, score, total_marks, answers, details, submitted_at,
-            time_taken_seconds, merit_position, negative_deduction,
-            timer_penalty, is_second_timer, question_version, assigned_set,
-            question_order
-     FROM exam_results
+    // Read optional snapshot fields when present without requiring every legacy
+    // DB to have all three columns. Only mapped script fields leave the server.
+    `SELECT * FROM exam_results
      WHERE exam_id = ? AND student_uid = ?
      ORDER BY id DESC LIMIT 1`,
     [examId, uid],
-  ).catch(async () => {
-    // Legacy DBs without the snapshot columns.
-    const legacy = await query<
-      {
-        student_name: string;
-        score: string | number;
-        total_marks: string | number;
-        answers: string | null;
-        details: string | null;
-        submitted_at: Date | string;
-        time_taken_seconds: number | null;
-        merit_position: number | null;
-        negative_deduction: string | number | null;
-        timer_penalty: string | number | null;
-        is_second_timer: number | null;
-      }[]
-    >(
-      `SELECT student_name, score, total_marks, answers, details, submitted_at,
-              time_taken_seconds, merit_position, negative_deduction,
-              timer_penalty, is_second_timer
-       FROM exam_results
-       WHERE exam_id = ? AND student_uid = ?
-       ORDER BY id DESC LIMIT 1`,
-      [examId, uid],
-    );
-    return legacy as {
-      student_name: string;
-      score: string | number;
-      total_marks: string | number;
-      answers: string | null;
-      details: string | null;
-      submitted_at: Date | string;
-      time_taken_seconds: number | null;
-      merit_position: number | null;
-      negative_deduction: string | number | null;
-      timer_penalty: string | number | null;
-      is_second_timer: number | null;
-      question_version?: string | null;
-      assigned_set?: string | null;
-      question_order?: string | null;
-    }[];
-  });
+  );
   const result = resultRows[0];
   if (!result) return null;
 
@@ -2017,9 +1983,9 @@ export async function getExamResultScript(
   const detailRows = parseJsonColumn<ResultDetail[]>(result.details);
   const details: ResultDetail[] = Array.isArray(detailRows) ? detailRows : [];
 
-  // Replay the student's own language version: variant content wins when the
-  // result carries a version/set snapshot, otherwise base rows (legacy).
-  const snapVersion = normalizeVersion(result.question_version);
+  // A URL cannot switch a persisted attempt's medium. The validated request
+  // version is only a fallback for legacy results without a language snapshot.
+  const snapVersion = normalizeVersion(result.question_version) ?? requestedVersion ?? "bangla";
   const snapSetRaw = String(result.assigned_set ?? "").toUpperCase();
   const snapSet: QuestionSet | null =
     snapSetRaw === "B" ? "B" : snapSetRaw === "A" ? "A" : null;
@@ -2065,138 +2031,10 @@ export async function getExamResultScript(
   } catch {
     variantOverlay = new Map();
   }
-  const byId = new Map<number, {
-    question: string;
-    options: string[];
-    marks: number;
-    /** NULL = unknown answer (rendered as "—", never as A). */
-    correctIndex: number | null;
-    explanation: string | null;
-    questionImage: string | null;
-  }>();
-  /** Displayable content takes question text (or an image) plus ≥2 non-empty options. */
-  const usableMeta = (
-    question: string | null | undefined,
-    options: string[],
-    marks: number,
-    correctIndex: number | null,
-    explanation: string | null | undefined,
-    questionImage: string | null | undefined,
-  ) => {
-    const text = String(question ?? "");
-    if (text.trim().length === 0 && !questionImage) return null;
-    if (options.length < 2 || options.some((o) => o.length === 0)) return null;
-    return {
-      question: text,
-      options,
-      marks,
-      correctIndex,
-      explanation: explanation ?? null,
-      questionImage: questionImage ?? null,
-    };
-  };
-  const baseMeta = (row: {
-    question: string;
-    options: string;
-    marks: string | number;
-    correct_index: number | null;
-    explanation: string | null;
-    question_image?: string | null;
-  }) => {
-    const parsed = parseJsonColumn<unknown[]>(row.options);
-    if (!Array.isArray(parsed)) return null;
-    return usableMeta(
-      row.question,
-      parsed.map(String),
-      Number(row.marks) || 1,
-      // Preserve an explicit unknown (NULL) — never coerce it to 0/A.
-      // `|| 0` would wrongly turn a valid 0 (answer A) into 0 via falsy — use isFinite guard instead.
-      row.correct_index === null || row.correct_index === undefined
-        ? null
-        : (Number.isFinite(Number(row.correct_index)) ? Number(row.correct_index) : null),
-      row.explanation,
-      (row.question_image as string | null) ?? null,
-    );
-  };
-  const variantMeta = (variant: VariantRow | undefined, fallbackMarks: number) => {
-    if (!variant) return null;
-    const parsed = parseJsonColumn<unknown[]>(variant.options);
-    if (!Array.isArray(parsed)) return null;
-    return usableMeta(
-      variant.question,
-      parsed.map(String),
-      Number(variant.marks) || fallbackMarks,
-      // Preserve an explicit unknown (NULL) — never coerce it to 0/A.
-      // `|| 0` would wrongly coerce non-finite into 0 — use isFinite guard.
-      variant.correct_index === null || variant.correct_index === undefined
-        ? null
-        : (Number.isFinite(Number(variant.correct_index)) ? Number(variant.correct_index) : null),
-      variant.explanation,
-      variant.question_image ?? null,
-    );
-  };
-  /** All authored variant cells for one question — attempt version/set first, then any. */
-  const variantsFor = (questionId: number): VariantRow[] => {
-    const ordered: VariantRow[] = [];
-    const seen = new Set<string>();
-    const langs = Array.from(
-      new Set([snapVersion, "bangla", "english"].filter(Boolean) as string[]),
-    );
-    const sets = Array.from(
-      new Set([snapSet, "A", "B"].filter(Boolean) as string[]),
-    );
-    for (const lang of langs) {
-      for (const set of sets) {
-        const key = `${questionId}:${lang}:${set}`;
-        const row = variantOverlay.get(key);
-        if (row && !seen.has(key)) {
-          seen.add(key);
-          ordered.push(row);
-        }
-      }
-    }
-    for (const [key, row] of variantOverlay) {
-      if (key.startsWith(`${questionId}:`) && !seen.has(key)) {
-        seen.add(key);
-        ordered.push(row);
-      }
-    }
-    return ordered;
-  };
-  for (const row of questionRows) {
-    const qid = Number(row.id);
-    const baseMarks = Number(row.marks) || 1;
-    // 1) The exact locked variant for this attempt (grading is replayed from it too).
-    let meta =
-      snapVersion && snapSet
-        ? variantMeta(variantOverlay.get(`${qid}:${snapVersion}:${snapSet}`), baseMarks)
-        : null;
-    // 2) Base-row content (legacy exams without authored variants).
-    if (!meta) meta = baseMeta(row);
-    // 3) Any valid variant cell — blank placeholder base rows must never reach the UI.
-    if (!meta) {
-      for (const candidate of variantsFor(qid)) {
-        const m = variantMeta(candidate, baseMarks);
-        if (m) {
-          meta = m;
-          break;
-        }
-      }
-    }
-    // 4) Last resort — keep whatever the base row has (never drop the question from the script).
-    if (!meta) {
-      const parsed = parseJsonColumn<unknown[]>(row.options);
-      meta = {
-        question: String(row.question ?? ""),
-        options: Array.isArray(parsed) ? parsed.map(String) : [],
-        marks: baseMarks,
-        correctIndex: normalizeStoredAnswerIndex(row.correct_index),
-        explanation: row.explanation ?? null,
-        questionImage: (row.question_image as string | null) ?? null,
-      };
-    }
-    byId.set(qid, meta);
-  }
+  const byId = new Map(questionRows.map((row) => [
+    Number(row.id),
+    resolveResultQuestionContent(row, variantOverlay, snapVersion, snapSet),
+  ]));
 
   // Prefer the stored per-question breakdown; fall back to the answers
   // snapshot + question keys when details are missing (older results).
@@ -2221,12 +2059,13 @@ export async function getExamResultScript(
       questionId: detail.questionId,
       question: meta.question,
       options: meta.options,
-      marks: meta.marks,
+      marks: resolveMarks(detail.marks, meta.marks),
       chosenIndex: normalizeStoredAnswerIndex(detail.chosenIndex),
       correctIndex: normalizeStoredAnswerIndex(detail.correctIndex),
       obtained: Number(detail.obtained) || 0,
       explanation: meta.explanation,
       questionImage: meta.questionImage,
+      contentFallback: meta.contentFallback,
     });
   }
   for (const [key, meta] of byId.entries()) {
@@ -2255,6 +2094,7 @@ export async function getExamResultScript(
             : 0, // Legacy rows lack per-question deductions; totals stay authoritative.
       explanation: meta.explanation,
       questionImage: meta.questionImage,
+      contentFallback: meta.contentFallback,
     });
   }
   // Student's display order first (locked at start), then any extras by ID.
