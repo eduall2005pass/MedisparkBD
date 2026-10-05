@@ -418,13 +418,16 @@ export async function ensureQuestionSlots(examId: string, count: number): Promis
       const placeholders = missing.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
       const values: unknown[] = [];
       for (const sortOrder of missing) {
+        // Placeholder slots use correct_index 0: production schema is
+        // NOT NULL DEFAULT 0, and NULL inserts fail silently here.
+        // The answer is set properly when the admin fills the slot.
         values.push(
           examId,
           "",
           "",
           null,
           JSON.stringify(["", "", "", ""]),
-          null,
+          0,
           null,
           marksPerSlot,
           sortOrder,
@@ -731,12 +734,13 @@ async function applyLiveTotals(exams: Exam[]): Promise<Exam[]> {
     }
     for (const exam of exams) {
       const live = map.get(exam.id);
-      if (live) {
+      // Live question rows win when they exist. With no linked questions
+      // yet (fresh exam, slots pending), keep the admin's configured
+      // Total Questions × Marks Per Question instead of zeroing them —
+      // otherwise a newly saved exam shows 0 marks until questions exist.
+      if (live && live.cnt > 0) {
         exam.totalMarks = Math.round(live.total * 100) / 100;
         exam.questionCount = live.cnt;
-      } else {
-        exam.totalMarks = 0;
-        exam.questionCount = 0;
       }
     }
   } catch {
@@ -1232,7 +1236,10 @@ export async function saveExam(
           const placeholders = missing.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
           const values: unknown[] = [];
           for (const order of missing) {
-            values.push(id, "", "", null, JSON.stringify(["", "", "", ""]), null, null, marksPerSlot, order, 1);
+            // correct_index 0 (not NULL): production schema is NOT NULL
+            // DEFAULT 0 — NULL fails the whole slot insert. Answer is set
+            // when the admin fills the slot.
+            values.push(id, "", "", null, JSON.stringify(["", "", "", ""]), 0, null, marksPerSlot, order, 1);
           }
           await conn.query(
             `INSERT INTO exam_questions (exam_id, bank_subject, question, question_image, options, correct_index, explanation, marks, sort_order, is_active)
