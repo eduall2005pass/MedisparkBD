@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireAnyPermission, requirePermission } from "@/lib/admin";
 import { logAdminAction } from "@/lib/administration";
 import {
@@ -48,6 +49,14 @@ export async function POST(request: NextRequest) {
       `exam=${String(body.examId)} id=${String(body.id ?? "new")}`,
       request,
     );
+    // Bust exam page caches so students see updated rules immediately.
+    try {
+      (revalidateTag as unknown as (tag: string) => void)("exams");
+      revalidatePath(`/exam/${String(body.examId)}`);
+      revalidatePath(`/exam/${String(body.examId)}/rules`);
+    } catch {
+      // Best effort — stale pages self-heal at TTL expiry.
+    }
     return NextResponse.json({ rules });
   } catch (error) {
     return NextResponse.json(
@@ -70,7 +79,15 @@ export async function PUT(request: NextRequest) {
   }
   const lang = typeof body?.lang === "string" && body.lang.toLowerCase() === "english" ? "english" : "bangla";
   const ids = body!.order.map(Number).filter((id) => Number.isInteger(id) && id > 0);
-  return NextResponse.json({ rules: await reorderExamRules(examId, ids, lang) });
+  const rules = await reorderExamRules(examId, ids, lang);
+  try {
+    (revalidateTag as unknown as (tag: string) => void)("exams");
+    revalidatePath(`/exam/${examId}`);
+    revalidatePath(`/exam/${examId}/rules`);
+  } catch {
+    // Best effort.
+  }
+  return NextResponse.json({ rules });
 }
 
 /** DELETE — body: { examId, lang?, id }. */
@@ -87,5 +104,13 @@ export async function DELETE(request: NextRequest) {
   }
   const lang = typeof body?.lang === "string" && body.lang.toLowerCase() === "english" ? "english" : "bangla";
   await logAdminAction(admin, "exam-rules.delete", `exam=${examId} lang=${lang} id=${id}`, request);
-  return NextResponse.json({ rules: await deleteExamRule(examId, id, lang) });
+  const rules = await deleteExamRule(examId, id, lang);
+  try {
+    (revalidateTag as unknown as (tag: string) => void)("exams");
+    revalidatePath(`/exam/${examId}`);
+    revalidatePath(`/exam/${examId}/rules`);
+  } catch {
+    // Best effort.
+  }
+  return NextResponse.json({ rules });
 }

@@ -202,7 +202,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
               >
                 <span
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-extrabold ${
-                    selected ? "border-primary-500 bg-primary-600 text-white" : "border-ink/20 bg-dark-850 text-neutral-500"
+                    selected ? "border-primary-500 bg-primary-600 text-white" : "border-ink/20 bg-dark-850 text-neutral-400"
                   }`}
                 >
                   {selected ? "●" : "○"}
@@ -316,7 +316,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
                 >
                   <span
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-extrabold ${
-                      timerType === "first" ? "border-emerald-500 bg-emerald-500 text-white" : "border-ink/20 bg-dark-850 text-neutral-500"
+                      timerType === "first" ? "border-emerald-500 bg-emerald-500 text-white" : "border-ink/20 bg-dark-850 text-neutral-400"
                     }`}
                   >
                     {timerType === "first" ? "●" : "○"}
@@ -337,7 +337,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
                 >
                   <span
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-extrabold ${
-                      timerType === "second" ? "border-red-500 bg-red-500 text-white" : "border-ink/20 bg-dark-850 text-neutral-500"
+                      timerType === "second" ? "border-red-500 bg-red-500 text-white" : "border-ink/20 bg-dark-850 text-neutral-400"
                     }`}
                   >
                     {timerType === "second" ? "●" : "○"}
@@ -428,7 +428,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
                 >
                   <span
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-extrabold ${
-                      timerType === "first" ? "border-emerald-500 bg-emerald-500 text-white" : "border-ink/20 bg-dark-850 text-neutral-500"
+                      timerType === "first" ? "border-emerald-500 bg-emerald-500 text-white" : "border-ink/20 bg-dark-850 text-neutral-400"
                     }`}
                   >
                     {timerType === "first" ? "●" : "○"}
@@ -449,7 +449,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
                 >
                   <span
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-extrabold ${
-                      timerType === "second" ? "border-red-500 bg-red-500 text-white" : "border-ink/20 bg-dark-850 text-neutral-500"
+                      timerType === "second" ? "border-red-500 bg-red-500 text-white" : "border-ink/20 bg-dark-850 text-neutral-400"
                     }`}
                   >
                     {timerType === "second" ? "●" : "○"}

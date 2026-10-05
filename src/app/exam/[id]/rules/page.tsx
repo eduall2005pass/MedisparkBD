@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { fetchExamPageById } from "@/lib/public-exams-server";
 import ExamRulesGate from "@/components/ExamRulesGate";
 
-export const revalidate = 300;
+// Exam rules must reflect admin edits immediately — never serve a stale cache.
+export const dynamic = "force-dynamic";
 
 type RulesPageProps = {
   params: Promise<{ id: string }>;

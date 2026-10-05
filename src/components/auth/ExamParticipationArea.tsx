@@ -161,6 +161,11 @@ export default function ExamParticipationArea({
   // server-side at start; never switchable during the active exam.
   const [questionVersion, setQuestionVersion] = useState<"bangla" | "english" | null>(versionFromUrl);
   const [beginning, setBeginning] = useState(false);
+  // Admin-managed DB rules for this exam (same source as the /rules page).
+  // Loaded fresh (no-store) so updates appear immediately; falls back to the
+  // static ExamRulesList when unavailable.
+  const [dbRules, setDbRules] = useState<Array<{ id: number | null; title: string; text: string }> | null>(null);
+  const [dbRulesEn, setDbRulesEn] = useState<Array<{ id: number | null; title: string; text: string }> | null>(null);
   const [script, setScript] = useState<ResultScript | null>(null);
   const [scriptOpen, setScriptOpen] = useState(false);
   // Connectivity (non-blocking): offline NEVER submits; answers queue as pending_sync.
@@ -461,6 +466,32 @@ export default function ExamParticipationArea({
       setBeginning(false);
     }
   }, [beginning, begun, exam, examId, user, activateSession, timerType, questionVersion, versionFromUrl, submit]);
+
+  // DB exam rules — fresh on every mount (no-store) so admin updates show
+  // immediately instead of stale built-in rules.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/exams/${encodeURIComponent(examId)}/rules`, {
+          cache: "no-store",
+        });
+        const data = (await res.json().catch(() => null)) as {
+          rules?: Array<{ id: number | null; title: string; text: string }>;
+          rulesEn?: Array<{ id: number | null; title: string; text: string }>;
+        } | null;
+        if (!cancelled && res.ok && data) {
+          if (Array.isArray(data.rules) && data.rules.length > 0) setDbRules(data.rules);
+          if (Array.isArray(data.rulesEn) && data.rulesEn.length > 0) setDbRulesEn(data.rulesEn);
+        }
+      } catch {
+        // ignore — static ExamRulesList remains as fallback
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [examId]);
 
   // Load exam meta. Resume model: a plain GET (no ?start=1) returns the
   // EXISTING active attempt (same expires_at + stored answers) when one is
@@ -1300,7 +1331,35 @@ export default function ExamParticipationArea({
         )}
 
         <div className="mt-4">
-          <ExamRulesList exam={exam} />
+          {(() => {
+            const lang = questionVersion ?? versionFromUrl ?? "bangla";
+            const rows = lang === "english" ? (dbRulesEn ?? dbRules) : (dbRules ?? dbRulesEn);
+            if (rows && rows.length > 0) {
+              return (
+                <ul className="space-y-3">
+                  {rows.map((rule, index) => (
+                    <li
+                      key={rule.id ?? `rule-${index}`}
+                      className="flex gap-3 rounded-xl border border-ink/10 bg-dark-850 p-3.5"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-600/15 text-xs font-extrabold text-primary-300">
+                        {index + 1}
+                      </span>
+                      <div className="min-w-0">
+                        {rule.title && (
+                          <p className="text-sm font-bold text-heading">{rule.title}</p>
+                        )}
+                        <p className={`text-xs leading-relaxed text-neutral-400 sm:text-sm ${rule.title ? "mt-0.5" : ""}`}>
+                          {rule.text}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              );
+            }
+            return <ExamRulesList exam={exam} />;
+          })()}
         </div>
 
         {/* Question Version — required; locked server-side once the exam starts */}
@@ -1331,7 +1390,7 @@ export default function ExamParticipationArea({
                 >
                   <span
                     className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-xs font-extrabold ${
-                      selected ? "border-primary-500 bg-primary-600 text-white" : "border-ink/20 bg-dark-850 text-neutral-500"
+                      selected ? "border-primary-500 bg-primary-600 text-white" : "border-ink/20 bg-dark-850 text-neutral-400"
                     }`}
                   >
                     {selected ? "●" : "○"}
@@ -1512,8 +1571,8 @@ export default function ExamParticipationArea({
                           isSelected
                             ? "border-primary-500 bg-primary-600/15 text-heading shadow-sm"
                             : isQuestionLocked
-                              ? "border-ink/10 bg-dark-800 text-neutral-500 opacity-60 cursor-not-allowed"
-                              : "border-ink/10 bg-dark-900 text-neutral-200 hover:border-primary-500/40 hover:bg-dark-800"
+                              ? "border-ink/10 bg-dark-800 text-neutral-300 cursor-not-allowed"
+                              : "border-ink/10 bg-dark-900 text-neutral-300 hover:border-primary-500/40 hover:bg-dark-800"
                         }`}
                       >
                         {/* Circle */}
@@ -1522,7 +1581,7 @@ export default function ExamParticipationArea({
                             isSelected
                               ? "border-primary-500 bg-primary-600 text-white"
                               : isQuestionLocked
-                                ? "border-ink/20 bg-dark-800 text-neutral-500"
+                                ? "border-ink/20 bg-dark-800 text-neutral-400"
                                 : "border-ink/20 bg-dark-850 text-neutral-400"
                           }`}
                         >
