@@ -351,10 +351,10 @@ export default function ExamCard({
   const isUpcoming = phase === "upcoming";
   const isPractice = phase === "practice";
   const isClosed = phase === "closed";
-  // Post-live Practice stays startable even with a prior live attempt — each
-  // new attempt is an unranked practice attempt with its own result.
+  // Practice (post-live AND static practice-mode) stays startable even with a
+  // prior attempt — each new attempt is an unranked practice attempt.
   const isPostLivePractice = isPractice && exam.examMode === "live";
-  const showResultLink = hasCompleted && !isPostLivePractice;
+  const showResultLink = hasCompleted && !isPractice;
   const canStart =
     !showResultLink &&
     !isUpcoming &&

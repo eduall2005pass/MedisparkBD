@@ -48,6 +48,10 @@ export function getMysqlPool(): mysql.Pool | null {
             ? { rejectUnauthorized: false }
             : undefined,
       flags: ["FOUND_ROWS"],
+      // App writes DATETIME/TIMESTAMP as UTC strings and the DB session is UTC;
+      // parse reads as UTC too. Without this, a non-UTC host (e.g. +06 dev box)
+      // shifts every read by its offset and exam attempts look instantly expired.
+      timezone: "Z",
     });
     // Prevent unhandled 'error' events on idle connections from crashing Node.
     (pool as unknown as { on?: (e: string, l: () => void) => void }).on?.(

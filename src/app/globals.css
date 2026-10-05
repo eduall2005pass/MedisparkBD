@@ -54,6 +54,81 @@
   color-scheme: light;
 }
 
+/* ============ Light Mode — global contrast fix (main website only) ============
+ * Components are authored dark-first: accent text uses pastel 200/300/400
+ * shades and cards use translucent bg-dark-950/xx surfaces. On light
+ * surfaces those wash out / become invisible. In Light Mode we remap the
+ * pastel shades to deep 600–800 tones (same hue), give translucent bordered
+ * cards a solid surface, and strengthen faint neutral borders.
+ * Dark Mode and the Admin Panel are untouched. */
+html[data-theme="light"]:not(:has([data-admin-theme])) {
+  --primary-200: #9b0610;
+  --primary-300: #b80711;
+  --primary-400: #d50a16;
+
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-green-200: #166534;
+  --color-green-300: #15803d;
+  --color-green-400: #16a34a;
+  --color-yellow-200: #713f12;
+  --color-yellow-300: #854d0e;
+  --color-yellow-400: #a16207;
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #b45309;
+  --color-orange-200: #9a3412;
+  --color-orange-300: #c2410c;
+  --color-orange-400: #ea580c;
+  --color-sky-200: #075985;
+  --color-sky-300: #0369a1;
+  --color-sky-400: #0284c7;
+  --color-blue-200: #1e40af;
+  --color-blue-300: #1d4ed8;
+  --color-blue-400: #2563eb;
+  --color-cyan-200: #155e75;
+  --color-cyan-300: #0e7490;
+  --color-cyan-400: #0891b2;
+  --color-teal-200: #115e59;
+  --color-teal-300: #0f766e;
+  --color-teal-400: #0d9488;
+  --color-indigo-200: #3730a3;
+  --color-indigo-300: #4338ca;
+  --color-indigo-400: #4f46e5;
+  --color-violet-200: #5b21b6;
+  --color-violet-300: #6d28d9;
+  --color-violet-400: #7c3aed;
+  --color-purple-200: #6b21a8;
+  --color-purple-300: #7e22ce;
+  --color-purple-400: #9333ea;
+  --color-pink-200: #9d174d;
+  --color-pink-300: #be185d;
+  --color-pink-400: #db2777;
+  --color-rose-200: #9f1239;
+  --color-rose-300: #be123c;
+  --color-rose-400: #e11d48;
+  --color-red-200: #991b1b;
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
+}
+
+/* Translucent dark surfaces (bg-dark-950/60, /80, /90 …) collapse into the
+ * light page background — bordered ones become solid white cards. Image
+ * overlays (no border) keep their translucency. */
+html[data-theme="light"]:not(:has([data-admin-theme]))
+  :where([class*="bg-dark-950/"][class*="border"], [class*="bg-dark-900/"][class*="border"]) {
+  background-color: #ffffff;
+}
+
+/* border-ink/10 (10% ink) is nearly invisible on white — strengthen it.
+ * :not(:hover) keeps hover:border-* utilities working (unlayered CSS would
+ * otherwise beat Tailwind's layered hover states). */
+html[data-theme="light"]:not(:has([data-admin-theme]))
+  :where([class*="bg-dark-"][class*="border-ink/10"], [class*="bg-dark-"][class*="border-ink/5"]):not(:hover) {
+  border-color: rgb(24 24 27 / 0.16);
+}
+
 /* Subtle transition while switching themes (applied transiently by the theme toggle). */
 html[data-theme-transition="true"] *,
 html[data-theme-transition="true"] *::before,

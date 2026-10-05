@@ -685,14 +685,18 @@ async function startExamAttempt(
     await exec(
       `INSERT INTO exam_attempts (exam_id, student_uid, session_token, status, timer_type, question_version, assigned_set, question_order, last_seen, started_at, expires_at)
        VALUES (?, ?, ?, 'active', ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
-       ON DUPLICATE KEY UPDATE session_token = IF(status = 'active', session_token, VALUES(session_token)), status = IF(status = 'active', status, VALUES(status)), timer_type = IF(status = 'active', timer_type, VALUES(timer_type)), question_version = IF(status = 'active', question_version, VALUES(question_version)), assigned_set = IF(status = 'active', assigned_set, VALUES(assigned_set)), question_order = IF(status = 'active', question_order, VALUES(question_order)), last_seen = CURRENT_TIMESTAMP, started_at = IF(status = 'active', started_at, VALUES(started_at)), expires_at = IF(status = 'active', expires_at, VALUES(expires_at))`,
+       ON DUPLICATE KEY UPDATE session_token = IF(status = 'active', session_token, VALUES(session_token)), timer_type = IF(status = 'active', timer_type, VALUES(timer_type)), question_version = IF(status = 'active', question_version, VALUES(question_version)), assigned_set = IF(status = 'active', assigned_set, VALUES(assigned_set)), question_order = IF(status = 'active', question_order, VALUES(question_order)), last_seen = CURRENT_TIMESTAMP, started_at = IF(status = 'active', started_at, VALUES(started_at)), expires_at = IF(status = 'active', expires_at, VALUES(expires_at)), status = IF(status = 'active', status, VALUES(status))`,
+      // NOTE: MySQL evaluates ON DUPLICATE KEY UPDATE assignments left-to-right.
+      // `status` MUST be assigned last — otherwise every later IF(status = 'active')
+      // sees the freshly-set 'active' and keeps the OLD expired started_at/expires_at,
+      // so a practice retake is instantly auto-submitted.
       [examId, uid, token, normalizedTimer, questionVersion, assignedSet, JSON.stringify(questionOrder), startedIso, expiresIso],
     );
   } catch {
     await exec(
       `INSERT INTO exam_attempts (exam_id, student_uid, session_token, status, timer_type, question_version, assigned_set, question_order, last_seen, started_at)
        VALUES (?, ?, ?, 'active', ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       ON DUPLICATE KEY UPDATE session_token = IF(status = 'active', session_token, VALUES(session_token)), status = IF(status = 'active', status, VALUES(status)), last_seen = CURRENT_TIMESTAMP`,
+       ON DUPLICATE KEY UPDATE session_token = IF(status = 'active', session_token, VALUES(session_token)), last_seen = CURRENT_TIMESTAMP, started_at = IF(status = 'active', started_at, CURRENT_TIMESTAMP), status = IF(status = 'active', status, VALUES(status))`,
       [examId, uid, token, normalizedTimer, questionVersion, assignedSet, JSON.stringify(questionOrder)],
     );
   }
@@ -928,7 +932,8 @@ async function finalizeAttempt(
   } catch {
     // Best-effort — fall through to the live-window rule.
   }
-  if (!isPostLivePracticeFinalize && !isEnrolledPracticeFinalize) {
+  const isStaticPracticeFinalize = found.examMode === "practice" || found.kind === "practice";
+  if (!isPostLivePracticeFinalize && !isEnrolledPracticeFinalize && !isStaticPracticeFinalize) {
     try {
       const hasCompleted = await hasPriorExamAttempt(examId, uid);
       if (hasCompleted) {
@@ -1835,7 +1840,10 @@ export async function submitExamAttempt(
   // as-is. Practice retakes (post-live Practice phase AND enrolled-archived
   // practice phase) are exempt — each practice submit writes its own new
   // unranked practice row (see finalizeAttempt).
-  let isPracticeRetakeSubmit = await isPostLivePracticeExam(found).catch(() => false);
+  let isPracticeRetakeSubmit =
+    found.examMode === "practice" ||
+    found.kind === "practice" ||
+    (await isPostLivePracticeExam(found).catch(() => false));
   if (!isPracticeRetakeSubmit) {
     try {
       const { getEnrolledExamPhase, isEnrolledPracticePhase } = await import("@/lib/enrolled-exam-lifecycle");
