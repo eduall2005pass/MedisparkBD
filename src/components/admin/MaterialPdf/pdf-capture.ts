@@ -54,6 +54,22 @@ function fallbackFor(prop: string): string {
 }
 
 /**
+ * html2canvas 1.4.1 measures font baselines using a hidden span + 1px image
+ * in the LIVE document, not the clone. Tailwind Preflight makes that image
+ * block-level, putting it below the text and shifting every captured label
+ * downward. Restore inline layout only for the library's measurement images;
+ * preview images and page geometry must remain unchanged.
+ */
+export function fixHtml2CanvasTextBaseline(doc: Document): () => void {
+  const style = doc.createElement("style");
+  style.textContent =
+    'body > div[style*="visibility: hidden"][style*="white-space: nowrap"] > img ' +
+    "{ display: inline-block !important; }";
+  doc.head.appendChild(style);
+  return () => style.remove();
+}
+
+/**
  * Preview-faithful PDF placement for a captured `.a4-page` element.
  *
  * The capture is drawn at full A4 width. When its aspect matches A4

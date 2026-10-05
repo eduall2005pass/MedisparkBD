@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { capturePageRect, sanitizeClonedColorsForHtml2Canvas } from "./pdf-capture";
+import { capturePageRect, fixHtml2CanvasTextBaseline, sanitizeClonedColorsForHtml2Canvas } from "./pdf-capture";
 
 /**
  * CQ PDF Generator — Creative Questions (সৃজনশীল).
@@ -437,6 +437,7 @@ export default function CqPdfGenerator({ onBack }: { onBack: () => void }) {
     if (!pageEls || pageEls.length === 0) throw new Error("Preview not ready");
     for (let i = 0; i < pageEls.length; i++) {
       const el = pageEls[i];
+      const restoreTextBaseline = fixHtml2CanvasTextBaseline(document);
       const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
@@ -453,7 +454,7 @@ export default function CqPdfGenerator({ onBack }: { onBack: () => void }) {
             sanitizeClonedColorsForHtml2Canvas(clonedDoc);
           } catch {}
         },
-      });
+      }).finally(restoreTextBaseline);
       const imgData = canvas.toDataURL("image/jpeg", 0.92);
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();

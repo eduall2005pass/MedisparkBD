@@ -15,7 +15,7 @@ import {
 } from "@/components/admin/MaterialPdf/pagination";
 import CqPdfGenerator from "@/components/admin/MaterialPdf/CqPdfGenerator";
 import ExamSourcePicker from "@/components/admin/MaterialPdf/ExamSourcePicker";
-import { capturePageRect, sanitizeClonedColorsForHtml2Canvas } from "@/components/admin/MaterialPdf/pdf-capture";
+import { capturePageRect, fixHtml2CanvasTextBaseline, sanitizeClonedColorsForHtml2Canvas } from "@/components/admin/MaterialPdf/pdf-capture";
 import { useAdminGate } from "@/components/admin/admin-ui";
 
 type Step = "paste" | "preview";
@@ -692,6 +692,7 @@ export default function MaterialPdfGeneratorPage() {
     if (!pageEls || pageEls.length === 0) throw new Error("Preview not ready");
     for (let i = 0; i < pageEls.length; i++) {
       const el = pageEls[i];
+      const restoreTextBaseline = fixHtml2CanvasTextBaseline(document);
       const canvas = await html2canvas(el, {
         scale: 2,
         useCORS: true,
@@ -709,7 +710,7 @@ export default function MaterialPdfGeneratorPage() {
             sanitizeClonedColorsForHtml2Canvas(clonedDoc);
           } catch {}
         },
-      });
+      }).finally(restoreTextBaseline);
       const imgData = canvas.toDataURL("image/jpeg", 0.92);
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
