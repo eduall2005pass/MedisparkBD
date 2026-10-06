@@ -56,6 +56,7 @@ export default function ExamResultDetailView({ examId }: { examId: string }) {
   const { user, authLoading } = useAuth();
   const [result, setResult] = useState<StudentExamResultDetail | null>(null);
   const [state, setState] = useState<LoadState>("loading");
+  const [showSheet, setShowSheet] = useState(false);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -130,6 +131,130 @@ export default function ExamResultDetailView({ examId }: { examId: string }) {
             Back to Exam Results
           </Link>
         </div>
+      </section>
+    );
+  }
+
+  const sheet = Array.isArray(result.questions) ? result.questions : [];
+
+  if (showSheet) {
+    return (
+      <section className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-extrabold text-heading">Answer Sheet</h3>
+            <p className="text-xs text-neutral-400">{result.examName}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSheet(false)}
+            className="rounded-xl border border-ink/10 bg-dark-850 px-4 py-2 text-sm font-bold text-neutral-300 transition hover:text-heading"
+          >
+            ← Back to Result
+          </button>
+        </div>
+        {sheet.length === 0 ? (
+          <p className="mt-4 rounded-2xl border border-ink/10 bg-dark-900 p-8 text-center text-sm text-neutral-400">
+            Answer sheet is not available for this exam yet.
+          </p>
+        ) : (
+          <ol className="mt-4 space-y-4">
+            {sheet.map((item, index) => {
+              const isCorrect =
+                item.chosenIndex !== null &&
+                item.correctIndex !== null &&
+                item.chosenIndex === item.correctIndex;
+              const status =
+                item.chosenIndex === null ? "Unanswered" : isCorrect ? "Correct" : "Wrong";
+              return (
+                <li
+                  key={item.questionId}
+                  className={`rounded-2xl border p-4 sm:p-5 ${
+                    item.chosenIndex === null
+                      ? "border-ink/10 bg-dark-900"
+                      : isCorrect
+                        ? "border-emerald-500/30 bg-emerald-500/5"
+                        : "border-red-500/30 bg-red-500/5"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-bold leading-relaxed text-heading sm:text-base">
+                      {index + 1}. {item.question || "Question content is unavailable."}
+                    </p>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
+                        item.chosenIndex === null
+                          ? "bg-neutral-500/15 text-neutral-400"
+                          : isCorrect
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : "bg-red-500/15 text-red-300"
+                      }`}
+                    >
+                      {status}
+                    </span>
+                  </div>
+                  {item.questionImage ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.questionImage}
+                      alt={`Question ${index + 1} image`}
+                      className="mt-3 max-h-72 w-full rounded-xl border border-ink/10 object-contain bg-dark-950"
+                    />
+                  ) : null}
+                  <div className="mt-3 space-y-2">
+                    {item.options.map((option, optionIndex) => {
+                      const chosen = item.chosenIndex === optionIndex;
+                      const correct = item.correctIndex === optionIndex;
+                      return (
+                        <div
+                          key={optionIndex}
+                          className={`flex items-center gap-3 rounded-xl border px-3.5 py-2.5 text-sm font-semibold ${
+                            correct
+                              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-200"
+                              : chosen
+                                ? "border-red-500/50 bg-red-500/10 text-red-200"
+                                : "border-ink/10 bg-dark-850 text-neutral-300"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold ${
+                              correct ? "bg-emerald-500 text-white" : chosen ? "bg-red-500 text-white" : "bg-ink/10 text-neutral-400"
+                            }`}
+                          >
+                            {String.fromCharCode(65 + optionIndex)}
+                          </span>
+                          <span className="min-w-0 break-words">{option}</span>
+                          {correct && <span className="ml-auto shrink-0 text-[10px] font-extrabold uppercase tracking-wide text-emerald-300">Correct Answer</span>}
+                          {chosen && !correct && <span className="ml-auto shrink-0 text-[10px] font-extrabold uppercase tracking-wide text-red-300">Your Answer</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-semibold text-neutral-400">
+                    <span>
+                      Marks: <span className="text-heading">{item.marks}</span>
+                      <span className="ml-2">
+                        Obtained: <span className={isCorrect ? "text-emerald-400" : "text-neutral-400"}>{isCorrect ? `+${item.marks}` : "0"}</span>
+                      </span>
+                    </span>
+                    <span>
+                      Your Answer: <span className="text-heading">{item.chosenIndex == null ? "Not Answered" : String.fromCharCode(65 + item.chosenIndex)}</span>
+                    </span>
+                    <span>
+                      Correct: <span className="text-heading">{item.correctIndex == null ? "—" : String.fromCharCode(65 + item.correctIndex)}</span>
+                    </span>
+                  </div>
+                  {item.explanation && (
+                    <div className="mt-2 rounded-lg bg-sky-500/10 px-3 py-2 text-xs leading-relaxed text-sky-200">
+                      <span className="font-extrabold">Explanation: </span>
+                      {item.explanation}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        )}
       </section>
     );
   }
@@ -216,6 +341,13 @@ export default function ExamResultDetailView({ examId }: { examId: string }) {
       )}
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+        <button
+          type="button"
+          onClick={() => setShowSheet(true)}
+          className="rounded-xl bg-primary-600 px-6 py-3 text-center font-semibold text-white shadow-lg shadow-primary-900/40 transition hover:bg-primary-700 active:scale-[0.98]"
+        >
+          View Answer Sheet
+        </button>
         <Link
           href="/dashboard/exam-result"
           className="rounded-xl border border-ink/15 bg-ink/5 px-6 py-3 text-center font-semibold text-heading transition hover:border-primary-500/60 hover:bg-ink/10 active:scale-[0.98]"

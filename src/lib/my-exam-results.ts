@@ -308,6 +308,22 @@ export type StudentExamResultDetail = {
   negativePerWrong: number;
   finalScore: number;
   submittedAt: string;
+  /** Question-wise answer sheet (student's locked language version). */
+  questions: StudentAnswerSheetQuestion[];
+};
+
+export type StudentAnswerSheetQuestion = {
+  questionId: number;
+  question: string;
+  options: string[];
+  marks: number;
+  /** Index the student selected — null when left unanswered. */
+  chosenIndex: number | null;
+  /** NULL = unknown answer (rendered as "—", never as A). */
+  correctIndex: number | null;
+  obtained: number;
+  explanation: string | null;
+  questionImage?: string | null;
 };
 
 type DetailRow = {
@@ -439,8 +455,41 @@ export async function getStudentExamResultDetail(
       negativePerWrong,
       finalScore: num(row.score),
       submittedAt: toIso(row.submitted_at),
+      // Question-wise sheet reuses the canonical script builder
+      // (locked language version + variant content, same as /exam result).
+      questions: await getOwnAnswerSheet(uid, examId),
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * This student's question-wise answer sheet for one exam — best-effort.
+ * Reuses the canonical `getExamResultScript` builder so the dashboard shows
+ * the exact locked language version/set the student took. Never throws:
+ * an empty sheet keeps the summary usable when content is unavailable.
+ */
+async function getOwnAnswerSheet(
+  uid: string,
+  examId: string,
+): Promise<StudentAnswerSheetQuestion[]> {
+  try {
+    const { getExamResultScript } = await import("@/lib/exam-taking");
+    const script = await getExamResultScript(examId, uid);
+    if (!script || !Array.isArray(script.questions)) return [];
+    return script.questions.map((q) => ({
+      questionId: q.questionId,
+      question: q.question,
+      options: Array.isArray(q.options) ? q.options.map(String) : [],
+      marks: Number(q.marks) || 1,
+      chosenIndex: q.chosenIndex,
+      correctIndex: q.correctIndex,
+      obtained: Number(q.obtained) || 0,
+      explanation: q.explanation ?? null,
+      questionImage: q.questionImage ?? null,
+    }));
+  } catch {
+    return [];
   }
 }
