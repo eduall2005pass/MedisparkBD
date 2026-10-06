@@ -41,12 +41,16 @@ export async function fetchNavbarConfig(): Promise<NavbarConfig> {
     const settings = settingsRows[0];
     let items: NavbarItem[];
     if (itemRows.length > 0) {
-      items = itemRows.map((row) => ({
-        key: row.item_key,
-        label: row.label,
-        href: row.href ?? null,
-        isActive: Boolean(row.is_active),
-      }));
+      items = itemRows
+        // Result is admin-only now — never show it in the public menu,
+        // even when an older saved menu still carries the entry.
+        .filter((row) => row.item_key !== "result")
+        .map((row) => ({
+          key: row.item_key,
+          label: row.label,
+          href: row.href ?? null,
+          isActive: Boolean(row.is_active),
+        }));
       // Ensure the Q&A entry exists even in older saved menus — it always
       // sits immediately after Public Exam.
       if (!items.some((item) => item.key === "qa")) {
@@ -63,29 +67,6 @@ export async function fetchNavbarConfig(): Promise<NavbarConfig> {
           items.push(qaItem);
         } else {
           items.splice(examIndex + 1, 0, qaItem);
-        }
-      }
-      // Ensure the Result entry exists even in older saved menus — it always
-      // sits immediately after Q&A.
-      if (!items.some((item) => item.key === "result")) {
-        const resultItem: NavbarItem = {
-          key: "result",
-          label: "Result",
-          href: "/result",
-          isActive: true,
-        };
-        const qaIndex = items.findIndex((item) => item.key === "qa");
-        if (qaIndex === -1) {
-          const examIndex = items.findIndex(
-            (item) => item.key === "public-exam",
-          );
-          if (examIndex === -1) {
-            items.push(resultItem);
-          } else {
-            items.splice(examIndex + 1, 0, resultItem);
-          }
-        } else {
-          items.splice(qaIndex + 1, 0, resultItem);
         }
       }
     } else {
