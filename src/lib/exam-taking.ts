@@ -154,7 +154,7 @@ async function highestMarkFor(examId: string): Promise<number | null> {
     // attempt_type are treated as scheduled.
     try {
       const liveRows = await query<{ best: string | number | null }[]>(
-        `SELECT MAX(score) AS best FROM exam_results WHERE exam_id = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+        `SELECT MAX(score) AS best FROM exam_results WHERE exam_id = ? AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)`,
         [examId],
       );
       const best = liveRows[0]?.best;
@@ -192,7 +192,7 @@ async function updateMeritPositions(examId: string): Promise<void> {
       const [rows] = await connection.query<RowDataPacket[]>(
         `SELECT id FROM exam_results
          WHERE exam_id = ?
-           AND (attempt_type = 'scheduled' OR attempt_type IS NULL)
+           AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)
          ORDER BY score DESC,
                   COALESCE(time_taken_seconds, 2147483647) ASC,
                   submitted_at ASC

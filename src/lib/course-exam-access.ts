@@ -14,7 +14,7 @@ async function hasScheduledExamAttempt(
 ): Promise<boolean> {
   try {
     const rows = await query<{ n: number }[]>(
-      `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+      `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)`,
       [examId, uid],
     );
     return (rows[0]?.n ?? 0) > 0;
@@ -161,7 +161,7 @@ export async function checkCourseExamAccess(
       let count = 0;
       try {
         const liveRows = await query<{ n: number }[]>(
-          `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+          `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)`,
           [normalizedId, cleanUid],
         );
         count = liveRows[0]?.n ?? 0;

@@ -185,7 +185,7 @@ export async function GET(
         let rows: { id: number }[];
         try {
           rows = await query<{ id: number }[]>(
-            `SELECT id FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL) LIMIT 1`,
+            `SELECT id FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL) LIMIT 1`,
             [id, user.uid],
           );
         } catch {
@@ -251,7 +251,7 @@ export async function GET(
       if (!gated) {
         try {
           const priorRows = await query<{ n: string | number }[]>(
-            `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+            `SELECT COUNT(*) AS n FROM exam_results WHERE exam_id = ? AND student_uid = ? AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)`,
             [id, user.uid],
           );
           gated = Number(priorRows[0]?.n ?? 0) > 0;

@@ -146,7 +146,7 @@ export async function fetchPublicExamResultSummaries(): Promise<
            FROM exam_results r
            JOIN exams e ON e.id = r.exam_id AND e.kind = 'public'
            LEFT JOIN course_categories cat ON cat.id = e.category_id
-          WHERE (r.attempt_type = 'scheduled' OR r.attempt_type IS NULL)
+          WHERE (r.attempt_type IN ('scheduled', 'live') OR r.attempt_type IS NULL)
           GROUP BY e.id, e.title, e.category_id, cat.name,
                    e.total_marks, e.duration_minutes, e.scheduled_at
           ORDER BY MAX(r.submitted_at) DESC`,
@@ -316,7 +316,7 @@ export async function fetchPublicExamRankedResultsPage(
                 r.time_taken_seconds, r.submitted_at, r.auto_submitted
             FROM exam_results r
            WHERE r.exam_id = ?
-             AND (r.attempt_type = 'scheduled' OR r.attempt_type IS NULL)
+             AND (r.attempt_type IN ('scheduled', 'live') OR r.attempt_type IS NULL)
            ORDER BY r.merit_position IS NULL ASC,
                     r.merit_position ASC,
                     r.score DESC,
@@ -349,7 +349,7 @@ export async function fetchPublicExamRankedResultsPage(
     try {
       const countRows = await query<{ n: string | number }[]>(
         `SELECT COUNT(*) AS n FROM exam_results
-            WHERE exam_id = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+            WHERE exam_id = ? AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)`,
         [examId],
       );
       total = toNumber(countRows[0]?.n ?? rows.length);
@@ -497,7 +497,7 @@ export async function fetchPublicExamStudentResult(
                 time_taken_seconds, submitted_at
            FROM exam_results
           WHERE exam_id = ? AND student_uid = ?
-            AND (attempt_type = 'scheduled' OR attempt_type IS NULL)
+            AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)
           ORDER BY id DESC LIMIT 1`,
         [examId, studentUid],
       );
@@ -523,7 +523,7 @@ export async function fetchPublicExamStudentResult(
       try {
         const countRows = await query<{ n: string | number }[]>(
           `SELECT COUNT(*) AS n FROM exam_results
-            WHERE exam_id = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+            WHERE exam_id = ? AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)`,
           [examId],
         );
         participantCount = toNumber(countRows[0]?.n ?? 0);
@@ -717,7 +717,7 @@ export async function fetchPublicExamResultStats(examId: string): Promise<{
         `SELECT COUNT(*) AS participants,
                 MAX(score) AS highest, MIN(score) AS lowest, AVG(score) AS average,
                 AVG(time_taken_seconds) AS avgTime
-           FROM exam_results WHERE exam_id = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+           FROM exam_results WHERE exam_id = ? AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)`,
         [examId],
       );
     } catch {
@@ -749,7 +749,7 @@ export async function fetchPublicExamResultStats(examId: string): Promise<{
         timerRows = await query<{ firstTimers: string | number; secondTimers: string | number }[]>(
           `SELECT SUM(CASE WHEN is_second_timer = 0 OR is_second_timer IS NULL THEN 1 ELSE 0 END) AS firstTimers,
                   SUM(CASE WHEN is_second_timer = 1 THEN 1 ELSE 0 END) AS secondTimers
-             FROM exam_results WHERE exam_id = ? AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+             FROM exam_results WHERE exam_id = ? AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)`,
           [examId],
         );
       } catch {
@@ -774,7 +774,7 @@ export async function fetchPublicExamResultStats(examId: string): Promise<{
         const autoRows = await query<{ n: string | number }[]>(
           `SELECT COUNT(*) AS n FROM exam_results
             WHERE exam_id = ? AND auto_submitted = 1
-              AND (attempt_type = 'scheduled' OR attempt_type IS NULL)`,
+              AND (attempt_type IN ('scheduled', 'live') OR attempt_type IS NULL)`,
           [examId],
         );
         autoSubmitted = toNumber(autoRows[0]?.n ?? 0);
