@@ -12,7 +12,6 @@ import {
 } from "@/components/ExamRules";
 import { answerIndexToLetter } from "@/lib/paste-mcq-parser";
 import { examResultApiPath } from "@/lib/exam-result-language";
-import { hasControlAccess, useAdminGate } from "@/components/admin/admin-ui";
 
 type TakingExam = ExamRulesData & {
   id: string;
@@ -137,9 +136,6 @@ export default function ExamParticipationArea({
   const examHref = `/exam/${examId}`;
   const loginHref = `/login?next=${encodeURIComponent(examHref)}`;
   const { user, profile, authLoading, profileLoading } = useAuth();
-  const resultGate = useAdminGate();
-  const isResultAdmin =
-    resultGate.ready && hasControlAccess(resultGate.role, resultGate.permissions, "/admin/result-control");
   const {
     setLocked: setExamLocked,
   } = useExamLock();
@@ -1067,25 +1063,9 @@ export default function ExamParticipationArea({
     );
   }
 
-  /* ── Result Card (admin-only marks; students see submitted confirmation) ── */
+  /* ── Result Card ─────────────────────────────────────────────────────── */
 
   if (outcome) {
-    if (!isResultAdmin) {
-      return (
-        <div className="rounded-2xl border border-emerald-600/30 bg-emerald-600/10 p-4 text-center sm:p-8">
-          <h3 className="text-lg font-extrabold text-heading">Exam Submitted Successfully</h3>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-neutral-400">
-            Your answers have been recorded. Results are published from the Admin Panel only.
-          </p>
-          <a
-            href="/dashboard"
-            className="mt-6 inline-block rounded-xl border border-ink/10 bg-dark-850 px-6 py-3 text-center text-sm font-bold text-neutral-300 transition hover:text-heading"
-          >
-            Go to Dashboard
-          </a>
-        </div>
-      );
-    }
     if (scriptOpen && script) {
       return (
         <div className="space-y-4">

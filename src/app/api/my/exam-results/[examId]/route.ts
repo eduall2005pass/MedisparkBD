@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseUser } from "@/lib/auth-api";
-import { requireAnyPermission } from "@/lib/admin";
 import { getStudentExamResultDetail } from "@/lib/my-exam-results";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET — ADMIN ONLY. One exam's detailed result (Admin Panel only).
+ * GET — one exam's detailed result for the logged-in student.
+ * The query filters on student_uid, so result ownership is enforced
+ * server-side: another student's result can never be read by changing IDs.
  */
 export async function GET(
   request: NextRequest,
@@ -15,10 +16,6 @@ export async function GET(
   const user = await getFirebaseUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-  const admin = await requireAnyPermission(request, ["manageResults", "manageExams"]);
-  if (!admin) {
-    return NextResponse.json({ error: "Administrators only." }, { status: 403 });
   }
   const { examId } = await context.params;
   const detail = await getStudentExamResultDetail(

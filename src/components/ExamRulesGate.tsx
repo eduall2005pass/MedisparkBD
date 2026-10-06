@@ -262,7 +262,7 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
             </p>
           ) : (
             <p className="mt-1 text-sm leading-relaxed text-neutral-400">
-              You have already appeared in this exam. Results are published from the Admin Panel only.
+              You have already appeared in this exam. You cannot start it again — view your existing result.
             </p>
           )}
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
@@ -280,10 +280,10 @@ export default function ExamRulesGate({ examId }: { examId: string }) {
             )}
             <button
               type="button"
-              onClick={() => router.push("/dashboard")}
+              onClick={() => router.push(`/dashboard/exam-result/${encodeURIComponent(examId)}`)}
               className="rounded-xl bg-emerald-600 px-6 py-3 text-sm font-extrabold text-white shadow-lg shadow-emerald-900/30 transition hover:bg-emerald-700 active:scale-[0.98]"
             >
-              Go to Dashboard →
+              View Result →
             </button>
           </div>
         </div>

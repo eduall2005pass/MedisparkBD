@@ -115,7 +115,7 @@ export default function StudentResultCard({
       {/* Action Buttons */}
       <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <Link
-          href={`/exam/${encodeURIComponent(result.examId)}/result`}
+          href={`/dashboard/exam-result/${encodeURIComponent(result.examId)}`}
           className="w-full rounded-xl bg-primary-600 px-6 py-3 text-center text-sm font-extrabold text-white shadow-lg shadow-primary-900/40 transition hover:bg-primary-500 active:scale-[0.98] sm:w-auto"
         >
           View Answer Sheet

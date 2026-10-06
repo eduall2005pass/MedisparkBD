@@ -461,12 +461,12 @@ export default function ExamCard({
               View Result
             </Link>
           ) : showSubmitted ? (
-            <div
-              className={`${buttonBase} flex cursor-not-allowed items-center justify-center border border-emerald-500/50 bg-emerald-600/15`}
-              aria-disabled="true"
+            <Link
+              href={`/dashboard/exam-result/${encodeURIComponent(exam.id)}`}
+              className={`${buttonBase} flex items-center justify-center border border-emerald-500/50 bg-emerald-600/15`}
             >
-              Submitted ✓
-            </div>
+              View Result
+            </Link>
           ) : isUpcoming || isClosed || phase === "idle" ? (
             <div
               className={`${buttonBase} flex cursor-not-allowed items-center justify-center ${meta.disabledBtn}`}

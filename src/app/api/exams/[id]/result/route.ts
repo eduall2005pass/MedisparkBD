@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseUser } from "@/lib/auth-api";
-import { requireAnyPermission } from "@/lib/admin";
 import { getExamResultScript } from "@/lib/exam-taking";
 import { parseExamVersion } from "@/lib/exam-result-language";
 
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/exams/[id]/result — ADMIN ONLY. The student's answer script for
- * their most recent submitted attempt. Public/student access is disabled;
- * results are viewed from the Admin Panel (Result Control).
+ * GET /api/exams/[id]/result — the student's OWN answer script for their most
+ * recent submitted attempt (chosen + correct answers). Only exists AFTER a
+ * submission; during an active exam there is nothing to reveal.
+ * Ownership is enforced (caller uid only). The standalone /exam/[id]/result
+ * page itself is admin-only; students view results from their dashboard.
  * Optional exam_version=en|bn is a legacy fallback; the stored medium wins.
  */
 export async function GET(
@@ -19,10 +20,6 @@ export async function GET(
   const user = await getFirebaseUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-  const admin = await requireAnyPermission(request, ["manageResults", "manageExams"]);
-  if (!admin) {
-    return NextResponse.json({ error: "Administrators only." }, { status: 403 });
   }
 
   const versions = request.nextUrl.searchParams.getAll("exam_version");

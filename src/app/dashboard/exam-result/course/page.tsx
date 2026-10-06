@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { AccessGate } from "@/components/auth/AccessGuard";
-import AdminResultGate from "@/components/admin/AdminResultGate";
 import ExamResultTypeView from "@/components/dashboard/ExamResultTypeView";
 
 export const metadata: Metadata = {
@@ -16,9 +15,7 @@ export default function CourseExamResultPage() {
         requirement="registered"
         loadingLabel="Loading your course exam results..."
       >
-        <AdminResultGate>
-          <ExamResultTypeView kind="course" />
-        </AdminResultGate>
+        <ExamResultTypeView kind="course" />
       </AccessGate>
     </main>
   );

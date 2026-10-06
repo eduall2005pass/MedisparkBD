@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AccessGate } from "@/components/auth/AccessGuard";
-import AdminResultGate from "@/components/admin/AdminResultGate";
 
 export const metadata: Metadata = {
   title: "Exam Results",
@@ -66,7 +65,6 @@ export default function ExamResultPage() {
         requirement="registered"
         loadingLabel="Loading your exam results..."
       >
-        <AdminResultGate>
         <section className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
           <div className="mt-4 grid gap-4 sm:grid-cols-2 sm:gap-5">
             {CARDS.map((card) => (
@@ -88,7 +86,6 @@ export default function ExamResultPage() {
             ))}
           </div>
         </section>
-        </AdminResultGate>
       </AccessGate>
     </main>
   );
