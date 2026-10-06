@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAnyPermission } from "@/lib/admin";
 import { fetchAllResults, fetchResultExams } from "@/lib/all-results";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Public result board — NO auth. Privacy-safe rows only
- * (name + student ID + college; never email/phone/UID).
+ * Admin-only result board — requires manageResults/manageExams.
+ * Public access is disabled; students never see results.
  * GET → { results, total, page, limit }
  * GET ?exams=1 → { exams } (filter dropdown)
  */
 export async function GET(request: NextRequest) {
+  const admin = await requireAnyPermission(request, ["manageResults", "manageExams"]);
+  if (!admin) {
+    return NextResponse.json({ error: "Administrators only." }, { status: 403 });
+  }
   try {
     const sp = request.nextUrl.searchParams;
     if (sp.get("exams") === "1") {

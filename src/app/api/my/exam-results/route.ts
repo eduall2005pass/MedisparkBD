@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFirebaseUser } from "@/lib/auth-api";
+import { requireAnyPermission } from "@/lib/admin";
 import {
   getStudentExamResultGroups,
   type StudentExamResultGroup,
@@ -11,13 +12,16 @@ export const dynamic = "force-dynamic";
 type CourseOption = { slug: string; name: string };
 
 /**
- * GET — the logged-in student's exam results grouped course-wise, plus the
- * enrolled-course options for the selector (live enrollment data only).
+ * GET — ADMIN ONLY. Exam results grouped course-wise (Admin Panel only).
  */
 export async function GET(request: NextRequest) {
   const user = await getFirebaseUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  const admin = await requireAnyPermission(request, ["manageResults", "manageExams"]);
+  if (!admin) {
+    return NextResponse.json({ error: "Administrators only." }, { status: 403 });
   }
   const [groups, enrolled] = await Promise.all([
     getStudentExamResultGroups(user.uid),

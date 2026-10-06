@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AccessGate } from "@/components/auth/AccessGuard";
+import AdminResultGate from "@/components/admin/AdminResultGate";
 import ExamResultDetailView from "@/components/dashboard/ExamResultDetailView";
 
 export const metadata: Metadata = {
@@ -19,7 +20,9 @@ export default async function ExamResultDetailPage({
         requirement="registered"
         loadingLabel="Loading result..."
       >
-        <ExamResultDetailView examId={decodeURIComponent(examId)} />
+        <AdminResultGate>
+          <ExamResultDetailView examId={decodeURIComponent(examId)} />
+        </AdminResultGate>
       </AccessGate>
     </main>
   );

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import StartExamButton from "@/components/StartExamButton";
+import { hasControlAccess, useAdminGate } from "@/components/admin/admin-ui";
 import {
   type ExamStatus,
   type PublicExam,
@@ -354,9 +355,13 @@ export default function ExamCard({
   // Practice (post-live AND static practice-mode) stays startable even with a
   // prior attempt — each new attempt is an unranked practice attempt.
   const isPostLivePractice = isPractice && exam.examMode === "live";
-  const showResultLink = hasCompleted && !isPractice;
+  const gate = useAdminGate();
+  const isResultAdmin =
+    gate.ready && hasControlAccess(gate.role, gate.permissions, "/admin/result-control");
+  const showSubmitted = hasCompleted && !isPractice;
+  const showResultLink = showSubmitted && isResultAdmin;
   const canStart =
-    !showResultLink &&
+    !showSubmitted &&
     !isUpcoming &&
     !isClosed &&
     phase !== "idle";
@@ -453,6 +458,13 @@ export default function ExamCard({
             >
               View Result
             </Link>
+          ) : showSubmitted ? (
+            <div
+              className={`${buttonBase} flex cursor-not-allowed items-center justify-center border border-emerald-500/50 bg-emerald-600/15`}
+              aria-disabled="true"
+            >
+              Submitted ✓
+            </div>
           ) : isUpcoming || isClosed || phase === "idle" ? (
             <div
               className={`${buttonBase} flex cursor-not-allowed items-center justify-center ${meta.disabledBtn}`}

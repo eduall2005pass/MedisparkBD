@@ -98,6 +98,7 @@ const ADMIN_NAV = [
   { label: "Dashboard Control", href: "/admin/dashboard-control", icon: DashboardIcon },
   { label: "Student Control", href: "/admin/student-control", icon: StudentsIcon },
   { label: "Result Control", href: "/admin/result-control", icon: ResultsChartIcon },
+  { label: "Result Board", href: "/admin/result-control/board", icon: ResultsChartIcon },
   { label: "Notification Control", href: "/admin/notification-control", icon: MegaphoneIcon },
   { label: "Readme", href: "/admin/rules", icon: BookOpenIcon },
   { label: "Admin Center", href: "/admin/admin-center", icon: UserShieldIcon },

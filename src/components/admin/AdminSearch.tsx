@@ -33,6 +33,7 @@ const SEARCH_INDEX: SearchEntry[] = [
   { label: "Dashboard Control", href: "/admin/dashboard-control", section: "Website" },
   { label: "Student Control", href: "/admin/student-control", section: "Students" },
   { label: "Result Control", href: "/admin/result-control", section: "Results" },
+  { label: "Result Board", href: "/admin/result-control/board", section: "Results" },
   { label: "Notification Control", href: "/admin/notification-control", section: "Content" },
   { label: "Readme", href: "/admin/rules", section: "System" },
   { label: "Admin Center", href: "/admin/admin-center", section: "System" },

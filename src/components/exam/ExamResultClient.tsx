@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { hasControlAccess, useAdminGate } from "@/components/admin/admin-ui";
 import { AccessLoading, AccessMessage } from "@/components/auth/AccessGuard";
 import { answerIndexToLetter } from "@/lib/paste-mcq-parser";
 import { examResultApiPath } from "@/lib/exam-result-language";
@@ -50,6 +51,8 @@ export default function ExamResultClient({
   questionVersion?: "bangla" | "english" | null;
 }) {
   const { user, profile, authLoading, profileLoading } = useAuth();
+  const gate = useAdminGate();
+  const isAdmin = gate.ready && hasControlAccess(gate.role, gate.permissions, "/admin/result-control");
   const [script, setScript] = useState<ResultScript | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +61,7 @@ export default function ExamResultClient({
   const [offlineCached, setOfflineCached] = useState(false);
 
   useEffect(() => {
-    if (authLoading || profileLoading || !user) return;
+    if (authLoading || profileLoading || !user || !gate.ready || !isAdmin) return;
     let cancelled = false;
     const uid = user.uid;
     async function load() {
@@ -75,6 +78,9 @@ export default function ExamResultClient({
         if (!res.ok) {
           allowCachedResult = res.status >= 500;
           const data = (await res.json().catch(() => ({}))) as { error?: string };
+          if (res.status === 401 || res.status === 403) {
+            throw new Error("Administrators only — results are visible from the Admin Panel.");
+          }
           throw new Error(data.error ?? "No submitted result found for this exam yet.");
         }
         const data = (await res.json()) as ResultScript;
@@ -103,7 +109,7 @@ export default function ExamResultClient({
       cancelled = true;
       window.removeEventListener("online", onOnline);
     };
-  }, [authLoading, profileLoading, user, examId, questionVersion]);
+  }, [authLoading, profileLoading, user, examId, questionVersion, gate.ready, isAdmin]);
 
   if (authLoading || profileLoading) return <AccessLoading label="Loading result…" />;
   if (!user) {
@@ -113,6 +119,28 @@ export default function ExamResultClient({
         message="You must be logged in to view your exam result."
         actionLabel="Login"
         actionHref={`/login?next=${encodeURIComponent(`/exam/${examId}/result`)}`}
+      />
+    );
+  }
+  if (!gate.ready) {
+    return gate.denied ? (
+      <AccessMessage
+        title="Administrators only"
+        message="Results are visible from the Admin Panel only."
+        actionLabel="Back to Home"
+        actionHref="/"
+      />
+    ) : (
+      <AccessLoading label="Checking access…" />
+    );
+  }
+  if (!isAdmin) {
+    return (
+      <AccessMessage
+        title="Administrators only"
+        message="Results are visible from the Admin Panel only."
+        actionLabel="Back to Home"
+        actionHref="/"
       />
     );
   }

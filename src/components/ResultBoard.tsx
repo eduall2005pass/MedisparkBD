@@ -69,7 +69,7 @@ function toCsv(rows: BoardRow[]): string {
   return [head.join(","), ...lines].join("\n");
 }
 
-export default function ResultBoard() {
+export default function ResultBoard({ authHeaders }: { authHeaders?: Record<string, string> }) {
   const [exams, setExams] = useState<ExamOption[]>([]);
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -79,6 +79,7 @@ export default function ResultBoard() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [page, setPage] = useState(1);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const limit = 20;
@@ -133,12 +134,19 @@ export default function ResultBoard() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/results?exams=1", { cache: "no-store" });
+        const res = await fetch("/api/results?exams=1", {
+          cache: "no-store",
+          headers: authHeaders,
+        });
+        if (res.status === 401 || res.status === 403) {
+          setDenied(true);
+          return;
+        }
         const data = (await res.json()) as { exams?: ExamOption[] };
         if (Array.isArray(data.exams)) setExams(data.exams);
       } catch {}
     })();
-  }, []);
+  }, [authHeaders]);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
@@ -152,7 +160,16 @@ export default function ResultBoard() {
       });
       if (examId) sp.set("examId", examId);
       if (debouncedQ) sp.set("q", debouncedQ);
-      const res = await fetch(`/api/results?${sp.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/results?${sp.toString()}`, {
+        cache: "no-store",
+        headers: authHeaders,
+      });
+      if (res.status === 401 || res.status === 403) {
+        setDenied(true);
+        setRows([]);
+        setTotal(0);
+        return;
+      }
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       const data = (await res.json()) as {
         results?: BoardRow[];
@@ -171,7 +188,7 @@ export default function ResultBoard() {
       if (!silent) setLoading(false);
       setRefreshing(false);
     }
-  }, [examId, debouncedQ, page]);
+  }, [examId, debouncedQ, page, authHeaders]);
 
   useEffect(() => {
     void load();
@@ -195,6 +212,11 @@ export default function ResultBoard() {
 
   return (
     <div>
+      {denied && (
+        <div className="mb-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-6 text-center">
+          <p className="font-semibold text-yellow-300">Administrators only — results are visible from the Admin Panel.</p>
+        </div>
+      )}
       {/* Filters */}
       <div className="rounded-2xl border border-ink/10 bg-dark-900/60 p-4">
         <div className="grid gap-3 md:grid-cols-[2fr_1fr_auto]">

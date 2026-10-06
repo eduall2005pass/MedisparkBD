@@ -28,6 +28,7 @@ const ADMIN_NAV = [
   { label: "Dashboard Control", href: "/admin/dashboard-control" },
   { label: "Student Control", href: "/admin/student-control" },
   { label: "Result Control", href: "/admin/result-control" },
+  { label: "Result Board", href: "/admin/result-control/board" },
   { label: "Notification Control", href: "/admin/notification-control" },
   { label: "Admin Center", href: "/admin/admin-center" },
 ] as const;
