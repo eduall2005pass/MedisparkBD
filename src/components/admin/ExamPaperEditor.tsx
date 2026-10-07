@@ -340,11 +340,11 @@ export default function ExamPaperEditor({
       setError("Paste your questions first.");
       return;
     }
-    const parsed = parsePastedMcqs(bulkText);
-    // Filter out totally invalid blocks (no question and <2 options) but keep those with warnings (partial)
-    const validParsed = parsed.filter((p) => p.question.trim().length >= 2 && p.options.filter((o) => o.trim()).length >= 2);
-    const hasAnyValid = validParsed.length > 0 ? validParsed : parsed;
-    const useParsed = hasAnyValid.length > 0 ? hasAnyValid : parsed;
+    // Keep incomplete questions visible with their warnings rather than
+    // silently dropping them and shifting every subsequent slot/answer key.
+    const useParsed = parsePastedMcqs(bulkText).filter((p) =>
+      p.originalNumber != null || p.question.trim().length > 0 || p.options.some((o) => o.trim()),
+    );
     if (useParsed.length === 0 || useParsed.every((p) => p.options.filter((o) => o.trim()).length < 2 && p.question.trim().length < 3)) {
       setError("No questions detected. Check the format (numbered questions with A–D options).");
       return;
