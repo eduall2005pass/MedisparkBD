@@ -139,6 +139,13 @@ export async function POST(request: NextRequest) {
         if (!examId) return NextResponse.json({ error: "Missing exam id." }, { status: 400 });
         if (items.length === 0) return NextResponse.json({ error: "No questions to save." }, { status: 400 });
         if (items.length > 200) return NextResponse.json({ error: "Too many questions in one batch (max 200)." }, { status: 400 });
+        // Snapshot the answer key BEFORE writing — a changed key triggers
+        // automatic result recalculation after the save (single source of truth).
+        let keyBefore: import("@/lib/exam-recalculation").AnswerKeySnapshot | null = null;
+        try {
+          const { snapshotAnswerKey } = await import("@/lib/exam-recalculation");
+          keyBefore = await snapshotAnswerKey(examId);
+        } catch {}
         const slotRows = await query<{ id: number; sort_order: number }[]>(
           `SELECT id, sort_order FROM exam_questions WHERE exam_id = ? ORDER BY sort_order ASC, id ASC`,
           [examId],
@@ -203,7 +210,17 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "No valid questions to save.", errors }, { status: 400 });
         }
         await logAdminAction(admin, "question.variant_bulk_save", `exam=${examId} ${bodyVersion}/${bodySet} count=${saved}`, request);
-        return NextResponse.json({ ok: true, saved, ...(errors.length > 0 ? { errors } : {}) });
+        // Answer-key correction → recalculate affected results from answers + latest key.
+        let recalculated = 0;
+        try {
+          const { recalculateIfAnswerKeyChanged } = await import("@/lib/exam-recalculation");
+          const recalc = await recalculateIfAnswerKeyChanged(examId, keyBefore);
+          recalculated = recalc.recalculated;
+          if (recalc.changed) {
+            await logAdminAction(admin, "question.recalculate", `exam=${examId} results=${recalculated}`, request);
+          }
+        } catch {}
+        return NextResponse.json({ ok: true, saved, ...(recalculated > 0 ? { recalculated } : {}), ...(errors.length > 0 ? { errors } : {}) });
       }
       // Single variant save.
       const examId = asString((body as Record<string, unknown>).examId).trim();
@@ -227,6 +244,15 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: "Question does not belong to this exam." }, { status: 400 });
         }
       }
+      // Snapshot the answer key BEFORE writing — a changed key triggers
+      // automatic result recalculation after the save.
+      let keyBefore: import("@/lib/exam-recalculation").AnswerKeySnapshot | null = null;
+      try {
+        if (examId) {
+          const { snapshotAnswerKey } = await import("@/lib/exam-recalculation");
+          keyBefore = await snapshotAnswerKey(examId);
+        }
+      } catch {}
       const qImage = str((body as Record<string, unknown>).questionImage) || str((body as Record<string, unknown>).question_image) || null;
       const text = str((body as Record<string, unknown>).question);
       const options = Array.isArray((body as Record<string, unknown>).options)
@@ -244,7 +270,19 @@ export async function POST(request: NextRequest) {
         questionImage: qImage,
       });
       await logAdminAction(admin, "question.variant_save", `q=${questionId} ${bodyVersion}/${bodySet}`, request);
-      return NextResponse.json({ ok: true, hasVariant: true, id: questionId });
+      // Answer-key correction → recalculate affected results from answers + latest key.
+      let recalculated = 0;
+      try {
+        if (examId) {
+          const { recalculateIfAnswerKeyChanged } = await import("@/lib/exam-recalculation");
+          const recalc = await recalculateIfAnswerKeyChanged(examId, keyBefore);
+          recalculated = recalc.recalculated;
+          if (recalc.changed) {
+            await logAdminAction(admin, "question.recalculate", `exam=${examId} results=${recalculated}`, request);
+          }
+        }
+      } catch {}
+      return NextResponse.json({ ok: true, hasVariant: true, id: questionId, ...(recalculated > 0 ? { recalculated } : {}) });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save the version/set content.";
       return NextResponse.json({ error: message }, { status: 400 });
@@ -269,20 +307,83 @@ export async function POST(request: NextRequest) {
   if (Array.isArray((body as Record<string, unknown>).questions)) {
     const examId = String((body as Record<string, unknown>).examId ?? "").trim();
     const items = (body as Record<string, unknown>).questions as Record<string, unknown>[];
+    // Snapshot the answer key BEFORE writing — a changed key triggers
+    // automatic result recalculation after the save.
+    let keyBefore: import("@/lib/exam-recalculation").AnswerKeySnapshot | null = null;
+    try {
+      if (examId) {
+        const { snapshotAnswerKey } = await import("@/lib/exam-recalculation");
+        keyBefore = await snapshotAnswerKey(examId);
+      }
+    } catch {}
     try {
       const result = await saveQuestionsBulk(examId, items);
       await logAdminAction(admin, "question.bulk_save", `exam=${examId} count=${items.length}`, request);
-      return NextResponse.json({ ok: true, questions: result.questions, savedIds: result.savedIds });
+      // Answer-key correction → recalculate affected results from answers + latest key.
+      let recalculated = 0;
+      try {
+        if (examId) {
+          const { recalculateIfAnswerKeyChanged } = await import("@/lib/exam-recalculation");
+          const recalc = await recalculateIfAnswerKeyChanged(examId, keyBefore);
+          recalculated = recalc.recalculated;
+          if (recalc.changed) {
+            await logAdminAction(admin, "question.recalculate", `exam=${examId} results=${recalculated}`, request);
+          }
+        }
+      } catch {}
+      return NextResponse.json({ ok: true, questions: result.questions, savedIds: result.savedIds, ...(recalculated > 0 ? { recalculated } : {}) });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save questions.";
       return NextResponse.json({ error: message }, { status: 400 });
     }
   }
+  // Single base save — may also MOVE a question between exams, so snapshot
+  // both the current and the target exam.
+  let singleBefore = new Map<string, import("@/lib/exam-recalculation").AnswerKeySnapshot>();
+  try {
+    const targetExam = typeof body.examId === "string" ? body.examId.trim() : "";
+    const movingId = Number((body as Record<string, unknown>).id);
+    const examsToWatch = new Set<string>();
+    if (targetExam) examsToWatch.add(targetExam);
+    if (Number.isInteger(movingId) && movingId > 0) {
+      try {
+        const { query: watchQuery } = await import("@/lib/mysql");
+        const owner = await watchQuery<{ exam_id: string | null }[]>(
+          `SELECT exam_id FROM exam_questions WHERE id = ? LIMIT 1`,
+          [movingId],
+        );
+        if (owner[0]?.exam_id) examsToWatch.add(owner[0].exam_id);
+      } catch {}
+    }
+    if (examsToWatch.size > 0) {
+      const { snapshotAnswerKey } = await import("@/lib/exam-recalculation");
+      for (const watchId of examsToWatch) {
+        try {
+          const snap = await snapshotAnswerKey(watchId);
+          if (snap) singleBefore.set(watchId, snap);
+        } catch {}
+      }
+    }
+  } catch {}
   try {
     const result = await saveQuestion(body);
     await logAdminAction(admin, "question.save", String(body.subject ?? ""), request);
+    // Answer-key correction → recalculate affected results from answers + latest key.
+    let recalculated = 0;
+    try {
+      const { recalculateIfAnswerKeyChanged } = await import("@/lib/exam-recalculation");
+      for (const [watchId, snap] of singleBefore) {
+        try {
+          const recalc = await recalculateIfAnswerKeyChanged(watchId, snap);
+          recalculated += recalc.recalculated;
+          if (recalc.changed) {
+            await logAdminAction(admin, "question.recalculate", `exam=${watchId} results=${recalc.recalculated}`, request);
+          }
+        } catch {}
+      }
+    } catch {}
     // Return fresh exam questions so client can sync without a second fetch when possible
-    return NextResponse.json({ ok: true, questions: result });
+    return NextResponse.json({ ok: true, questions: result, ...(recalculated > 0 ? { recalculated } : {}) });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to save the question.";

@@ -183,7 +183,7 @@ async function highestMarkFor(examId: string): Promise<number | null> {
  * (attempt_type='practice', after Live window) keep merit_position NULL
  * and never shift the frozen Live leaderboard.
  */
-async function updateMeritPositions(examId: string): Promise<void> {
+export async function updateMeritPositions(examId: string): Promise<void> {
   try {
     // Auto-ensure attempt_type column exists (best-effort, no error if missing).
     try { await ensureColumn("exam_results", "attempt_type", "`attempt_type` ENUM('scheduled','practice') NOT NULL DEFAULT 'scheduled'"); } catch {}
